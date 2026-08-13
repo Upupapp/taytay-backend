@@ -1,0 +1,278 @@
+# Frontend → Backend Endpoint Matrix
+
+Every screen in every client, and the backend contract that serves it.
+
+Sources audited: `Taytay_Rizal_Social_Welfare_Angular` (`src/app/app.routes.ts`,
+`src/app/core/navigation/navigation.ts`, `src/app/domain/ports/repositories.ts`,
+`src/app/data/http/http-repositories.ts`), `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter`
+(`lib/core/api/`, `lib/core/router/`), `lgu_ids_taytay` (`lib/core/services/api_service.dart`,
+`lib/features/`).
+
+Conventions that apply to every row without being repeated: `/api/v1` prefix,
+`{data,meta}` / `{error:{code,message,details,request_id}}` envelope, `X-Request-Id` on
+every response, snake_case fields, UUID identifiers, ISO-8601 UTC timestamps, money as
+integer centavos, collections always paginated (`page`, `per_page` default 25 / max 100).
+Full text: [`../api/conventions.md`](../api/conventions.md).
+
+**Auth** is `bearer` (first-party Sanctum token, ADR 0005/0006) or `public`.
+**Scope** is the server-side data boundary applied *after* the permission check —
+`all-barangays`, `own-barangay`, `assigned-cases` for staff (from the Angular
+`DataScope`), or `own-record` for a citizen.
+
+> A permission column entry is a **contract**, not a claim that the permission exists in
+> code today. The backend `Permission` catalog currently holds only `services.*` — see
+> gap **G-09**. Rows marked `implemented` are the exception and do resolve.
+
+---
+
+## 1. Platform
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Mobile splash, uptime probe, NodeBalancer | `GET /api/v1/health` | public | — | — | — | `{service,status,api_version}` | none — must never expose env, versions or config | `implemented` |
+| Citizen service catalog | `GET /api/v1/services` | public | — | — | `?category=&channel=&page=&per_page=` | published catalog entries | public reference data | `implemented` |
+| Admin service catalog | `GET /api/v1/admin/services` | bearer | `services.view_unpublished` widens the result | all-barangays | as above | adds `draft`/`retired` entries | operational | `implemented` |
+
+The two catalog routes share one controller and one application service; the `/admin`
+prefix confers nothing. This is the reference pattern every row below follows.
+
+---
+
+## 2. Identity and session
+
+Angular `StaffRepository`; mobile `AuthRepository`. Both clients are unauthenticated
+today — the mobile one declines honestly (`PendingBackendAuthRepository`).
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Admin sign-in (`/sign-in`) | `POST /api/v1/auth/tokens` | public | — | — | `{email,password,device_name}` | `{token,expires_at,actor}` | credentials — never logged, rate-limited, generic failure message | `planned` |
+| Citizen sign-in — request code | `POST /api/v1/auth/otp` | public | — | — | `{mobile_number}` | `202` accepted | must not reveal whether the number is registered | `planned` |
+| Citizen sign-in — verify code | `POST /api/v1/auth/otp/verify` | public | — | — | `{mobile_number,code}` | `{token,expires_at,actor}` | attempt-limited; generic failure | `planned` |
+| Session bootstrap (all clients) | `GET /api/v1/me` | bearer | — | own-record | — | actor identity + **server-resolved** `permissions[]`, `scope`, `verification_tier` | own identity only | `planned` |
+| Sign out | `DELETE /api/v1/auth/tokens/current` | bearer | — | own-record | — | `204` | must revoke server-side | `planned` |
+| Angular `signInAs(staffUserId)` | — | — | — | — | — | — | — | `mock-only` |
+
+`signInAs` posts `{staffUserId}` to `session` with **no credential**
+(`http-repositories.ts:172`). As a backend endpoint that is an authentication bypass —
+anyone could become the MSWDO head by guessing an id. It exists to switch personas
+against mock data and must never be implemented. See gap **G-02**.
+
+`/api/v1/me` returning `permissions[]` is what lets the Angular console stop deriving
+authority locally (`toAuthenticatedUser`, gap **G-03**). The client mirrors the server's
+answer for usability; it never computes it.
+
+---
+
+## 3. Dashboard — `/dashboard`, `dashboard.view`
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DashboardPage` | `GET /api/v1/dashboard/summary` | bearer | `dashboard.view` | role scope | — | `DashboardSummary` — counts + `disbursed_this_month` + breakdowns by status, barangay, category | **aggregates only, no person is identifiable**; a barangay bucket below a minimum count must be suppressed, not rounded | `planned` |
+
+A barangay-scoped user gets a summary computed over their own barangay only. The same
+service, a different actor — not a second endpoint.
+
+---
+
+## 4. Residents — `/residents`, `resident.view`
+
+Angular `ResidentRepository`. `ResidentListPage` is fully built against mocks.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Resident list | `GET /api/v1/residents` | bearer | `resident.view` | role scope | `?search=&barangay_id=&sector=&include_inactive=&sort=&page=&per_page=` | paginated resident summaries | list projection excludes income and PhilSys; sensitive-sector records **redacted server-side** without `request.view-sensitive` | `planned` |
+| Resident detail | `GET /api/v1/residents/{resident_id}` | bearer | `resident.view` | role scope | — | full resident | `philsys_last_four` and `monthly_income` require detail view + audit entry | `planned` |
+| Household panel | `GET /api/v1/households/{household_id}` | bearer | `resident.view` | role scope | — | household + members | member list is other people's data — audited read | `planned` |
+| Create resident | `POST /api/v1/residents` | bearer | `resident.create` | role scope | resident payload | `201` + resident | intake of new personal data | `planned` |
+| Update resident | `PATCH /api/v1/residents/{resident_id}` | bearer | `resident.update` | role scope | partial payload | resident | audited field-level change | `planned` |
+| Deactivate | `POST /api/v1/residents/{resident_id}/deactivation` | bearer | `resident.deactivate` | all-barangays | `{reason}` | resident | never a hard delete — retention is statutory | `planned` |
+| Export | `GET /api/v1/residents/export` | bearer | `resident.export` | role scope | `?` same filters | CSV | **bulk personal data** — always audited, rate-limited, no sensitive-sector rows without `request.view-sensitive` | `planned` |
+
+`sector=vawc-survivor` or `sector=cicl` as a filter is itself a sensitive query: it must
+be rejected with `403 FORBIDDEN` for an actor lacking `request.view-sensitive`, rather
+than silently returning nothing — a silent empty result teaches a probing caller that the
+filter is real.
+
+---
+
+## 5. Assistance requests — `/assistance-requests`, `request.view`
+
+The core casework module. Angular screen is a placeholder; the domain model and lifecycle
+are fully specified (`domain/assistance/assistance-request.ts`).
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Request list | `GET /api/v1/assistance-requests` | bearer | `request.view` | role scope | `?search=&status=&program_id=&barangay_id=&assigned_to=&open_only=&sort=&page=&per_page=` | paginated summaries | sensitive-sector cases redacted server-side | `planned` |
+| Request detail | `GET /api/v1/assistance-requests/{request_id}` | bearer | `request.view` | role scope | — | request + requirements + assessment + status history | assessment and decision remarks are **staff-only** | `planned` |
+| Case notes | `GET /api/v1/assistance-requests/{request_id}/notes` | bearer | `request.view` | role scope | `?visibility=` | notes | `internal` notes are staff-only; see visibility matrix | `planned` |
+| Add case note | `POST /api/v1/assistance-requests/{request_id}/notes` | bearer | `request.intake` \| `request.assess` | assigned-cases | `{body,visibility}` | `201` | author recorded, append-only | `planned` |
+| Create request | `POST /api/v1/assistance-requests` | bearer | `request.create` | role scope | request payload | `201` | staff-assisted intake | `planned` |
+| Lifecycle transition | `POST /api/v1/assistance-requests/{request_id}/transitions` | bearer | per target — see below | assigned-cases | `{to,reason}` + `Idempotency-Key` | request | reason may be applicant-visible; see ADR 0007 | `planned` |
+| Requirement review | `PATCH /api/v1/assistance-requests/{request_id}/requirements/{requirement_id}` | bearer | `request.intake` | assigned-cases | `{status,remarks}` | requirement | `remarks` is internal | `planned` |
+| Linked payouts | `GET /api/v1/assistance-requests/{request_id}/disbursements` | bearer | `disbursement.view` | role scope | — | disbursements | amounts and instrument references | `planned` |
+
+**One endpoint, not nine verbs.** The Angular port already models this correctly
+(`changeStatus(id, to, reason)`). The permission is resolved from the *target* state, so
+the state machine and the authorization table stay in one place:
+
+| Target | Permission |
+| --- | --- |
+| `intake-review` | `request.intake` |
+| `assessment` | `request.assess` |
+| `endorsed` | `request.endorse` |
+| `approved` | `request.approve` |
+| `rejected` | `request.reject` |
+| `returned` | `request.intake` \| `request.assess` |
+| `scheduled` | `request.schedule` |
+| `completed` | `request.close` |
+| `cancelled` | `request.create` (own draft) \| `request.close` |
+
+The server rejects any transition not permitted by `ASSISTANCE_STATUS_TRANSITIONS` with
+`409 INVALID_STATE_TRANSITION`, *before* checking the permission, so a probe cannot use
+the error to map who holds what.
+
+**Separation of duties** (Angular `CLAUDE.md` §5, asserted by
+`domain/access/permission.spec.ts`): no single non-administrator role may both approve a
+request and release its money. The backend must assert this over its own role catalog —
+inheriting the constraint, not the client's copy of it.
+
+---
+
+## 6. Programs — `/programs`, `program.view`
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Programme list | `GET /api/v1/programs` | bearer | `program.view` | all-barangays | `?search=&category=&status=&page=&per_page=` | paginated programmes | reference data | `planned` |
+| Programme detail | `GET /api/v1/programs/{program_id}` | bearer | `program.view` | all-barangays | — | programme + eligibility + requirements | reference data | `planned` |
+| Active programmes (pickers) | `GET /api/v1/programs?status=active` | bearer | `program.view` | all-barangays | — | active programmes | reference data | `planned` |
+| Citizen programme list | `GET /api/v1/programs?status=active` | bearer | — | own-record | — | **narrowed projection** — no `funding_source`, no internal notes | see visibility matrix | `planned` |
+| Create / edit programme | `POST` / `PATCH /api/v1/programs[/{program_id}]` | bearer | `program.manage` | all-barangays | programme payload | programme | changes eligibility for money | `planned` |
+
+`listActive()` is the same endpoint with a filter, not a second route. The citizen
+projection is the same service with a narrower resource — one place to change eligibility
+text, not two.
+
+---
+
+## 7. Disbursements — `/disbursements`, `disbursement.view`
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Payout list | `GET /api/v1/disbursements` | bearer | `disbursement.view` | role scope | `?search=&status=&method=&scheduled_from=&scheduled_to=&page=&per_page=` | paginated payouts | financial | `planned` |
+| Payout detail | `GET /api/v1/disbursements/{disbursement_id}` | bearer | `disbursement.view` | role scope | — | payout | `instrument_reference` is a financial instrument id — staff-only | `planned` |
+| Schedule | `POST /api/v1/disbursements/{disbursement_id}/transitions` `{to:"scheduled"}` | bearer | `disbursement.schedule` | all-barangays | `{scheduled_for,method}` + `Idempotency-Key` | payout | — | `planned` |
+| Release | `POST /api/v1/disbursements/{disbursement_id}/transitions` `{to:"released"}` | bearer | `disbursement.release` | all-barangays | `{instrument_reference}` + `Idempotency-Key` | payout | **money leaves here** — idempotency mandatory | `planned` |
+| Void | `POST /api/v1/disbursements/{disbursement_id}/transitions` `{to:"voided"}` | bearer | `disbursement.void` | all-barangays | `{reason}` | payout | reason mandatory | `planned` |
+| Acknowledge receipt | `POST /api/v1/me/disbursements/{disbursement_id}/acknowledgement` | bearer | — | own-record | `{}` + `Idempotency-Key` | payout summary | beneficiary confirms — closes the loop | `planned` |
+
+Release without an `Idempotency-Key` must be rejected: a retried release on a flaky
+connection is a double payout of public funds.
+
+---
+
+## 8. Referrals — `/referrals`, `referral.view`
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Referral list | `GET /api/v1/referrals` | bearer | `referral.view` | role scope | `?search=&status=&destination=&page=&per_page=` | paginated referrals | `barangay-vaw-desk` / WCPD destinations are themselves sensitive — see below | `planned` |
+| Referral detail | `GET /api/v1/referrals/{referral_id}` | bearer | `referral.view` | role scope | — | referral | `reason` and `outcome` are case narrative — staff-only | `planned` |
+| Create / update | `POST` / `PATCH /api/v1/referrals[/{referral_id}]` | bearer | `referral.manage` | assigned-cases | referral payload | referral | — | `planned` |
+
+A referral to `barangay-vaw-desk` or `women-and-children-protection-desk` discloses, by
+its destination alone, that the resident is likely a VAWC survivor (RA 9262). Those rows
+are gated on `request.view-sensitive` exactly as a flagged record is.
+
+---
+
+## 9. Reports — `/reports`, `report.view`
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Report catalog | `GET /api/v1/reports` | bearer | `report.view` | role scope | — | available reports | — | `planned` |
+| Run report | `GET /api/v1/reports/{report_code}` | bearer | `report.view` | role scope | report params | aggregate result | **aggregates only** | `planned` |
+| Export report | `GET /api/v1/reports/{report_code}/export` | bearer | `report.export` | role scope | report params | CSV | bulk export — audited, rate-limited | `planned` |
+
+Statutory DSWD reporting keys off PSGC codes, which are `null` in the client today —
+gap **G-11**.
+
+---
+
+## 10. Administration
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Staff list (`/administration/staff`) | `GET /api/v1/staff` | bearer | `staff.view` | all-barangays | `?search=&role=&include_inactive=&page=&per_page=` | paginated staff | staff personal data — never reaches a citizen channel | `planned` |
+| Staff detail | `GET /api/v1/staff/{staff_user_id}` | bearer | `staff.view` | all-barangays | — | staff user | — | `planned` |
+| Create / update staff, assign role | `POST` / `PATCH /api/v1/staff[/{staff_user_id}]` | bearer | `staff.manage` | all-barangays | staff payload | staff user | **privilege granting** — always audited | `planned` |
+| Audit trail (`/administration/audit`) | `GET /api/v1/audit-entries` | bearer | `audit.view` | all-barangays | `?entity_type=&entity_id=&actor_id=&from=&to=&page=&per_page=` | paginated entries | the audit log itself is sensitive; **append-only, never editable or deletable** | `planned` |
+| Settings (`/administration/settings`) | `GET` / `PATCH /api/v1/settings` | bearer | `settings.manage` | all-barangays | settings payload | settings | office configuration | `planned` |
+| Barangay reference list | `GET /api/v1/barangays` | bearer | — | — | — | barangays + PSGC | public reference data | `planned` |
+
+---
+
+## 11. Notifications (shell, all channels)
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Inbox | `GET /api/v1/me/notifications` | bearer | — | own-record | `?unread_only=&page=&per_page=` | paginated notifications | recipient's own only | `planned` |
+| Mark read | `POST /api/v1/me/notifications/{notification_id}/read` | bearer | — | own-record | — | notification | — | `planned` |
+| Mark all read | `POST /api/v1/me/notifications/read-all` | bearer | — | own-record | — | `204` | — | `planned` |
+| Device registration (push) | `POST /api/v1/me/devices` | bearer | — | own-record | `{fcm_token,platform}` | `201` | token is a credential — never logged | `planned` |
+| Angular `NotificationRepository.create()` | — | — | — | — | — | — | — | `mock-only` |
+
+A client that can create its own notifications can forge an official LGU message. Raising
+a notification is a **server-side consequence of a domain event** (ADR 0004: Laravel
+decides, FCM only delivers). The client-side `create()` is the mock adapter's way of
+showing a local toast and must stay local — the `NotificationStore` toast path needs no
+backend at all.
+
+---
+
+## 12. Citizen clients
+
+Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)
+and `lgu_ids_taytay` (broader feature set, placeholder API). See gap **G-10** on which is
+authoritative.
+
+Citizen-owned collections live under `/me/` deliberately: ownership becomes structural
+rather than a filter someone can forget to apply, and there is no path on which a citizen
+could even attempt to enumerate another resident. The `/me/` routes call the **same
+application services** as the staff routes above, with an actor-derived `own-record`
+scope — not a parallel implementation.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Home, profile | `GET /api/v1/me` | bearer | — | own-record | — | actor + `verification_tier` | own only | `planned` |
+| Profile update | `PATCH /api/v1/me/profile` | bearer | — | own-record | contact fields only | profile | a citizen may not edit their own eligibility-bearing fields | `planned` |
+| Verification status | `GET /api/v1/me/verification` | bearer | — | own-record | — | tier + outstanding steps | own only | `planned` |
+| Submit verification | `POST /api/v1/me/verification/submissions` | bearer | — | own-record | document/selfie upload | `202` | biometric + ID images — private object storage only | `planned` |
+| Digital ID / credential | `GET /api/v1/me/credential` | bearer | — | own-record | — | credential + signed QR payload | **QR signing material never leaves the server**; the client receives a signed artifact only | `planned` |
+| Credential verification (kiosk) | `POST /api/v1/credential-verifications` | bearer | — | — | `{qr_payload}` | validity + minimal display fields | verifier sees name + photo + validity, **never** address, sectors or case data | `planned` |
+| My assistance requests | `GET /api/v1/me/assistance-requests` | bearer | — | own-record | `?status=&page=&per_page=` | citizen projection | see visibility matrix | `planned` |
+| Request detail | `GET /api/v1/me/assistance-requests/{request_id}` | bearer | — | own-record | — | citizen projection + `available_actions` | **no assessment, no internal notes, no staff identities** | `planned` |
+| Submit request | `POST /api/v1/me/assistance-requests` | bearer | — | own-record | request payload + `Idempotency-Key` | `201` | self-service intake | `planned` |
+| Cancel request | `POST /api/v1/me/assistance-requests/{request_id}/transitions` `{to:"cancelled"}` | bearer | — | own-record | `{reason}` | citizen projection | server decides cancellability — ADR 0007 | `planned` |
+| Resubmit documents | `POST /api/v1/me/assistance-requests/{request_id}/requirements/{requirement_id}` | bearer | — | own-record | upload | requirement | private object storage | `planned` |
+| Announcements (`balita`) | `GET /api/v1/announcements` | public | — | — | `?page=&per_page=` | announcements | public content | `planned` |
+| Events | `GET /api/v1/events` | public | — | — | `?page=&per_page=` | events | public content | `planned` |
+| Emergency hotlines | `GET /api/v1/emergency-hotlines` | public | — | — | — | hotlines | public content | `planned` |
+
+### Citizen web vs citizen mobile
+
+There is **no row in this matrix that exists for one and not the other.** Both are
+`X-Client-Channel` values over the identical routes above. The channel may set a default
+page size and is recorded for audit; it grants nothing and changes no rule
+(`ClientChannelIsNotAuthorityTest`). Anything a citizen may do on mobile, they may do on
+web, because it is the same service and the same authorization decision.
+
+---
+
+## 13. Screens with no backend contract
+
+| Screen | Why |
+| --- | --- |
+| `/forbidden` | Renders the client's reaction to a `403 FORBIDDEN`. No data. |
+| `/**` (not found) | Client-side routing only. |
+| Placeholder pages | `FeaturePlaceholderPage` is a build-status notice; the endpoints its real screen will need are listed above under that screen's section. |
+
+Every other route in `app.routes.ts` has at least one contract row.

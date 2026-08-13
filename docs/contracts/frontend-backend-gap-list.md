@@ -1,0 +1,306 @@
+# Gap List — Frontend Mocks vs Required Backend
+
+What the clients assume, what the backend actually promises, and what has no persistence
+yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
+
+**Severity:** `blocking` — a client cannot be connected until it is settled ·
+`high` — wrong behaviour or a privacy risk if built as-is · `medium` — rework later ·
+`low` — tidy-up.
+
+| # | Gap | Severity | Owner |
+| --- | --- | --- | --- |
+| [G-01](#g-01) | Angular's provisional envelope contradicts `/api/v1` | blocking | Angular |
+| [G-02](#g-02) | `signInAs(staffUserId)` is an authentication bypass | blocking | Angular |
+| [G-03](#g-03) | Admin auth: cookie session vs bearer token | blocking | both — [ADR 0006](../adr/0006-admin-console-authentication.md) |
+| [G-04](#g-04) | Permissions derived client-side | high | both |
+| [G-05](#g-05) | Two divergent assistance lifecycles | blocking | both — [ADR 0007](../adr/0007-canonical-assistance-lifecycle.md) |
+| [G-06](#g-06) | `canCancel` / `isTerminal` implemented in the mobile client | high | backend + mobile |
+| [G-07](#g-07) | Sensitive-sector suppression is presentation-only | high | backend |
+| [G-08](#g-08) | No resident verification state in the admin model | high | backend |
+| [G-09](#g-09) | Backend permission catalog holds 2 of ~31 permissions | high | backend |
+| [G-10](#g-10) | Two Flutter apps claim the citizen-mobile channel | high | product |
+| [G-11](#g-11) | Barangay PSGC codes are `null` | medium | backend |
+| [G-12](#g-12) | No persistence behind dashboard, notifications, audit | medium | backend |
+| [G-13](#g-13) | Field naming and pagination defaults differ | medium | both |
+| [G-14](#g-14) | Client-created notifications | medium | Angular |
+| [G-15](#g-15) | No idempotency on money or intake operations | high | both |
+| [G-16](#g-16) | Separation of duties asserted only in the client | high | backend |
+| [G-17](#g-17) | `request.view-sensitive` vs `case.view-sensitive` | low | Angular |
+| [G-18](#g-18) | No file-upload contract | medium | backend |
+
+---
+
+### G-01
+**Angular's provisional envelope contradicts the shipped `/api/v1` contract.** `blocking`
+
+`data/http/api.contract.ts` expects `meta: {page, pageSize, totalItems, totalPages}`,
+errors as `{message: string}`, unversioned paths (`residents`), and camelCase query
+parameters (`pageSize`, `sort` + `direction`).
+
+The backend ships `meta.pagination: {page, per_page, total, total_pages, has_more}`,
+errors as `{error:{code, message, details, request_id}}`, `/api/v1` paths, and
+`per_page` / `sort=-field`.
+
+The file says it is provisional and must be reconciled first — this is that moment. The
+mobile client already implements the shipped contract exactly
+(`lib/core/api/api_envelope.dart`), which is the proof the contract is implementable.
+
+*Resolution:* Angular updates `api.contract.ts` and its adapters. Domain models do not
+change; that is what the adapter seam is for. Nothing changes in this backend.
+
+---
+
+### G-02
+**`signInAs(staffUserId)` would be an authentication bypass.** `blocking`
+
+`http-repositories.ts:172` posts `{staffUserId}` to `session` with **no credential**. As a
+real endpoint, anyone could become the MSWDO head by guessing an identifier.
+
+*Resolution:* never implement it. The backend offers `POST /api/v1/auth/tokens` with real
+credentials. The persona switcher is a mock-adapter development affordance and must not
+survive the switch to `dataSource: 'http'`. Recorded as `mock-only` in the endpoint matrix.
+
+---
+
+### G-03
+**Admin authentication: HTTP-only cookie vs bearer token.** `blocking`
+
+Angular `CLAUDE.md` §2.5: *"No token is placed in `localStorage` by this app; session
+credentials travel in an HTTP-only cookie set by the API."*
+Backend ADR 0005 rejected cookie/SPA mode for the cross-origin Netlify → Linode split and
+chose first-party bearer tokens.
+
+Both positions are defensible and they are incompatible. Settled in
+[ADR 0006](../adr/0006-admin-console-authentication.md): bearer token held **in memory
+only**, which honours the Angular rule (nothing in `localStorage`) without reintroducing
+the cookie scope, credentialed CORS and CSRF surface ADR 0005 refused.
+
+---
+
+### G-04
+**Effective permissions are computed on the client.** `high`
+
+`toAuthenticatedUser()` (`domain/access/staff-user.ts:49`) derives the permission set from
+a client-side role map plus `additionalPermissions`. If the backend's role catalog ever
+differs, the console shows actions the server will refuse — or hides ones it would allow.
+
+The Angular constitution is already clear that client checks are usability only, so this
+is a synchronisation defect, not a security hole. But a UI that disagrees with the server
+teaches users that errors are random.
+
+*Resolution:* `GET /api/v1/me` returns server-resolved `permissions[]` and `scope`. The
+client mirrors that response and stops deriving. The role→permission map stays in the
+client only as a fallback label source.
+
+---
+
+### G-05
+**Two different assistance lifecycles already exist.** `blocking`
+
+| Client | States |
+| --- | --- |
+| Angular admin | 13: `draft, submitted, intake-review, returned, assessment, endorsed, approved, rejected, scheduled, released, completed, cancelled, expired` |
+| `lgu_ids_taytay` | 17: `draft, submitted, received, underReview, forSocialWorker, forVerification, forHealthOfficeReview, forMswdoReview, needsMoreDocuments, waiting, forInterview, forApproval, approved, scheduledForRelease, released, rejected, cancelled` |
+
+Neither is a superset of the other, and the mobile set encodes routing decisions
+(`forHealthOfficeReview`) that the admin set treats as assignment rather than state.
+
+*Resolution:* [ADR 0007](../adr/0007-canonical-assistance-lifecycle.md) — the Angular
+lifecycle is canonical because it is the one the office actually operates and the one with
+transition rules and separation-of-duties tests behind it. The mobile states become a
+**presentation projection** served by the backend, not a second state machine.
+
+---
+
+### G-06
+**The mobile client decides cancellability and terminality itself.** `high`
+
+`RequestStatusX.canCancel` and `.isTerminal` (`lib/data/models/models.dart:292-300`) are
+business rules living in a shipped mobile build that cannot be patched on demand. If the
+office changes when a request may be withdrawn, an old build keeps offering the old rule.
+
+*Resolution:* the backend returns `available_actions[]` on every citizen request
+projection. The client renders what it is told. Same rule for `isTerminal` — the server
+sends the projected status and whether the case is closed.
+
+---
+
+### G-07
+**Sensitive-sector suppression is presentation-only today.** `high`
+
+The mock adapter returns the full record and the list view masks it; `decision-log.md`
+DL-19 states plainly that *"the API enforces its own copy"*.
+
+That copy does not exist yet, and "masking" is the wrong verb for an API: a masked field
+still crossed the network.
+
+*Resolution:* the backend **omits** sensitive sector values and excludes flagged cases
+from list results for actors without `request.view-sensitive`, and rejects a
+`sector=vawc-survivor` filter with `403` rather than an empty page. Specified in the
+visibility matrix §2.
+
+---
+
+### G-08
+**No resident verification state in the admin model.** `high`
+
+The Angular `Resident` carries only `isActive`; DL-12 records the gap and defers it. But
+the mobile client already routes on a verification tier
+(`AccessLevel.fromVerificationTier`), and verification gates what assistance can be
+released.
+
+*Resolution:* the backend owns a canonical `VerificationState` enumeration (not a boolean)
+in the residents/identity TAB, exposed as `verification_tier` on `/api/v1/me` and on the
+admin resident resource. Unknown tiers must degrade to the least-capable state — the
+mobile client already does this correctly.
+
+---
+
+### G-09
+**The backend permission catalog holds 2 of about 31 permissions.** `high`
+
+`Modules\AccessControl\Contracts\Permission` has `services.view_unpublished` and
+`services.manage`. The admin console references 31 across 7 roles.
+
+Deliberately **not** added in TAB 02: permissions without the endpoints they guard, and
+without persisted role assignment (`config/access_control.php` is still provisional), is
+policy invented ahead of its use. The endpoint matrix records each permission against the
+operation it guards so the catalog can be added with its endpoints.
+
+---
+
+### G-10
+**Two Flutter applications both claim the `citizen-mobile` channel.** `high`
+
+| App | Evidence | State |
+| --- | --- | --- |
+| `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` | named by the Angular constitution; already implements this backend's envelope, error codes, channel header and bearer auth | narrow: auth, credential, verification, account |
+| `lgu_ids_taytay` | named by this backend's `CLAUDE.md` Article 0 | broad: `tulong`, `buwis`, `kalusugan`, `dokumento`, `trabaho`, `balita`, `events`, `qr_scanner`; placeholder API service, no git history |
+
+They disagree on lifecycle (G-05) and on API shape. Building endpoints for both as if they
+were one client will produce exactly the duplicate logic this TAB exists to prevent.
+
+*Resolution:* a product decision is required — is `lgu_ids_taytay` the superseded
+prototype, the superset target, or a separate LGU-wide app of which social welfare is one
+module? **This backend's `CLAUDE.md` Article 0 should be corrected once decided.** Until
+then the matrix treats their union as the citizen contract surface, which is safe because
+both are served by the same routes.
+
+---
+
+### G-11
+**Barangay PSGC codes are `null`.** `medium`
+
+`domain/geography/barangay.ts` leaves `psgcCode: null` for all five barangays, with a
+comment that a wrong code is worse than an absent one because DSWD reporting keys off it.
+
+*Resolution:* the backend loads the authoritative PSA PSGC dataset for Taytay, Rizal when
+the geography reference table is built, and serves it via `GET /api/v1/barangays`.
+Statutory reports (matrix §9) cannot be certified correct until this lands.
+
+---
+
+### G-12
+**Several screens have no persistence behind them at all.** `medium`
+
+| Mock | What the backend must own |
+| --- | --- |
+| `mock-dashboard.repository.ts` | Aggregates computed from real requests/disbursements, scope-filtered per actor |
+| `mock-notification.repository.ts` | Per-recipient persisted notifications with read state |
+| Audit trail screen | An append-only `AuditEntry` store — nothing writes one today |
+| `AuditStamp` on every model | `created_by` / `updated_by` need a real actor, which needs Identity |
+| `SubmittedRequirement` files | No document storage; see G-18 |
+| Household composition | Referenced by `getHousehold()`, seeded only in mocks |
+
+None of these are contract disagreements — they are simply unbuilt. They are listed so
+that "the screen works" against mocks is not mistaken for "the data exists".
+
+---
+
+### G-13
+**Field naming and pagination defaults differ.** `medium`
+
+Angular models are camelCase (`referenceNumber`, `philsysLastFour`) and default to
+`pageSize: 20`; the backend emits snake_case and defaults to `per_page: 25` (15 for
+`citizen-mobile`), max 100.
+
+*Resolution:* the backend keeps snake_case per conventions §6 — it is the published
+contract and the mobile client already consumes it. The Angular adapter maps at the
+boundary, which is the adapter's job. Page size is a client request; the client sends
+`per_page=20` if it wants 20.
+
+---
+
+### G-14
+**The client can create notifications.** `medium`
+
+`NotificationRepository.create()` exists as a port. A client able to create its own
+notifications can forge an official LGU message.
+
+*Resolution:* no backend endpoint. Notifications are raised server-side as a consequence
+of a domain event (ADR 0004: Laravel decides, FCM delivers). The local toast path needs no
+backend and stays client-side. Recorded as `mock-only`.
+
+---
+
+### G-15
+**No idempotency on money or intake operations.** `high`
+
+Neither client sends an `Idempotency-Key`, although the mobile `RequestContext` already
+supports one. A retried release on a flaky connection is a double payout of public funds;
+a retried submission creates a duplicate application.
+
+*Resolution:* the backend **requires** `Idempotency-Key` on disbursement transitions and
+citizen request submission, and replays the original result for a repeated key
+(conventions §7). Clients must send one.
+
+---
+
+### G-16
+**Separation of duties is asserted only in the client.** `high`
+
+Angular `CLAUDE.md` §5 and `domain/access/permission.spec.ts` assert that no single
+non-administrator role may both approve a request and release its money. That test guards
+the *client's* role map.
+
+*Resolution:* the backend asserts the same invariant over its own role catalog, with its
+own test, when the catalog lands (G-09). A control that exists only in the frontend is not
+a control.
+
+---
+
+### G-17
+**Permission name inconsistency inside the Angular reference.** `low`
+
+`resident.ts:37` documents the gate as `case.view-sensitive`; the catalog defines
+`request.view-sensitive`. The catalog is authoritative — the comment is stale. Noted so
+the backend does not adopt the wrong name.
+
+---
+
+### G-18
+**No file-upload contract.** `medium`
+
+Requirement documents, verification ID images and selfies are all uploads with no agreed
+mechanism. They are the most sensitive artifacts in the system.
+
+*Resolution:* uploads go to the private `object-storage` disk (ADR 0004) — never the
+`public` disk — via an authorization-gated endpoint, and are read back through a
+short-lived signed URL issued after a server-side authorization decision. The concrete
+request/response shape is specified in the TAB that builds intake.
+
+---
+
+## Not gaps — already aligned
+
+Worth recording, so nobody "fixes" them:
+
+* **Money is integer centavos** on both sides (Angular `Money`, conventions §6).
+* **Client permission checks are usability only** — both client constitutions say so.
+* **`X-Client-Channel` is telemetry** — the mobile client's `request_context.dart` cites
+  ADR 0002 and sends no authority-shaped header.
+* **The resident mobile client already implements the shipped envelope**, error codes,
+  request-id shape and bearer auth.
+* **PhilSys last-four only** (RA 11055) — consistent across the client and this contract.
+* **`CaseNoteVisibility`** already distinguishes `internal` from `shared-with-applicant`,
+  which the backend adopts as its authorization discriminator.

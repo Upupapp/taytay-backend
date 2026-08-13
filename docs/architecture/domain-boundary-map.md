@@ -118,4 +118,7 @@ Two consequences worth stating plainly:
   no `package.json`, no view templates.
 * `tests/Architecture/InfrastructureAlignmentTest.php` — no Firebase parallel authority or
   store, private object storage, portable migrations, no browser-exposed secrets.
+* `tests/Architecture/ContractMatrixTest.php` — the published contract
+  ([`docs/contracts/`](../contracts/README.md)) and the registered routes agree in both
+  directions, and no endpoint is specific to one client.
 * `config/modules.php` — the registry; a module that is not listed is not loaded.
