@@ -37,7 +37,9 @@ UI role (for example a generated PDF/PNG credential asset or a CSV export).
 * REST/JSON only, under **`/api/v1`**. No GraphQL, no RPC.
 * Tests: PHPUnit via `php artisan test`.
 * Style: Laravel Pint (`vendor/bin/pint`).
-* Persistence: relational (PostgreSQL/MySQL in real environments, SQLite in tests).
+* Persistence: **PostgreSQL** in real environments (Akamai Managed PostgreSQL where
+  regionally available), SQLite in tests. Migrations stay portable — no vendor-specific
+  raw SQL — so the managed service remains a deployment choice, not a lock-in.
 
 ---
 
@@ -170,7 +172,43 @@ A change is done when:
 
 ---
 
-## Article 8 — Operational prohibitions for agents
+## Article 8 — Infrastructure boundaries (binding)
+
+Providers are fixed. Full detail: `docs/architecture/deployment-topology.md`, decided in
+ADR 0004 (topology) and ADR 0005 (cross-origin authentication).
+
+1. **Laravel on Linode/Akamai is the sole authority.** Netlify delivers the browser
+   portals; Firebase carries mobile push. Neither is a backend. A second place where
+   authority *appears* to live is the same defect as Article 3.4, one layer down.
+2. **Netlify hosts frontends only.** Build variables are public — no Laravel secret,
+   database credential, object-storage key or Firebase service-account material may be
+   configured there. Netlify Functions/Edge Functions must never own authentication,
+   welfare workflows, KYC, case state, files, event capacity or moderation. Deploy
+   Previews use staging APIs and synthetic data.
+3. **Firebase is transport, not authority.** Laravel decides that a notification is
+   warranted, who may receive it and what it may say; FCM only delivers it, via HTTP v1
+   with short-lived OAuth credentials from a securely stored service account. **Firebase
+   Auth, Firestore, Realtime Database and Firebase Storage are not used** — introducing
+   any as a parallel authority or store requires a new ADR. App Check is an extra signal
+   only and never replaces authentication, RBAC, object authorization or rate limiting.
+4. **Never send personal data to a third-party telemetry or push channel.** No PII, case
+   narrative, document identifier or welfare detail in an analytics property, crash key or
+   push payload. Send an identifier and a type; let the client fetch detail over the
+   authenticated API.
+5. **Sensitive objects are private.** Akamai Object Storage (`object-storage` disk) with
+   least-privilege keys, delivered by an authorization-gated endpoint or a short-lived
+   signed URL issued after a server-side authorization decision — never a public link.
+   Nothing citizen-derived may be written to the `public` disk.
+6. **Redis and PostgreSQL are never publicly reachable**, and staging never shares a
+   credential, bucket, database or Firebase project with production.
+7. **Do not weaken a control to make an integration work.** Where cookie-based SPA auth
+   would have required widening cookie scope, enabling credentialed CORS and adding a CSRF
+   surface, ADR 0005 chose first-party bearer tokens instead. Take the same route: change
+   the approach, not the control.
+
+---
+
+## Article 9 — Operational prohibitions for agents
 
 Never push, force-push, merge protected branches, deploy, rotate credentials, touch
 production infrastructure or production data, or expose secrets. Local commits only, and

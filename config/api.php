@@ -38,6 +38,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trusted reverse proxies
+    |--------------------------------------------------------------------------
+    |
+    | The API runs behind Nginx, and behind a NodeBalancer once there is more than one
+    | node (ADR 0004). Without trusted proxies Laravel reads the proxy's address as the
+    | client IP and believes every request is plain HTTP, which silently breaks rate
+    | limiting (every caller shares one key), signed URLs (wrong scheme) and audit trails
+    | (every action attributed to the load balancer).
+    |
+    | Deny by default: empty means no proxy is trusted, so a misconfigured deployment
+    | cannot let a caller spoof X-Forwarded-For. Set it per environment to the
+    | private-network CIDR or NodeBalancer address; prefer that over "*".
+    |
+    | This lives in config rather than bootstrap/app.php because the middleware closure
+    | there runs before the .env file is loaded, where env() reads null.
+    |
+    */
+
+    'trusted_proxies' => env('TRUSTED_PROXIES', ''),
+
+    /*
+    |--------------------------------------------------------------------------
     | Pagination limits
     |--------------------------------------------------------------------------
     |

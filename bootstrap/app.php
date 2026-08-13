@@ -21,6 +21,17 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        /*
+         * Trusted proxies are configured in Modules\Shared\Providers\SharedServiceProvider
+         * from config('api.trusted_proxies'), NOT here.
+         *
+         * This closure runs when the HTTP kernel is resolved, which is before Laravel
+         * loads the .env file — so reading that variable through env() here yields null
+         * and the whole setting silently does nothing. That was verified, not assumed: a
+         * request forwarded by a configured proxy still reported the proxy as the client
+         * and isSecure() as false.
+         */
+
         // Prepended so that a request is JSON-shaped and correlated before anything —
         // including authentication failures — can produce a response.
         $middleware->api(prepend: [

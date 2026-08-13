@@ -74,15 +74,27 @@ config/modules.php   the module registry — unlisted modules do not load
 | --- | --- |
 | [`CLAUDE.md`](CLAUDE.md) | The constitution — highest authority |
 | [`docs/architecture/domain-boundary-map.md`](docs/architecture/domain-boundary-map.md) | Who owns which fact, and allowed dependencies |
+| [`docs/architecture/deployment-topology.md`](docs/architecture/deployment-topology.md) | Netlify / Firebase / Linode responsibilities and environments |
 | [`docs/api/conventions.md`](docs/api/conventions.md) | Envelope, errors, pagination, types |
 | [`docs/adr/`](docs/adr/README.md) | Architecture decision records |
 
-## Two rules worth repeating
+## Three rules worth repeating
 
 1. **Authorization is server-side, always.** A role, permission list or `is_admin` flag
    arriving from a client is untrusted input. The `/api/v1/admin/...` prefix grants
    nothing. A hidden button is not access control.
 2. **The client channel is telemetry, never authority.** `X-Client-Channel` is recorded
    for audit and may set a default page size. It can never widen what a caller may see.
+3. **This backend is the only authority.** Netlify delivers the browser portals and
+   Firebase carries push; neither is a backend. No secrets on Netlify, no Firebase Auth or
+   Firestore, no personal data in a push or analytics payload.
 
-Both are enforced by tests, not by review — see `tests/Feature/Api/V1/`.
+All three are enforced by tests, not by review — see `tests/Feature/Api/V1/` and
+`tests/Architecture/`.
+
+## Deployed environments
+
+Set these per environment or the deployment is subtly wrong (details in
+[`deployment-topology.md`](docs/architecture/deployment-topology.md)):
+`TRUSTED_PROXIES`, `CORS_ALLOWED_ORIGINS`, `DB_CONNECTION=pgsql` + `DB_SSLMODE=require`,
+`OBJECT_STORAGE_*`, `FCM_*`, `APP_DEBUG=false`.

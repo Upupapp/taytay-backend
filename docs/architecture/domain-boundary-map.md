@@ -81,10 +81,41 @@ Consequences, enforced in code:
 
 ---
 
-## 4. Boundary enforcement
+## 4. External integration boundaries
+
+Module boundaries govern code. These govern the providers the modules talk to
+(ADR 0004, `deployment-topology.md`). The rule is the same one, restated: **a fact has one
+owner, and it is always a module in this repository.**
+
+| External system | Role | Owning module | Never |
+| --- | --- | --- | --- |
+| Akamai Managed PostgreSQL | canonical relational store | every module owns its own tables | shared tables across modules |
+| Akamai Object Storage (`object-storage` disk) | private blob store for documents, ID artifacts, attachments | `Credential`, `ServiceDelivery` | public URLs; anything citizen-derived on the `public` disk |
+| Redis | queues, cache, locks, rate limits | `Shared` (infrastructure) | a source of truth — it is a cache, and Article 6 requires caches be derivable |
+| Firebase Cloud Messaging | push **transport** to the Flutter app | `Notification` | deciding *whether* to notify, *who* may receive, or *what* may be said; carrying PII in a payload |
+| Firebase Crashlytics / Performance / Analytics | app operations telemetry | n/a (client-side) | any citizen PII, case narrative, document identifier or welfare detail as a property or key |
+| Firebase App Check | anti-abuse signal | n/a | substituting for authentication, RBAC, object authorization or rate limiting |
+| Netlify | delivery of the two browser portals | n/a | holding secrets; owning auth, workflows, KYC, case state, files, capacity or moderation |
+
+Two consequences worth stating plainly:
+
+* **`Notification` owns the decision; FCM owns the delivery.** When `Notification` is
+  built, its application service decides that an event warrants telling someone, resolves
+  who may be told through `AccessControl`, and records the dispatch. FCM is an adapter
+  behind an interface in `Notification/Infrastructure/` — swappable for SMS or email
+  without touching a single business rule.
+* **No Firebase Auth, Firestore, Realtime Database or Firebase Storage.** Each would
+  create a parallel identity or store with its own authorization model, which is exactly
+  the split-brain this map exists to prevent. Adding one requires a new ADR.
+
+---
+
+## 5. Boundary enforcement
 
 * `tests/Architecture/ModuleBoundaryTest.php` — no module references another module's
   `Domain\` or `Infrastructure\` namespace.
 * `tests/Architecture/NoFrontendCodeTest.php` — no frontend assets, no bundler config,
   no `package.json`, no view templates.
+* `tests/Architecture/InfrastructureAlignmentTest.php` — no Firebase parallel authority or
+  store, private object storage, portable migrations, no browser-exposed secrets.
 * `config/modules.php` — the registry; a module that is not listed is not loaded.

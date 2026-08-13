@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Shared\Providers;
 
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Support\ServiceProvider;
 use Modules\Shared\Application\RequestContext;
 
@@ -33,5 +34,25 @@ final class SharedServiceProvider extends ServiceProvider
 
             return $request->attributes->get('shared.request_context');
         });
+    }
+
+    /**
+     * Applied at boot, once configuration is available.
+     *
+     * `TrustProxies` reads this static per request, so setting it here takes effect for
+     * every request while still being driven by config. Doing the same thing in
+     * bootstrap/app.php does NOT work: that closure runs before the .env file is loaded,
+     * so the setting silently evaporates and the API keeps treating the load balancer as
+     * the client.
+     */
+    public function boot(): void
+    {
+        $proxies = trim((string) config('api.trusted_proxies', ''));
+
+        if ($proxies === '') {
+            return; // Deny by default — trust nothing.
+        }
+
+        TrustProxies::at($proxies === '*' ? '*' : array_map('trim', explode(',', $proxies)));
     }
 }

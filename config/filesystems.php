@@ -38,6 +38,10 @@ return [
             'report' => false,
         ],
 
+        /*
+         | World-readable by URL. Nothing derived from a citizen's record — no document,
+         | no photo, no ID artifact — may ever be written here. Use `object-storage`.
+         */
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
@@ -47,17 +51,30 @@ return [
             'report' => false,
         ],
 
-        's3' => [
+        /*
+         | Akamai (Linode) Object Storage — the S3-compatible production store (ADR 0004).
+         |
+         | Citizen documents, ID card artifacts and case attachments live here. The disk
+         | is PRIVATE: nothing it holds may ever be world-readable by URL. Objects are
+         | delivered either by an authorization-gated streaming endpoint or by a
+         | short-lived signed URL issued after a server-side authorization decision —
+         | never by handing a client a permanent link (CLAUDE.md Article 5.3).
+         |
+         | `throw` is on: a silent write failure on a citizen's uploaded document would
+         | otherwise surface much later as missing evidence in a welfare case.
+         */
+        'object-storage' => [
             'driver' => 's3',
-            'key' => env('AWS_ACCESS_KEY_ID'),
-            'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION'),
-            'bucket' => env('AWS_BUCKET'),
-            'url' => env('AWS_URL'),
-            'endpoint' => env('AWS_ENDPOINT'),
-            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
-            'throw' => false,
-            'report' => false,
+            'key' => env('OBJECT_STORAGE_KEY'),
+            'secret' => env('OBJECT_STORAGE_SECRET'),
+            'region' => env('OBJECT_STORAGE_REGION'),
+            'bucket' => env('OBJECT_STORAGE_BUCKET'),
+            'endpoint' => env('OBJECT_STORAGE_ENDPOINT'),
+            'use_path_style_endpoint' => env('OBJECT_STORAGE_PATH_STYLE', false),
+            // No 'url': a public base URL is what turns a private store into a leak.
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => true,
         ],
 
     ],
