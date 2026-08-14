@@ -170,6 +170,8 @@ with PHP 8.3.30, PostgreSQL 16.14 and Redis 5.0.14 as native processes:
 | `lguids:readiness` with `FILESYSTEM_DISK=object-storage` | storage `ok` through the S3 path |
 | `docker compose config` | **valid** — parsed and fully resolved by the official Docker Compose CLI v5.4.0; 5 services, all published ports on `127.0.0.1`, 3 volumes, healthchecks intact |
 | Pinned image tags | all five verified to exist in their registries |
+| **TAB 04 foundation schema on PostgreSQL** | `migrate` from empty → `migrate:reset` (clean, only `migrations` left) → re-apply; then `migrate:fresh --seed`, `db:seed` twice more (idempotent: still 5 barangays, 1 user), rollback again **with data present**, re-apply. 20 indexes and 10 unique/check/FK constraints verified |
+| Constraint behaviour on PostgreSQL | duplicate `(subject_id, role)` rejected by `uniq_role_assignments_subject_role`; invalid `scope_type` rejected by the check constraint compiled from `->enum()`; all 14 datetime columns are `timestamp with time zone`; `audit_entries` has `created_at`/`occurred_at` and no mutation column |
 
 The Compose CLI used for validation was the official release binary, checksum-verified
 against Docker's published `.sha256`, run from a temporary directory and not installed.

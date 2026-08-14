@@ -118,6 +118,10 @@ Two consequences worth stating plainly:
   no `package.json`, no view templates.
 * `tests/Architecture/InfrastructureAlignmentTest.php` — no Firebase parallel authority or
   store, private object storage, portable migrations, no browser-exposed secrets.
+* `tests/Architecture/DatabaseConventionsTest.php` — ADR 0008 holds: no application state
+  in JSON, every migration reversible, time zones on datetimes, a public UUID per table,
+  and no cross-module foreign key. Schema shape is verified against a live database by
+  `tests/Feature/Database/FoundationSchemaTest.php`.
 * `tests/Architecture/LocalInfrastructureTest.php` — the local stack mirrors the
   production topology, images are pinned, stateful services bind to loopback, and no
   credential or deployed hostname reaches `.env.example` or `docker-compose.yml`.

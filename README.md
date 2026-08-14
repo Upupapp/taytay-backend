@@ -81,6 +81,7 @@ config/modules.php   the module registry — unlisted modules do not load
 | [`CLAUDE.md`](CLAUDE.md) | The constitution — highest authority |
 | [`docs/architecture/domain-boundary-map.md`](docs/architecture/domain-boundary-map.md) | Who owns which fact, and allowed dependencies |
 | [`docs/architecture/deployment-topology.md`](docs/architecture/deployment-topology.md) | Netlify / Firebase / Linode responsibilities and environments |
+| [`docs/architecture/erd.md`](docs/architecture/erd.md) | Entity-relationship map of all planned domains, with ownership |
 | [`docs/api/conventions.md`](docs/api/conventions.md) | Envelope, errors, pagination, types |
 | [`docs/contracts/`](docs/contracts/README.md) | Frontend endpoint matrix, client visibility matrix, gap list |
 | [`docs/runbooks/`](docs/runbooks/README.md) | Local development; environments, secrets and rotation |
