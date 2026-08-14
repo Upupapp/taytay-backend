@@ -130,6 +130,49 @@ stack before trusting a migration, a job or an upload.
 If you have local PostgreSQL and Redis installed natively, point the `.env` at them
 instead — nothing in the application knows or cares whether a dependency is containerised.
 
+### A disposable native PostgreSQL
+
+If PostgreSQL is installed but you do not want to touch the cluster your machine already
+runs, create a throwaway one on a spare port. It never interacts with the existing service
+and is deleted afterwards:
+
+```bash
+PGBIN="/c/Program Files/PostgreSQL/16/bin"      # adjust to your install
+PGDATA_DIR="$TEMP/lguids_pg"
+
+"$PGBIN/initdb" -D "$PGDATA_DIR" -U lguids --auth=trust --encoding=UTF8 --no-locale
+"$PGBIN/pg_ctl" -D "$PGDATA_DIR" -o "-p 55432 -h 127.0.0.1" -l "$TEMP/lguids_pg.log" start
+"$PGBIN/psql" -h 127.0.0.1 -p 55432 -U lguids -d postgres -c "CREATE DATABASE lguids;"
+
+# point .env at it: DB_PORT=55432, DB_USERNAME=lguids, DB_PASSWORD=
+php artisan migrate && php artisan lguids:readiness
+
+"$PGBIN/pg_ctl" -D "$PGDATA_DIR" stop && rm -rf "$PGDATA_DIR"
+```
+
+`--auth=trust` is safe **only** because the cluster listens on `127.0.0.1`, holds nothing
+but synthetic data, and is destroyed at the end. Never use it for anything you keep.
+
+## 6a. What has actually been verified on a developer machine
+
+Recorded so that "it should work" is not confused with "it was run". Verified on Windows
+with PHP 8.3.30, PostgreSQL 16.14 and Redis 5.0.14 as native processes:
+
+| Item | Result |
+| --- | --- |
+| `migrate` and `migrate:fresh` on PostgreSQL | 4 migrations applied, 10 tables created, re-runnable |
+| `lguids:readiness` on PostgreSQL + Redis | all five dependencies `ok` |
+| Redis cache and queue | read/write ok; a job was dispatched and executed by `queue:work` |
+| Storage read/write/delete | ok on the `local` disk |
+| Local SMTP capture | message delivered to Mailpit 1.22.3 and visible in its inbox |
+| API against PostgreSQL | `/api/v1/health` 200, `/api/v1/services` paginated, `/api/v1/admin/services` 401 |
+
+**Not yet executed anywhere:** `docker compose config` / `up` (no container runtime was
+available on the machine used), and the S3 code path against MinIO. The `object-storage`
+disk has therefore never been exercised against a real S3 API — treat it as unproven until
+someone runs the compose stack. The compose file's PostgreSQL is pinned to 17 while the
+verification above ran on 16.
+
 ## 7. When something is wrong
 
 | Symptom | Likely cause |
