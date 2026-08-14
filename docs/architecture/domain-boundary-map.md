@@ -118,6 +118,9 @@ Two consequences worth stating plainly:
   no `package.json`, no view templates.
 * `tests/Architecture/InfrastructureAlignmentTest.php` — no Firebase parallel authority or
   store, private object storage, portable migrations, no browser-exposed secrets.
+* `tests/Architecture/LocalInfrastructureTest.php` — the local stack mirrors the
+  production topology, images are pinned, stateful services bind to loopback, and no
+  credential or deployed hostname reaches `.env.example` or `docker-compose.yml`.
 * `tests/Architecture/ContractMatrixTest.php` — the published contract
   ([`docs/contracts/`](../contracts/README.md)) and the registered routes agree in both
   directions, and no endpoint is specific to one client.

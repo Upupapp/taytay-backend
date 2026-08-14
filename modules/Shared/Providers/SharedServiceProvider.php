@@ -7,6 +7,7 @@ namespace Modules\Shared\Providers;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Support\ServiceProvider;
 use Modules\Shared\Application\RequestContext;
+use Modules\Shared\Console\ReadinessCommand;
 
 /**
  * Shared is the only module every other module may depend on, and it may depend on
@@ -47,6 +48,10 @@ final class SharedServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->runningInConsole()) {
+            $this->commands([ReadinessCommand::class]);
+        }
+
         $proxies = trim((string) config('api.trusted_proxies', ''));
 
         if ($proxies === '') {

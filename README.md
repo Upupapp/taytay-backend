@@ -32,7 +32,10 @@ enforced by `tests/Architecture/NoFrontendCodeTest.php`, not by convention.
 composer install
 cp .env.example .env
 php artisan key:generate
+
+docker compose up -d --wait     # postgres, redis, minio, mailpit
 php artisan migrate
+php artisan lguids:readiness    # proves every dependency is actually reachable
 php artisan serve
 ```
 
@@ -41,6 +44,9 @@ Verify the boot:
 ```bash
 curl http://127.0.0.1:8000/api/v1/health
 ```
+
+Queue worker in a second terminal: `php artisan queue:work`.
+No Docker, or something not working? [`docs/runbooks/local-development.md`](docs/runbooks/local-development.md).
 
 ## Checks
 
@@ -77,6 +83,7 @@ config/modules.php   the module registry — unlisted modules do not load
 | [`docs/architecture/deployment-topology.md`](docs/architecture/deployment-topology.md) | Netlify / Firebase / Linode responsibilities and environments |
 | [`docs/api/conventions.md`](docs/api/conventions.md) | Envelope, errors, pagination, types |
 | [`docs/contracts/`](docs/contracts/README.md) | Frontend endpoint matrix, client visibility matrix, gap list |
+| [`docs/runbooks/`](docs/runbooks/README.md) | Local development; environments, secrets and rotation |
 | [`docs/adr/`](docs/adr/README.md) | Architecture decision records |
 
 ## Three rules worth repeating

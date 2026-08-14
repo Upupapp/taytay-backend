@@ -146,6 +146,11 @@ These are names only — values live in the environment and nowhere else
 | `REDIS_*` | Queues, cache, locks, rate limits — on the private network only. |
 | `APP_DEBUG=false` | Debug detail is attached to 500 responses when true. |
 
+Verify after any deploy or rotation with `php artisan lguids:readiness` on the host — it
+writes and reads back through each dependency rather than pinging a port. Setting these
+per environment, secret handling and rotation:
+[runbooks/environments-and-secrets.md](../runbooks/environments-and-secrets.md).
+
 ---
 
 ## 4. Deliberately not in this repository
