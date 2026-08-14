@@ -13,6 +13,7 @@ supersede it with a new one and update the status here.
 | [0006](0006-admin-console-authentication.md) | Admin console authenticates with an in-memory bearer token | Accepted |
 | [0007](0007-canonical-assistance-lifecycle.md) | One canonical assistance lifecycle, projected per channel | Accepted |
 | [0008](0008-database-conventions.md) | PostgreSQL-first relational conventions | Accepted |
+| [0009](0009-account-model-and-authentication-factors.md) | Accounts are separate from residents; factors differ by account type | Accepted |
 
 An ADR is required when a change alters a module boundary, an API convention, an
 authentication/authorization model, a persistence source of truth, or a lifecycle state

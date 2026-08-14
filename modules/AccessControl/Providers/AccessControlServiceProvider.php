@@ -7,14 +7,17 @@ namespace Modules\AccessControl\Providers;
 use Illuminate\Support\ServiceProvider;
 use Modules\AccessControl\Application\ActorContextFactory;
 use Modules\AccessControl\Domain\RoleAssignmentRepository;
-use Modules\AccessControl\Infrastructure\ConfigRoleAssignmentRepository;
+use Modules\AccessControl\Infrastructure\DatabaseRoleAssignmentRepository;
 use Modules\Shared\Application\ActorContext;
 
 final class AccessControlServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->bind(RoleAssignmentRepository::class, ConfigRoleAssignmentRepository::class);
+        // Canonical since TAB 05: role assignments live in the database now that
+        // Identity owns accounts. The config-backed implementation is gone; the
+        // interface it was bound to has not changed (gap G-09).
+        $this->app->bind(RoleAssignmentRepository::class, DatabaseRoleAssignmentRepository::class);
 
         $this->app->when(ActorContextFactory::class)
             ->needs('$guard')

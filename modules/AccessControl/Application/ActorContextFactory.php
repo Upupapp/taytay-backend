@@ -40,7 +40,11 @@ final class ActorContextFactory
             return ActorContext::guest($this->requestContext->channel());
         }
 
-        return $this->forSubject((string) $user->getAuthIdentifier());
+        // The subject is the account's public UUID, which is what role_assignments and
+        // audit_entries reference. Never the autoincrement id (ADR 0008 §1).
+        $subjectId = $user->getAttribute('uuid') ?? $user->getAuthIdentifier();
+
+        return $this->forSubject((string) $subjectId);
     }
 
     public function forSubject(string $subjectId): ActorContext

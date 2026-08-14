@@ -11,22 +11,25 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
-            $table->timestamps();
-        });
-
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->timestamp('created_at')->nullable();
-        });
-
+        /*
+         * Laravel's `users` and `password_reset_tokens` tables are deliberately NOT
+         * created.
+         *
+         * Identity owns authentication in this system (TAB 05): `accounts` supersedes
+         * `users` and `password_resets` supersedes `password_reset_tokens`. Creating the
+         * scaffolding tables as well would leave two account stores and two reset
+         * mechanisms in one database — the duplicate source of truth that CLAUDE.md
+         * Article 6 and ADR 0008 §10 exist to prevent, and the kind that ends with half
+         * the code reading the wrong one.
+         *
+         * Editing this migration rather than adding a drop is safe here and only here:
+         * it has never run anywhere but local and disposable databases, and the project
+         * has no deployment. Once anything is deployed, ADR 0008 §14 applies and the
+         * change would have to be a new forward migration.
+         *
+         * `sessions` stays: the framework's session store is unrelated to API
+         * authentication, which uses bearer tokens (ADR 0005).
+         */
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->foreignId('user_id')->nullable()->index();
@@ -42,8 +45,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
     }
 };

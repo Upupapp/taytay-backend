@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api\V1;
 
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Modules\Identity\Infrastructure\Eloquent\Account;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -87,7 +87,7 @@ final class ClientChannelIsNotAuthorityTest extends TestCase
     {
         // The account exists and is authenticated, but holds no role assignment — which
         // is the default for every citizen account (deny by default).
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(Account::factory()->create());
 
         $response = $this->getJson('/api/v1/admin/services', ['X-Client-Channel' => 'admin-console']);
 
@@ -126,8 +126,9 @@ final class ClientChannelIsNotAuthorityTest extends TestCase
     #[Test]
     public function an_unknown_role_in_configuration_is_ignored(): void
     {
-        $user = User::factory()->create();
-        config(['access_control.assignments' => [(string) $user->getAuthIdentifier() => ['super_admin', 'root']]]);
+        $user = Account::factory()->create();
+        $this->grantRole($user, 'super_admin');
+        $this->grantRole($user, 'root');
         Sanctum::actingAs($user);
 
         // A role outside the catalog is dropped rather than passed through, so a typo in
@@ -138,11 +139,11 @@ final class ClientChannelIsNotAuthorityTest extends TestCase
         $this->assertDraftIsHidden($response->json('data'));
     }
 
-    private function actAsLguAdmin(): User
+    private function actAsLguAdmin(): Account
     {
-        $user = User::factory()->create();
+        $user = Account::factory()->create();
 
-        config(['access_control.assignments' => [(string) $user->getAuthIdentifier() => ['lgu_admin']]]);
+        $this->grantRole($user, 'lgu_admin');
 
         Sanctum::actingAs($user);
 

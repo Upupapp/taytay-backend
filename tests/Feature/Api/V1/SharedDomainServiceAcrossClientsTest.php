@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api\V1;
 
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Sanctum;
+use Modules\Identity\Infrastructure\Eloquent\Account;
 use Modules\ServiceCatalog\Application\ListServicesQuery;
 use Modules\ServiceCatalog\Http\Controllers\V1\ServiceCatalogController;
 use PHPUnit\Framework\Attributes\Test;
@@ -88,8 +88,8 @@ final class SharedDomainServiceAcrossClientsTest extends TestCase
     #[Test]
     public function the_same_actor_gets_the_same_result_from_the_citizen_and_admin_urls(): void
     {
-        $user = User::factory()->create();
-        config(['access_control.assignments' => [(string) $user->getAuthIdentifier() => ['lgu_admin']]]);
+        $user = Account::factory()->create();
+        $this->grantRole($user, 'lgu_admin');
         Sanctum::actingAs($user);
 
         $viaCitizenUrl = $this->getJson('/api/v1/services?per_page=100')->assertOk()->json('data');
@@ -107,8 +107,8 @@ final class SharedDomainServiceAcrossClientsTest extends TestCase
     {
         $resident = $this->getJson('/api/v1/services?per_page=100')->assertOk()->json('data');
 
-        $staff = User::factory()->create();
-        config(['access_control.assignments' => [(string) $staff->getAuthIdentifier() => ['lgu_staff']]]);
+        $staff = Account::factory()->create();
+        $this->grantRole($staff, 'lgu_staff');
         Sanctum::actingAs($staff);
 
         $staffView = $this->getJson('/api/v1/services?per_page=100')->assertOk()->json('data');
@@ -130,8 +130,8 @@ final class SharedDomainServiceAcrossClientsTest extends TestCase
     {
         $residentEntry = $this->getJson('/api/v1/services')->assertOk()->json('data.0');
 
-        $staff = User::factory()->create();
-        config(['access_control.assignments' => [(string) $staff->getAuthIdentifier() => ['lgu_staff']]]);
+        $staff = Account::factory()->create();
+        $this->grantRole($staff, 'lgu_staff');
         Sanctum::actingAs($staff);
 
         $staffEntry = $this->getJson('/api/v1/admin/services')->assertOk()->json('data.0');

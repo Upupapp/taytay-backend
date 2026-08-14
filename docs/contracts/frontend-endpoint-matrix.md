@@ -45,12 +45,19 @@ today — the mobile one declines honestly (`PendingBackendAuthRepository`).
 
 | Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Admin sign-in (`/sign-in`) | `POST /api/v1/auth/tokens` | public | — | — | `{email,password,device_name}` | `{token,expires_at,actor}` | credentials — never logged, rate-limited, generic failure message | `planned` |
-| Citizen sign-in — request code | `POST /api/v1/auth/otp` | public | — | — | `{mobile_number}` | `202` accepted | must not reveal whether the number is registered | `planned` |
-| Citizen sign-in — verify code | `POST /api/v1/auth/otp/verify` | public | — | — | `{mobile_number,code}` | `{token,expires_at,actor}` | attempt-limited; generic failure | `planned` |
-| Session bootstrap (all clients) | `GET /api/v1/me` | bearer | — | own-record | — | actor identity + **server-resolved** `permissions[]`, `scope`, `verification_tier` | own identity only | `planned` |
-| Sign out | `DELETE /api/v1/auth/tokens/current` | bearer | — | own-record | — | `204` | must revoke server-side | `planned` |
+| Admin sign-in (`/sign-in`) | `POST /api/v1/auth/tokens` | public | — | — | `{email,password,device_name}` | `201` `{token,expires_at}` or `200` `{status:"mfa-required",challenge}` | credentials — never logged, rate-limited, one generic failure message for every cause | `implemented` |
+| Admin sign-in — second factor | `POST /api/v1/auth/tokens/mfa` | public | — | — | `{challenge,code}` | `201` `{token,expires_at}` | challenge is single-use and expires in 5 minutes | `implemented` |
+| Citizen sign-in — request code | `POST /api/v1/auth/otp` | public | — | — | `{mobile_number}` | `202` accepted | **identical response whether or not the number is registered** | `implemented` |
+| Citizen sign-in — verify code | `POST /api/v1/auth/otp/verify` | public | — | — | `{mobile_number,code,device_name}` | `201` `{token,expires_at}` | attempt-capped; guessing burns the code | `implemented` |
+| Session bootstrap (all clients) | `GET /api/v1/me` | bearer | — | own-record | — | actor identity + **server-resolved** `permissions[]`, `roles[]`, `resident_id` | own identity only; `resident_id` grants nothing | `implemented` |
+| Sign out | `DELETE /api/v1/auth/tokens/current` | bearer | — | own-record | — | `{status}` | revokes server-side, immediately | `implemented` |
+| Forgot password (staff) | `POST /api/v1/auth/password/forgot` | public | — | — | `{email}` | `202` accepted | identical response for unknown addresses | `implemented` |
+| Reset password | `POST /api/v1/auth/password/reset` | public | — | — | `{token,password,password_confirmation}` | `{status}` | single-use, 30-minute token; revokes every session on success | `implemented` |
 | Angular `signInAs(staffUserId)` | — | — | — | — | — | — | — | `mock-only` |
+
+`verification_tier` is **not** yet on `/me`: identity verification belongs to ResidentProfile
+(TAB 06), and Identity only proves control of a contact channel. `/me` returns
+`email_verified` and `mobile_verified`, which are the facts Identity actually owns.
 
 `signInAs` posts `{staffUserId}` to `session` with **no credential**
 (`http-repositories.ts:172`). As a backend endpoint that is an authentication bypass —
@@ -217,7 +224,9 @@ gap **G-11**.
 | Inbox | `GET /api/v1/me/notifications` | bearer | — | own-record | `?unread_only=&page=&per_page=` | paginated notifications | recipient's own only | `planned` |
 | Mark read | `POST /api/v1/me/notifications/{notification_id}/read` | bearer | — | own-record | — | notification | — | `planned` |
 | Mark all read | `POST /api/v1/me/notifications/read-all` | bearer | — | own-record | — | `204` | — | `planned` |
-| Device registration (push) | `POST /api/v1/me/devices` | bearer | — | own-record | `{fcm_token,platform}` | `201` | token is a credential — never logged | `planned` |
+| Device registration (push) | `POST /api/v1/me/devices` | bearer | — | own-record | `{fingerprint,display_name,platform,push_token}` | `201` `{id,display_name}` | fingerprint hashed, push token encrypted, never returned | `implemented` |
+| List devices | `GET /api/v1/me/devices` | bearer | — | own-record | — | own devices | push token never returned | `implemented` |
+| Revoke device | `DELETE /api/v1/me/devices/{device}` | bearer | — | own-record | — | `{status}` | clears the push token as well as the flag | `implemented` |
 | Angular `NotificationRepository.create()` | — | — | — | — | — | — | — | `mock-only` |
 
 A client that can create its own notifications can forge an official LGU message. Raising
@@ -227,6 +236,27 @@ showing a local toast and must stay local — the `NotificationStore` toast path
 backend at all.
 
 ---
+
+## 11a. Account security (all channels) — built in TAB 05
+
+Every route is scoped to the caller by construction: the account is resolved from the
+token, never from a path or body parameter, so there is no identifier to tamper with.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| List my sessions | `GET /api/v1/me/sessions` | bearer | — | own-record | — | sessions with `current` flag | own sessions only; other accounts' return `404` | `implemented` |
+| Revoke one session | `DELETE /api/v1/me/sessions/{session}` | bearer | — | own-record | — | `{status}` | `404` not `403` for another account's session | `implemented` |
+| Revoke all sessions | `POST /api/v1/me/sessions/revoke-all` | bearer | — | own-record | — | `{status,count}` | includes the current session — the "lost phone" control | `implemented` |
+| Verify a contact channel | `POST /api/v1/me/contact/verify` | bearer | — | own-record | `{channel}` | `202` | code never returned or logged | `implemented` |
+| Confirm a contact channel | `POST /api/v1/me/contact/verify/confirm` | bearer | — | own-record | `{channel,code}` | `{status}` | proves control of a channel, **not** identity | `implemented` |
+| Begin MFA enrolment (staff) | `POST /api/v1/me/mfa` | bearer | staff account type | own-record | — | `201` `{secret,otpauth_uri}` | secret shown once; `403` for citizens | `implemented` |
+| Confirm MFA enrolment | `POST /api/v1/me/mfa/confirm` | bearer | staff account type | own-record | `{code}` | `{status,recovery_codes}` | recovery codes shown **once**, stored hashed | `implemented` |
+| Regenerate recovery codes | `POST /api/v1/me/mfa/recovery-codes` | bearer | staff account type | own-record | `{code}` | `{recovery_codes}` | requires a current second factor | `implemented` |
+| Disable MFA | `DELETE /api/v1/me/mfa` | bearer | staff account type | own-record | `{code}` | `{status}` | lowering protection is privileged — requires a current second factor | `implemented` |
+
+MFA applies to staff because they read other people's welfare records. Citizens
+authenticate with a code to their mobile, which is already a possession factor; requiring
+TOTP as well would push residents off the service entirely.
 
 ## 12. Citizen clients
 

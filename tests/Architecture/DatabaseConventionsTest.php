@@ -126,10 +126,20 @@ final class DatabaseConventionsTest extends TestCase
         // Columns that reference another module's table by identifier. A `constrained()`
         // on any of them would weld two modules together at the schema level and make the
         // boundary in ADR 0001 unenforceable (CLAUDE.md Article 2.2).
-        $crossModule = ['subject_id', 'actor_subject_id', 'granted_by', 'resident_id', 'account_id', 'recipient_subject_id'];
+        $crossModule = ['subject_id', 'actor_subject_id', 'granted_by', 'resident_id', 'recipient_subject_id'];
+
+        /*
+         * `account_id` is the interesting case: it is a real foreign key *inside* Identity
+         * (a device belongs to an account and means nothing without one), and a forbidden
+         * one everywhere else. So the rule is scoped by owner rather than by column name —
+         * a blanket ban would have rejected Identity's own perfectly correct constraints.
+         */
+        $identityOwned = static fn (string $file): bool => str_contains($file, 'identity') || str_contains($file, 'accounts');
 
         foreach (self::conventionMigrations() as $file => $source) {
-            foreach ($crossModule as $column) {
+            $columns = $identityOwned($file) ? $crossModule : [...$crossModule, 'account_id'];
+
+            foreach ($columns as $column) {
                 if (preg_match('/[\'"]'.$column.'[\'"]\s*\)?\s*->[^;]*constrained\(/', $source) === 1) {
                     $offenders[] = "{$file}: `{$column}` is constrained";
                 }

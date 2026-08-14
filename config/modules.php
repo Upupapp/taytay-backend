@@ -23,6 +23,7 @@ return [
     'enabled' => [
         'Shared',
         'AccessControl',
+        'Identity',
         'ServiceCatalog',
     ],
 

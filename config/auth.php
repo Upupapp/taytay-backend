@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\User;
+use Modules\Identity\Infrastructure\Eloquent\Account;
 
 return [
 
@@ -74,7 +74,10 @@ return [
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', User::class),
+            // Identity owns authentication (TAB 05). `accounts` supersedes Laravel's
+            // `users` table — an account is a way to sign in, and is deliberately not the
+            // same thing as the resident it may act for.
+            'model' => env('AUTH_MODEL', Account::class),
         ],
 
         // 'users' => [

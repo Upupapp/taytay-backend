@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api\V1;
 
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Sanctum\Sanctum;
+use Modules\Identity\Infrastructure\Eloquent\Account;
 use Modules\Shared\Application\ActorContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -38,8 +38,8 @@ final class ActorContextIsolationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(self::PUBLISHED_SERVICE_COUNT, 'data');
 
-        $admin = User::factory()->create();
-        config(['access_control.assignments' => [(string) $admin->getAuthIdentifier() => ['lgu_admin']]]);
+        $admin = Account::factory()->create();
+        $this->grantRole($admin, 'lgu_admin');
         Sanctum::actingAs($admin);
 
         $this->getJson('/api/v1/services?per_page=100')
@@ -50,8 +50,8 @@ final class ActorContextIsolationTest extends TestCase
     #[Test]
     public function authority_does_not_survive_into_a_later_anonymous_request(): void
     {
-        $admin = User::factory()->create();
-        config(['access_control.assignments' => [(string) $admin->getAuthIdentifier() => ['lgu_admin']]]);
+        $admin = Account::factory()->create();
+        $this->grantRole($admin, 'lgu_admin');
         Sanctum::actingAs($admin);
 
         $this->getJson('/api/v1/services?per_page=100')
@@ -83,8 +83,8 @@ final class ActorContextIsolationTest extends TestCase
     #[Test]
     public function the_actor_context_is_stable_within_a_single_request(): void
     {
-        $staff = User::factory()->create();
-        config(['access_control.assignments' => [(string) $staff->getAuthIdentifier() => ['lgu_staff']]]);
+        $staff = Account::factory()->create();
+        $this->grantRole($staff, 'lgu_staff');
         Sanctum::actingAs($staff);
 
         // Memoisation must still hold within one request: resolving the actor twice in a
