@@ -26,6 +26,54 @@ Linode/Akamai is the only authority. Every other provider is delivery or transpo
 * Netlify Functions / Edge Functions are not the canonical backend. If one needs
   protected data it calls `api.<domain>` as a client and is authorized like any other.
 
+#### Content-Security-Policy (required by ADR 0005 and ADR 0006)
+
+Both authentication decisions depend on this control, so it is an obligation rather than
+hardening polish:
+
+* [ADR 0005](../adr/0005-cross-origin-authentication.md) accepts bearer tokens for the
+  citizen portal, naming a strict CSP among the mitigations for the XSS exposure that
+  choice carries.
+* [ADR 0006](../adr/0006-admin-console-authentication.md) has the admin console hold its
+  token **in memory**. That removes persistence, but injected script can still read a
+  variable.
+
+**If the policy below is not deployed, the residual risk both ADRs accepted is
+unmitigated, not merely undocumented.**
+
+Served as response headers from Netlify (`netlify.toml` `[[headers]]` or a `_headers`
+file) on **both** browser clients — `admin.<domain>` and `portal.<domain>`, and their
+staging hosts. Baseline:
+
+| Directive | Value | Why |
+| --- | --- | --- |
+| `default-src` | `'self'` | Deny by default, as everywhere else. |
+| `script-src` | `'self'` | **No `'unsafe-inline'`, no `'unsafe-eval'`.** Allowing either defeats the whole control. |
+| `connect-src` | `'self' https://api.<domain>` | The API origin for this environment only — never a wildcard, never the production API from a staging or preview host. |
+| `object-src` | `'none'` | No plugin content. |
+| `base-uri` | `'none'` | Stops injected `<base>` from re-pointing relative URLs. |
+| `frame-ancestors` | `'none'` | Clickjacking; a caseworker must not be framed into approving. |
+| `form-action` | `'self'` | Stops injected forms exfiltrating to another origin. |
+| `img-src` | `'self' data:` | App assets and inline data URIs only. |
+| `upgrade-insecure-requests` | — | No mixed content. |
+
+Alongside it: `Strict-Transport-Security` (with a long `max-age`),
+`X-Content-Type-Options: nosniff`, and
+`Referrer-Policy: strict-origin-when-cross-origin` — a referrer carrying a case
+identifier to a third party is a personal-data leak.
+
+Two implementation notes so the policy is not silently weakened to make the build work:
+
+* Angular emits component styles as inline `<style>` blocks. Use its `ngCspNonce` support
+  with a per-response nonce rather than adding `'unsafe-inline'` to `style-src`.
+* Deploy Previews get generated `*.netlify.app` origins and must keep `connect-src`
+  pointed at the **staging** API. A preview that can reach the production API contradicts
+  the Deploy Preview rule above.
+
+Not configured from this repository — Netlify holds no backend code and this backend
+issues no CSP for pages it does not serve. Recorded here because it is a binding
+deployment obligation, and it is verified by inspecting the deployed response headers.
+
 ### Firebase boundaries
 
 * Laravel decides that a notification is warranted, who may receive it, and what it may

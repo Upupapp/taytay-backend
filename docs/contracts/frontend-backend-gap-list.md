@@ -75,6 +75,12 @@ Both positions are defensible and they are incompatible. Settled in
 only**, which honours the Angular rule (nothing in `localStorage`) without reintroducing
 the cookie scope, credentialed CORS and CSRF surface ADR 0005 refused.
 
+That decision carries a **deployment obligation, not just a client change**: an in-memory
+token is still readable by injected script, so it depends on a strict Content-Security-Policy
+served by Netlify on both browser clients
+([deployment topology](../architecture/deployment-topology.md#content-security-policy-required-by-adr-0005-and-adr-0006)).
+Shipping the token change without the CSP leaves the accepted risk unmitigated.
+
 ---
 
 ### G-04

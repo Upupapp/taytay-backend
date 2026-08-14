@@ -68,8 +68,11 @@ storage — without reintroducing anything ADR 0005 refused.
   server-side mechanism — not by moving the access token into web storage.**
 * Negative: XSS in the console still yields a usable token for the tab's lifetime. Mitigated
   by a strict Content-Security-Policy on the Netlify-hosted console, short token lifetimes,
-  and server-side revocation. The console's existing lint and template rules help; a CSP is
-  a Netlify configuration task recorded in the deployment topology.
+  and server-side revocation. The console's existing lint and template rules help; the CSP
+  is a Netlify configuration task, specified as a binding obligation in
+  [deployment-topology.md § Content-Security-Policy](../architecture/deployment-topology.md#content-security-policy-required-by-adr-0005-and-adr-0006).
+  **Until that policy is deployed, this residual risk is unmitigated** — the decision
+  depends on it.
 * The Angular repository must update `api.contract.ts` and its HTTP adapters (gap G-01) and
   delete the credential-less `signInAs` path (G-02) before switching `dataSource` to
   `'http'`.
