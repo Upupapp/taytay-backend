@@ -163,15 +163,31 @@ with PHP 8.3.30, PostgreSQL 16.14 and Redis 5.0.14 as native processes:
 | `migrate` and `migrate:fresh` on PostgreSQL | 4 migrations applied, 10 tables created, re-runnable |
 | `lguids:readiness` on PostgreSQL + Redis | all five dependencies `ok` |
 | Redis cache and queue | read/write ok; a job was dispatched and executed by `queue:work` |
-| Storage read/write/delete | ok on the `local` disk |
 | Local SMTP capture | message delivered to Mailpit 1.22.3 and visible in its inbox |
 | API against PostgreSQL | `/api/v1/health` 200, `/api/v1/services` paginated, `/api/v1/admin/services` 401 |
+| Storage — `local` disk | write/read/delete ok |
+| Storage — **`object-storage` against a real S3 API** | bucket created, write/read/size ok, `visibility=private`, signed URL issued, delete ok — against MinIO `RELEASE.2025-09-07T16-13-09Z` running locally |
+| `lguids:readiness` with `FILESYSTEM_DISK=object-storage` | storage `ok` through the S3 path |
+| `docker compose config` | **valid** — parsed and fully resolved by the official Docker Compose CLI v5.4.0; 5 services, all published ports on `127.0.0.1`, 3 volumes, healthchecks intact |
+| Pinned image tags | all five verified to exist in their registries |
 
-**Not yet executed anywhere:** `docker compose config` / `up` (no container runtime was
-available on the machine used), and the S3 code path against MinIO. The `object-storage`
-disk has therefore never been exercised against a real S3 API — treat it as unproven until
-someone runs the compose stack. The compose file's PostgreSQL is pinned to 17 while the
-verification above ran on 16.
+The Compose CLI used for validation was the official release binary, checksum-verified
+against Docker's published `.sha256`, run from a temporary directory and not installed.
+
+### The one thing still not executed
+
+**No container has ever been started from this file.** `docker compose config` validates
+the model — schema, interpolation, defaults — and the image tags are known to exist, but
+image pull, container networking, `depends_on` ordering, volume mounts and the
+healthcheck *commands inside the images* have not run, because no container runtime was
+available. Everything the stack provides has been proven with the same software running
+natively; the orchestration layer itself has not.
+
+If you are the first person to run `docker compose up -d --wait`, expect it to work and
+please report it if it does not.
+
+Lesser caveat: the compose file pins PostgreSQL 17; the migration proof above ran on the
+locally installed PostgreSQL 16.14.
 
 ## 7. When something is wrong
 

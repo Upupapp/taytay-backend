@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Architecture;
 
+use Illuminate\Filesystem\AwsS3V3Adapter;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -196,6 +198,37 @@ final class LocalInfrastructureTest extends TestCase
         $this->assertStringContainsString('SANCTUM_STATEFUL_DOMAINS', $env);
         $this->assertStringContainsString('TRUSTED_PROXIES', $env);
         $this->assertMatchesRegularExpression('/ADR 0005|ADR 0006/', $env);
+    }
+
+    #[Test]
+    public function the_object_storage_disk_can_actually_be_built(): void
+    {
+        // This caught a real defect. The `object-storage` disk was configured, documented
+        // in two runbooks and asserted by other tests, but `league/flysystem-aws-s3-v3`
+        // was never installed — so every one of those checks passed while the disk itself
+        // would have thrown on first use. Nothing exercised it, so nothing failed.
+        //
+        // Building the adapter needs no network: it constructs a client, it does not call
+        // one. That is exactly the point — the check is cheap enough to always run.
+        config([
+            'filesystems.disks.object-storage' => [
+                'driver' => 's3',
+                'key' => 'test-key',
+                'secret' => 'test-secret',
+                'region' => 'us-east-1',
+                'bucket' => 'test-bucket',
+                'endpoint' => 'http://127.0.0.1:9000',
+                'use_path_style_endpoint' => true,
+                'visibility' => 'private',
+                'throw' => true,
+            ],
+        ]);
+
+        $this->assertInstanceOf(
+            AwsS3V3Adapter::class,
+            Storage::disk('object-storage'),
+            'The s3 driver is unavailable — league/flysystem-aws-s3-v3 is missing from composer.json.'
+        );
     }
 
     private static function compose(): string
