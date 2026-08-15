@@ -258,6 +258,46 @@ MFA applies to staff because they read other people's welfare records. Citizens
 authenticate with a code to their mobile, which is already a possession factor; requiring
 TOTP as well would push residents off the service entirely.
 
+## 11b. Citizen onboarding and KYC — built in TAB 06
+
+The rule the whole section turns on: **nothing here creates a canonical resident.**
+Registration and submission touch only the KYC case; `residents` is written exclusively by
+a reviewer's approval (ADR 0010).
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Start registration | `POST /api/v1/me/kyc` | bearer | — | own-record | claimed name, birth date, sex, barangay, address | `201` case | **idempotent** — a second call returns the same case, never a second one | `implemented` |
+| My application | `GET /api/v1/me/kyc` | bearer | — | own-record | — | status, own claims, reviewer message | **no candidates, no internal reasons** — an applicant must never learn their record resembles someone else's | `implemented` |
+| Submit for review | `POST /api/v1/me/kyc/submit` | bearer | — | own-record | — | case in `manual-review` | screening can never reach `approved` | `implemented` |
+| Review queue | `GET /api/v1/admin/kyc-cases` | bearer | `kyc.review` | role scope | `?status=&page=&per_page=` | paginated cases | claimed identity only | `implemented` |
+| Case detail | `GET /api/v1/admin/kyc-cases/{case}` | bearer | `kyc.review` | role scope | — | case + match candidates | candidates carry name, birth date, barangay — not the other resident's income, sectors or case history | `implemented` |
+| Re-run matching | `POST /api/v1/admin/kyc-cases/{case}/rescreen` | bearer | `kyc.review` | role scope | — | candidates | idempotent; decisions already made are preserved | `implemented` |
+| Rule on a candidate | `POST /api/v1/admin/kyc-cases/{case}/candidates/{candidate}` | bearer | `kyc.review` | role scope | `{decision}` | candidates | the step that actually prevents duplicates | `implemented` |
+| Approve | `POST /api/v1/admin/kyc-cases/{case}/approve` | bearer | `kyc.approve` | role scope | `{link_resident_id?,message?}` | approved case | **the only path to a canonical resident**; refused while any candidate is undecided | `implemented` |
+| Reject | `POST /api/v1/admin/kyc-cases/{case}/reject` | bearer | `kyc.approve` | role scope | `{reason,message?}` | rejected case | internal reason and applicant message are separate fields | `implemented` |
+| Ask for more | `POST /api/v1/admin/kyc-cases/{case}/request-information` | bearer | `kyc.review` | role scope | `{message}` | case | returns the case to the applicant | `implemented` |
+
+`kyc.review` and `kyc.approve` are separate permissions on purpose: deciding that two
+records are the same person and deciding that somebody becomes a verified resident are
+different responsibilities, and an LGU may want them held by different people.
+
+## 11c. Digital ID — built in TAB 06, **feature-flagged off**
+
+Every route below returns `404` while `credential.digital_id.enabled` is false, which is
+the default. A feature that is not live should look absent rather than forbidden.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| My digital ID | `GET /api/v1/me/credential` | bearer | — | own-record | — | serial, status, validity | resolved from the token — no identifier to tamper with | `implemented` |
+| Mint a QR | `POST /api/v1/me/credential/qr` | bearer | — | own-record | — | `{payload,expires_at}` | payload is a **handle**: serial, expiry, nonce, key id, signature — and nothing about the holder | `implemented` |
+| Verify a scan | `POST /api/v1/credential-verifications` | bearer | — | — | `{payload}` | `{outcome,valid,serial,expires_at,holder_name}` | **the minimal response** — no birth date, address, barangay, sectors, income or case data | `implemented` |
+| Issue | `POST /api/v1/admin/credentials` | bearer | `credential.manage` | all-barangays | `{resident_id}` | `201` credential | only for a fully verified resident; idempotent | `implemented` |
+| Revoke | `POST /api/v1/admin/credentials/{credential}/revoke` | bearer | `credential.manage` | all-barangays | `{reason}` | `{status}` | validity is decided at scan time, so revocation is immediate | `implemented` |
+
+QR payloads are single-use (nonce, enforced by a unique index) and short-lived (90s), so a
+photographed code is worthless. Verification is authenticated for attribution but requires
+no permission — a verifier device is not staff.
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

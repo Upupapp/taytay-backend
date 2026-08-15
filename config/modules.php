@@ -24,6 +24,8 @@ return [
         'Shared',
         'AccessControl',
         'Identity',
+        'ResidentProfile',
+        'Credential',
         'ServiceCatalog',
     ],
 

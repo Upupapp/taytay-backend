@@ -123,21 +123,39 @@ final class DatabaseConventionsTest extends TestCase
     {
         $offenders = [];
 
-        // Columns that reference another module's table by identifier. A `constrained()`
-        // on any of them would weld two modules together at the schema level and make the
-        // boundary in ADR 0001 unenforceable (CLAUDE.md Article 2.2).
-        $crossModule = ['subject_id', 'actor_subject_id', 'granted_by', 'resident_id', 'recipient_subject_id'];
+        // Columns that reference another module's table by identifier and may never carry
+        // a foreign key anywhere. A `constrained()` on one welds two modules together at
+        // the schema level and makes the boundary in ADR 0001 unenforceable
+        // (CLAUDE.md Article 2.2).
+        $neverConstrained = ['subject_id', 'actor_subject_id', 'granted_by', 'recipient_subject_id'];
 
         /*
-         * `account_id` is the interesting case: it is a real foreign key *inside* Identity
-         * (a device belongs to an account and means nothing without one), and a forbidden
-         * one everywhere else. So the rule is scoped by owner rather than by column name —
-         * a blanket ban would have rejected Identity's own perfectly correct constraints.
+         * The interesting cases are columns that are a *correct* foreign key inside their
+         * owning module and a forbidden one everywhere else — `account_id` within Identity
+         * (a device belongs to an account and means nothing without one), `resident_id`
+         * within ResidentProfile (a sector tag belongs to a resident).
+         *
+         * So the rule is scoped by owner rather than by column name. A blanket ban would
+         * reject each module's own perfectly correct constraints, and the usual response to
+         * that is to delete the test.
+         *
+         * @var array<string, list<string>> column => migration filename fragments that own it
          */
-        $identityOwned = static fn (string $file): bool => str_contains($file, 'identity') || str_contains($file, 'accounts');
+        $ownedBy = [
+            'account_id' => ['identity', 'accounts'],
+            'resident_id' => ['residents', 'kyc'],
+        ];
 
         foreach (self::conventionMigrations() as $file => $source) {
-            $columns = $identityOwned($file) ? $crossModule : [...$crossModule, 'account_id'];
+            $columns = $neverConstrained;
+
+            foreach ($ownedBy as $column => $owners) {
+                $isOwner = array_filter($owners, static fn (string $owner): bool => str_contains($file, $owner)) !== [];
+
+                if (! $isOwner) {
+                    $columns[] = $column;
+                }
+            }
 
             foreach ($columns as $column) {
                 if (preg_match('/[\'"]'.$column.'[\'"]\s*\)?\s*->[^;]*constrained\(/', $source) === 1) {

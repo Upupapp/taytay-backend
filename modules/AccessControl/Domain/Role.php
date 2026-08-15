@@ -34,9 +34,28 @@ enum Role: string
     public function permissions(): array
     {
         return match ($this) {
-            self::Resident, self::Verifier => [],
-            self::LguStaff => [Permission::ServicesViewUnpublished],
-            self::LguAdmin => [Permission::ServicesViewUnpublished, Permission::ServicesManage],
+            self::Resident => [],
+
+            // A verifier device checks credentials at a counter. It reads no resident
+            // record and reviews nothing — the verification endpoint returns the minimum
+            // it needs without any permission at all.
+            self::Verifier => [],
+
+            self::LguStaff => [
+                Permission::ServicesViewUnpublished,
+                Permission::ResidentView,
+                // Staff review possible duplicates but do not decide who becomes verified.
+                Permission::KycReview,
+            ],
+
+            self::LguAdmin => [
+                Permission::ServicesViewUnpublished,
+                Permission::ServicesManage,
+                Permission::ResidentView,
+                Permission::KycReview,
+                Permission::KycApprove,
+                Permission::CredentialManage,
+            ],
         };
     }
 

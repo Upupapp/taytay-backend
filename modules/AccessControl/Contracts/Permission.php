@@ -18,6 +18,22 @@ namespace Modules\AccessControl\Contracts;
  */
 enum Permission: string
 {
+    /** Open the KYC review queue and rule on possible duplicate residents. */
+    case KycReview = 'kyc.review';
+
+    /**
+     * Approve or refuse a KYC case. Separate from review on purpose: deciding that two
+     * records are the same person and deciding that somebody becomes a verified resident
+     * are different responsibilities, and an LGU may want them held by different people.
+     */
+    case KycApprove = 'kyc.approve';
+
+    /** Read a canonical resident record. Every use is audited. */
+    case ResidentView = 'resident.view';
+
+    /** Issue or revoke a digital ID credential. */
+    case CredentialManage = 'credential.manage';
+
     /** See catalog entries that are not published to citizens (drafts, retired). */
     case ServicesViewUnpublished = 'services.view_unpublished';
 

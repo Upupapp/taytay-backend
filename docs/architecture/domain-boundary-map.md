@@ -16,8 +16,8 @@ Eloquent relationship across the boundary.
 | `AccessControl` | roles, permission catalog, role→permission mapping, staff scope (office/jurisdiction), authorization decisions | who a person *is*, credential validity | **implemented** |
 | `ServiceCatalog` | the catalog of LGU services offered (code, name, category, channel availability, publication state) | applications submitted against a service | **implemented (reference vertical)** |
 | `Identity` | accounts, credentials-to-log-in, sessions, tokens, devices, MFA, account lifecycle | resident demographics, ID cards | **implemented** (TAB 05) |
-| `ResidentProfile` | resident master record, demographics, addresses, household links, verification tier | login credentials, issued ID cards | planned |
-| `Credential` | LGU ID lifecycle (application → review → approval → issuance → active → suspended → expired/revoked), card artifacts, QR credential material | who may approve (asks `AccessControl`) | planned |
+| `ResidentProfile` | resident master record, demographics, addresses, household links, verification tier, KYC cases | login credentials, issued ID cards | **implemented** (TAB 06) |
+| `Credential` | LGU ID lifecycle, card artifacts, QR credential material | who may approve (asks `AccessControl`) | **implemented, feature-flagged off** (TAB 06) |
 | `Verification` | verification attempts, scan events, verifier registry, offline-verification key distribution | credential state (asks `Credential`) | planned |
 | `ServiceDelivery` | service applications/transactions against catalog entries (dokumento, buwis, kalusugan, trabaho, national referrals), their state machines and attachments | the catalog itself (asks `ServiceCatalog`) | planned |
 | `Notification` | outbound notification dispatch, delivery receipts, per-resident channel preferences | why a notification was triggered | planned |
