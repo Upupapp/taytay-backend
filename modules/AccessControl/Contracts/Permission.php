@@ -69,6 +69,17 @@ enum Permission: string
      */
     case ResidentLinkReview = 'resident.link_review';
 
+    /**
+     * Create and edit households and families, move members between them, name heads and
+     * record kinship.
+     *
+     * Reading a household is governed by `ResidentView` instead — a household is a group of
+     * residents, and seeing it reveals their data, so the two must not be separable. Writing
+     * gets its own permission because moving a resident between households changes who is
+     * counted in every household-based distribution.
+     */
+    case HouseholdManage = 'household.manage';
+
     /** Issue or revoke a digital ID credential. */
     case CredentialManage = 'credential.manage';
 

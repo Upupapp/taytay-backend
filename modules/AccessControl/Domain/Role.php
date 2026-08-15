@@ -50,6 +50,10 @@ enum Role: string
                 // Front-line staff take walk-ins and fix bad addresses — that is most of
                 // the job. They do not decide who is verified, and they do not merge.
                 Permission::ResidentManage,
+                // Household composition changes constantly and is recorded at the counter
+                // and in the field; withholding it would push the work to an admin who was
+                // not there.
+                Permission::HouseholdManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -62,6 +66,7 @@ enum Role: string
                 Permission::ResidentVerify,
                 Permission::ResidentMerge,
                 Permission::ResidentLinkReview,
+                Permission::HouseholdManage,
                 Permission::KycReview,
                 Permission::KycApprove,
                 Permission::CredentialManage,

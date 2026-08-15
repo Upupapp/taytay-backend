@@ -89,7 +89,8 @@ Angular `ResidentRepository`. `ResidentListPage` is fully built against mocks.
 > verification, activation, history, account links, duplicates and merge under the `/admin`
 > prefix every other staff surface here uses. The rows below keep the shapes the Angular
 > repository calls *today* and stay `planned` until that client is repointed (gap **G-19**).
-> Household and export remain genuinely unbuilt, in TAB 09 and TAB 21 respectively.
+> The household panel is now built too — see §11e — under the same `/admin` prefix and the
+> same gap. Export remains genuinely unbuilt, in TAB 21.
 
 | Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -378,6 +379,70 @@ rewrite a record in a barangay they were never granted.
 destructive permission in the catalog: a wrong merge makes one resident disappear and hands
 their assistance history to somebody else, by destroying the evidence that they were two
 people.
+
+---
+
+## 11e. Households, families and kinship — built in TAB 09
+
+A household is who sleeps under one roof; a family is who belongs to one another. Several
+families per household is the normal case, and the two counts drive different programmes
+(relief per household, 4Ps per family), so both are first-class. Full reasoning: ADR 0014.
+
+Membership is **effective-dated**. Nothing is edited or deleted — a move closes one row and
+opens another, so "who lived here when the October relief was released" stays answerable in
+November.
+
+Reads take `resident.view`, not a separate household permission: a household is a group of
+residents and opening one reveals their data, so a "household viewer" permission would be a
+way to enumerate residents without holding the permission that guards them.
+
+### Citizen
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| My household | `GET /api/v1/me/household` | bearer | — | own-record | — | address, co-members by name, `relationship_to_me`, family units with `is_mine` | **minimised** — co-members carry no tier, sectors, income, contacts or case data; the home carries no verification status, completeness, dwelling or utility assessment. Exception: for members the caller is recorded responsible for (child/ward/provider), birth date and tier are included — resolved from recorded kinship, **never inferred from co-residence** | `implemented` |
+
+### Staff — households
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Household list | `GET /api/v1/admin/households` | bearer | `resident.view` | role scope | `?q=&barangay_id=&status=&page=&per_page=` | paginated summaries + derived `member_count` | scoped at the query, so the pagination total never counts another barangay's rows | `implemented` |
+| Household detail | `GET /api/v1/admin/households/{household}` | bearer | `resident.view` | role scope | — | household + members + families | **audited read** — the member list is other people's personal data; each member carries name, birth date and tier only, never their welfare file | `implemented` |
+| Create | `POST /api/v1/admin/households` | bearer | `household.manage` | role scope | address + dwelling/utility facts | `201` household | refuses a barangay the caller does not serve — otherwise the record lands where its own office cannot see it | `implemented` |
+| Update | `PATCH /api/v1/admin/households/{household}` | bearer | `household.manage` | role scope | partial payload | household | `profile_completeness` recomputed on write; never an eligibility input | `implemented` |
+| Name the head | `POST /api/v1/admin/households/{household}/head` | bearer | `household.manage` | role scope | `{resident_id\|null}` | household | nominee must be a current member; **headship confers no read access** over the other members | `implemented` |
+| Field verification | `POST /api/v1/admin/households/{household}/verification` | bearer | `household.manage` | role scope | `{verification_status}` | household | demotion clears `verified_at` | `implemented` |
+| Dissolve / archive | `POST /api/v1/admin/households/{household}/status` | bearer | `household.manage` | role scope | `{status,reason}` | household | never a delete — assistance history references the household that received it | `implemented` |
+
+### Staff — membership and transfer
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Add member | `POST /api/v1/admin/households/{household}/members` | bearer | `household.manage` | role scope | `{resident_id,effective_from?}` | `201` membership | idempotent; a resident already housed elsewhere is **refused (409)**, never silently moved | `implemented` |
+| Remove member | `DELETE /api/v1/admin/households/{household}/members/{resident}` | bearer | `household.manage` | role scope | `{end_reason,effective_to?}` | closed membership | closes family memberships inside that household too, and clears headship if they held it | `implemented` |
+| Transfer | `POST /api/v1/admin/households/{household}/transfers` | bearer | `household.manage` | role scope | `{resident_id,reason,effective_from?}` | new membership | **one call, one transaction** — a half-transfer would leave a real person belonging to no household | `implemented` |
+| Residence history | `GET /api/v1/admin/residents/{resident}/households` | bearer | `resident.view` | role scope | — | every membership, newest first | audited read; the record that makes a past distribution auditable | `implemented` |
+
+### Staff — families
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Create family | `POST /api/v1/admin/households/{household}/families` | bearer | `household.manage` | role scope | `{label?}` | `201` family | several per household is expected, not exceptional | `implemented` |
+| Add family member | `POST /api/v1/admin/families/{family}/members` | bearer | `household.manage` | role scope | `{resident_id,effective_from?}` | family | requires a current membership of that family's household (`409` otherwise); one family per resident at a time | `implemented` |
+| Remove family member | `DELETE /api/v1/admin/families/{family}/members/{resident}` | bearer | `household.manage` | role scope | `{end_reason}` | family | effective-dated close, never a delete | `implemented` |
+| Name the family head | `POST /api/v1/admin/families/{family}/head` | bearer | `household.manage` | role scope | `{resident_id\|null}` | family | nominee must be a current member of the family | `implemented` |
+
+### Staff — kinship
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Relationships | `GET /api/v1/admin/residents/{resident}/relationships` | bearer | `resident.view` | role scope | `?include_ended=` | stored rows **and derived inverses**, each flagged `derived` | internal primary keys never cross the boundary | `implemented` |
+| Record | `POST /api/v1/admin/residents/{resident}/relationships` | bearer | `household.manage` | role scope | `{related_resident_id,type,note?,effective_from?}` | `201` relationship | self-relations rejected (`400`); an existing tie **or its inverse** rejected (`409`) — one directed row per fact | `implemented` |
+| End | `DELETE /api/v1/admin/residents/{resident}/relationships/{relationship}` | bearer | `household.manage` | role scope | `{end_reason}` | ended relationship | sets `effective_to`; **never deletes** — a separation and "this never happened" are different claims | `implemented` |
+
+Relationship types: `parent`/`child`, `guardian`/`ward`, `dependent`/`provider`, and the
+symmetric `spouse`, `partner`, `sibling`, plus `other`. Only one direction is stored; the
+opposite view is computed, which is also what makes the duplicate check possible.
 
 ---
 

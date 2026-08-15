@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Modules\ResidentProfile\Http\Controllers\V1\HouseholdController;
 use Modules\ResidentProfile\Http\Controllers\V1\KycController;
 use Modules\ResidentProfile\Http\Controllers\V1\MyProfileController;
+use Modules\ResidentProfile\Http\Controllers\V1\RelationshipController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentCorrectionController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentDuplicateController;
@@ -30,6 +32,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('me/profile/corrections', [MyProfileController::class, 'requestCorrection'])->name('v1.me.profile.corrections.store');
     Route::get('me/profile/corrections', [MyProfileController::class, 'listCorrections'])->name('v1.me.profile.corrections.index');
     Route::delete('me/profile/corrections/{correction}', [MyProfileController::class, 'withdrawCorrection'])->name('v1.me.profile.corrections.withdraw');
+
+    // The resident's own household, privacy-minimised. Sharing a roof is not consent to be
+    // looked up, so co-members appear by name and relationship only (ADR 0014 §5).
+    Route::get('me/household', [MyProfileController::class, 'showHousehold'])->name('v1.me.household.show');
 
     // ── KYC reviewer queue ────────────────────────────────────────────────────────────
     Route::get('admin/kyc-cases', [KycController::class, 'index'])->name('v1.admin.kyc.index');
@@ -69,4 +75,37 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('admin/residents/{resident}/account-links', [ResidentController::class, 'listLinks'])->name('v1.admin.residents.links.index');
     Route::post('admin/residents/{resident}/account-links', [ResidentController::class, 'storeLink'])->name('v1.admin.residents.links.store');
     Route::delete('admin/residents/{resident}/account-links/{link}', [ResidentController::class, 'revokeLink'])->name('v1.admin.residents.links.destroy');
+
+    // A resident's residence history and their kinship. Both hang off the resident because
+    // that is the record staff have open when they need them.
+    Route::get('admin/residents/{resident}/households', [HouseholdController::class, 'memberHistory'])->name('v1.admin.residents.households.index');
+    Route::get('admin/residents/{resident}/relationships', [RelationshipController::class, 'index'])->name('v1.admin.residents.relationships.index');
+    Route::post('admin/residents/{resident}/relationships', [RelationshipController::class, 'store'])->name('v1.admin.residents.relationships.store');
+    Route::delete('admin/residents/{resident}/relationships/{relationship}', [RelationshipController::class, 'destroy'])->name('v1.admin.residents.relationships.destroy');
+
+    /*
+     * ── households and families ───────────────────────────────────────────────────────
+     *
+     * `admin/families/...` is declared before `admin/households/{household}` for the same
+     * reason the duplicate routes are: a wildcard segment declared first swallows its
+     * siblings, and the shadowed route 404s with no obvious cause.
+     */
+    Route::post('admin/families/{family}/members', [HouseholdController::class, 'addFamilyMember'])->name('v1.admin.families.members.store');
+    Route::delete('admin/families/{family}/members/{resident}', [HouseholdController::class, 'removeFamilyMember'])->name('v1.admin.families.members.destroy');
+    Route::post('admin/families/{family}/head', [HouseholdController::class, 'changeFamilyHead'])->name('v1.admin.families.head');
+
+    Route::get('admin/households', [HouseholdController::class, 'index'])->name('v1.admin.households.index');
+    Route::post('admin/households', [HouseholdController::class, 'store'])->name('v1.admin.households.store');
+    Route::get('admin/households/{household}', [HouseholdController::class, 'show'])->name('v1.admin.households.show');
+    Route::patch('admin/households/{household}', [HouseholdController::class, 'update'])->name('v1.admin.households.update');
+    Route::post('admin/households/{household}/head', [HouseholdController::class, 'changeHead'])->name('v1.admin.households.head');
+    Route::post('admin/households/{household}/verification', [HouseholdController::class, 'changeVerification'])->name('v1.admin.households.verification');
+    Route::post('admin/households/{household}/status', [HouseholdController::class, 'changeStatus'])->name('v1.admin.households.status');
+
+    Route::post('admin/households/{household}/members', [HouseholdController::class, 'addMember'])->name('v1.admin.households.members.store');
+    Route::delete('admin/households/{household}/members/{resident}', [HouseholdController::class, 'removeMember'])->name('v1.admin.households.members.destroy');
+    // Transfer is one call because it must be one transaction: a client that could only
+    // remove-then-add could leave a real person belonging to no household at all.
+    Route::post('admin/households/{household}/transfers', [HouseholdController::class, 'transferMember'])->name('v1.admin.households.transfers');
+    Route::post('admin/households/{household}/families', [HouseholdController::class, 'storeFamily'])->name('v1.admin.households.families.store');
 });

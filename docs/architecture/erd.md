@@ -80,8 +80,13 @@ erDiagram
     ACCOUNTS ||--o{ MFA_FACTORS : holds
 
     RESIDENTS ||--o{ RESIDENT_SECTORS : "tagged with"
-    HOUSEHOLDS ||--o{ HOUSEHOLD_MEMBERS : contains
-    RESIDENTS ||--o{ HOUSEHOLD_MEMBERS : "member of"
+
+    HOUSEHOLDS ||--o{ HOUSEHOLD_MEMBERSHIPS : "houses (effective-dated)"
+    RESIDENTS ||--o{ HOUSEHOLD_MEMBERSHIPS : "lives in"
+    HOUSEHOLDS ||--o{ FAMILIES : "contains (several)"
+    FAMILIES ||--o{ FAMILY_MEMBERSHIPS : "groups (effective-dated)"
+    RESIDENTS ||--o{ FAMILY_MEMBERSHIPS : "belongs to"
+    RESIDENTS ||--o{ RESIDENT_RELATIONSHIPS : "related to (one directed row)"
 
     RESIDENTS ||--o{ RESIDENT_STATUS_EVENTS : "history (append-only)"
     RESIDENTS ||--o{ RESIDENT_ALIASES : "also known as"
@@ -143,7 +148,7 @@ together. Each is an identifier plus a service call.
 | **AccessControl** | `role_assignments` | `internal` | **built** |
 | **Audit** | `audit_entries` | `internal` (records access, never the data) | **built** |
 | **Identity** | `accounts`, `auth_tokens`, `devices`, `mfa_factors` | `personal` | planned — TAB 05 |
-| **ResidentProfile** | `residents`, `resident_sectors`, `kyc_cases`, `resident_match_candidates`, `resident_status_events`, `resident_aliases`, `resident_duplicate_pairs`, `resident_merges`, `resident_correction_requests`, `resident_correction_fields`, `account_resident_links`; `households`, `household_members`, `resident_addresses` still planned | **`sensitive`** | **built** — TAB 06, TAB 08 (households: TAB 09) |
+| **ResidentProfile** | `residents`, `resident_sectors`, `kyc_cases`, `resident_match_candidates`, `resident_status_events`, `resident_aliases`, `resident_duplicate_pairs`, `resident_merges`, `resident_correction_requests`, `resident_correction_fields`, `account_resident_links`, `households`, `families`, `household_memberships`, `family_memberships`, `resident_relationships` | **`sensitive`** | **built** — TAB 06, TAB 08, TAB 09 |
 | **ServiceCatalog** | `services`, `service_channels`, `programs`, `program_requirements`, `program_eligibility` | `public` | planned (config-backed today) |
 | **Credential** | `credentials`, `credential_artifacts`, `credential_transitions` | `personal` | planned |
 | **Verification** | `verification_attempts`, `verifier_devices` | `internal` | planned |
