@@ -31,6 +31,44 @@ enum Permission: string
     /** Read a canonical resident record. Every use is audited. */
     case ResidentView = 'resident.view';
 
+    /**
+     * Create a resident record and correct its fields, including approving a resident's own
+     * correction request.
+     *
+     * Separate from `ResidentView` because reading a file and rewriting it are different
+     * responsibilities: most front-line staff need the first and very few should hold the
+     * second.
+     */
+    case ResidentManage = 'resident.manage';
+
+    /**
+     * Move a resident's verification tier, or deactivate/reactivate the record.
+     *
+     * Held apart from `ResidentManage` on purpose. Correcting a misspelt street is
+     * routine; declaring somebody's identity established is the decision that unlocks a
+     * digital ID (ADR 0011), and an LGU may well want those in different hands.
+     */
+    case ResidentVerify = 'resident.verify';
+
+    /**
+     * Rule on duplicate resident records and execute a merge.
+     *
+     * The most destructive permission in the catalog. A merge collapses two people into one
+     * row, and when it is wrong it makes one resident disappear while handing their
+     * assistance history to somebody else. It is deliberately not implied by
+     * `ResidentManage` and belongs to no role by default.
+     */
+    case ResidentMerge = 'resident.merge';
+
+    /**
+     * Attach an account to a resident, or withdraw that attachment.
+     *
+     * Its own permission because linking is what decides whose welfare file a person can
+     * open in the citizen app. Getting it wrong is a data breach performed by the system
+     * itself, so it is not folded into general resident management.
+     */
+    case ResidentLinkReview = 'resident.link_review';
+
     /** Issue or revoke a digital ID credential. */
     case CredentialManage = 'credential.manage';
 

@@ -47,6 +47,9 @@ enum Role: string
             self::LguStaff => [
                 Permission::ServicesViewUnpublished,
                 Permission::ResidentView,
+                // Front-line staff take walk-ins and fix bad addresses — that is most of
+                // the job. They do not decide who is verified, and they do not merge.
+                Permission::ResidentManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -55,6 +58,10 @@ enum Role: string
                 Permission::ServicesViewUnpublished,
                 Permission::ServicesManage,
                 Permission::ResidentView,
+                Permission::ResidentManage,
+                Permission::ResidentVerify,
+                Permission::ResidentMerge,
+                Permission::ResidentLinkReview,
                 Permission::KycReview,
                 Permission::KycApprove,
                 Permission::CredentialManage,

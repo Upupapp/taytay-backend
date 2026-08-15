@@ -83,6 +83,14 @@ erDiagram
     HOUSEHOLDS ||--o{ HOUSEHOLD_MEMBERS : contains
     RESIDENTS ||--o{ HOUSEHOLD_MEMBERS : "member of"
 
+    RESIDENTS ||--o{ RESIDENT_STATUS_EVENTS : "history (append-only)"
+    RESIDENTS ||--o{ RESIDENT_ALIASES : "also known as"
+    RESIDENTS ||--o{ RESIDENT_CORRECTION_REQUESTS : "corrected by"
+    RESIDENT_CORRECTION_REQUESTS ||--o{ RESIDENT_CORRECTION_FIELDS : proposes
+    RESIDENTS ||--o{ ACCOUNT_RESIDENT_LINKS : "acted for by"
+    RESIDENTS ||--o{ RESIDENT_DUPLICATE_PAIRS : "possibly duplicates"
+    RESIDENTS ||--o{ RESIDENT_MERGES : "survivor of"
+
     CREDENTIALS ||--o{ CREDENTIAL_TRANSITIONS : "lifecycle (append-only)"
     CREDENTIALS ||--o{ CREDENTIAL_ARTIFACTS : renders
 
@@ -116,8 +124,11 @@ erDiagram
 | `assistance_requests.program_id` | programme | ServiceCatalog | catalog is a separate owner |
 | `verification_attempts.credential_id` | credential | Credential | verification runs at the edge, sees no PII |
 | `notifications.recipient_subject_id` | account | Identity | Notification decides *whether*, not *who* |
+| `account_resident_links.account_id` | account | Identity | the link is ResidentProfile's record of Identity's account; written with `accounts.resident_id` in one transaction |
+| `resident_correction_requests.requested_by` | account | Identity | the requester may be deactivated later; the request must survive |
+| `resident_status_events.actor_subject_id` | account | Identity | history outlives the staff member who made it |
 
-Nine references, nine places a convenient join would have silently welded two modules
+Twelve references, twelve places a convenient join would have silently welded two modules
 together. Each is an identifier plus a service call.
 
 ---
@@ -132,7 +143,7 @@ together. Each is an identifier plus a service call.
 | **AccessControl** | `role_assignments` | `internal` | **built** |
 | **Audit** | `audit_entries` | `internal` (records access, never the data) | **built** |
 | **Identity** | `accounts`, `auth_tokens`, `devices`, `mfa_factors` | `personal` | planned — TAB 05 |
-| **ResidentProfile** | `residents`, `households`, `household_members`, `resident_sectors`, `resident_addresses` | **`sensitive`** | planned |
+| **ResidentProfile** | `residents`, `resident_sectors`, `kyc_cases`, `resident_match_candidates`, `resident_status_events`, `resident_aliases`, `resident_duplicate_pairs`, `resident_merges`, `resident_correction_requests`, `resident_correction_fields`, `account_resident_links`; `households`, `household_members`, `resident_addresses` still planned | **`sensitive`** | **built** — TAB 06, TAB 08 (households: TAB 09) |
 | **ServiceCatalog** | `services`, `service_channels`, `programs`, `program_requirements`, `program_eligibility` | `public` | planned (config-backed today) |
 | **Credential** | `credentials`, `credential_artifacts`, `credential_transitions` | `personal` | planned |
 | **Verification** | `verification_attempts`, `verifier_devices` | `internal` | planned |

@@ -16,7 +16,7 @@ Eloquent relationship across the boundary.
 | `AccessControl` | roles, permission catalog, role→permission mapping, staff scope resolution and enforcement, explicit barangay grants, staff provisioning, authorization decisions | who a person *is*, staff accounts themselves (asks `Identity`), credential validity | **implemented** (TAB 07) |
 | `ServiceCatalog` | the catalog of LGU services offered (code, name, category, channel availability, publication state) | applications submitted against a service | **implemented (reference vertical)** |
 | `Identity` | accounts, credentials-to-log-in, sessions, tokens, devices, MFA, account lifecycle | resident demographics, ID cards | **implemented** (TAB 05) |
-| `ResidentProfile` | resident master record, demographics, addresses, household links, verification tier, KYC cases | login credentials, issued ID cards | **implemented** (TAB 06) |
+| `ResidentProfile` | resident master record, demographics, addresses, household links, verification tier, KYC cases, change history and aliases, duplicate pairs and merges, correction requests, account→resident links | login credentials, issued ID cards | **implemented** (TAB 06, TAB 08) |
 | `Credential` | LGU ID lifecycle, card artifacts, QR credential material | who may approve (asks `AccessControl`) | **implemented, feature-flagged off** (TAB 06) |
 | `Verification` | verification attempts, scan events, verifier registry, offline-verification key distribution | credential state (asks `Credential`) | planned |
 | `ServiceDelivery` | service applications/transactions against catalog entries (dokumento, buwis, kalusugan, trabaho, national referrals), their state machines and attachments | the catalog itself (asks `ServiceCatalog`) | planned |
@@ -62,6 +62,32 @@ what, and calls `Identity\Application\StaffAccountProvisioner` for the account i
 * No cycles. If you need a cycle, you have found a missing module or a domain event.
 * Downward calls (a lower module needing a higher one) must be inverted with a domain
   event, not a direct call.
+
+Both rules are now **enforced**, by
+`ModuleBoundaryTest::the_module_dependency_graph_has_no_cycles()`. They were documentation
+only until TAB 08, and the first thing that happened when a real case arrived was that the
+rule got broken: a resident merge has to repoint the absorbed person's credentials, and
+calling `Credential\Application` from `ResidentProfile` closed the cycle
+`ResidentProfile → Credential → ResidentProfile`. Every existing assertion passed, because
+the import was of a public layer — only the *direction* was wrong.
+
+The inversion is the pattern to copy (ADR 0013 §6):
+
+```
+ResidentProfile  ──dispatches──>  Contracts\ResidentMerged
+                                        │
+Credential  ──listens (registered in its OWN provider)──┘
+            └─> reassigns its own rows, returns the count
+```
+
+ResidentProfile announces what happened and knows nothing about who cares. The listener is
+registered in `CredentialServiceProvider`, not in ResidentProfile, which is what keeps the
+dependency one-directional. Listener return values are collected by the dispatcher, so the
+merge record can still report how many credentials moved without this module knowing that
+credentials exist.
+
+Such listeners run **synchronously, inside the originating transaction**. Queued handling
+would let a merge commit while a credential still pointed at a soft-deleted resident.
 
 ---
 

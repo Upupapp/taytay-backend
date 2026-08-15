@@ -85,6 +85,12 @@ service, a different actor — not a second endpoint.
 
 Angular `ResidentRepository`. `ResidentListPage` is fully built against mocks.
 
+> **The registry is built — see §11d.** TAB 08 implemented search, detail, create, correct,
+> verification, activation, history, account links, duplicates and merge under the `/admin`
+> prefix every other staff surface here uses. The rows below keep the shapes the Angular
+> repository calls *today* and stay `planned` until that client is repointed (gap **G-19**).
+> Household and export remain genuinely unbuilt, in TAB 09 and TAB 21 respectively.
+
 | Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Resident list | `GET /api/v1/residents` | bearer | `resident.view` | role scope | `?search=&barangay_id=&sector=&include_inactive=&sort=&page=&per_page=` | paginated resident summaries | list projection excludes income and PhilSys; sensitive-sector records **redacted server-side** without `request.view-sensitive` | `planned` |
@@ -303,6 +309,77 @@ the default. A feature that is not live should look absent rather than forbidden
 QR payloads are single-use (nonce, enforced by a unique index) and short-lived (90s), so a
 photographed code is worthless. Verification is authenticated for attribution but requires
 no permission — a verifier device is not staff.
+
+## 11d. Canonical resident registry — built in TAB 08
+
+The registry the Angular `/residents` screen (§4) was designed against, now real. The
+built routes carry the `/admin` prefix used by every other staff surface here; the §4 rows
+keep the shapes the Angular repository currently calls and stay `planned` until that client
+is repointed — see gap **G-19**.
+
+### Citizen — the resident's own record
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| My profile | `GET /api/v1/me/profile` | bearer | — | own-record | — | own canonical record + `editable_fields[]` / `requestable_fields[]` | resolved from the token — **no identifier in the contract to tamper with**; omits income, PhilSys digits, matching fingerprint, sector tags and all internal history | `implemented` |
+| File a correction | `POST /api/v1/me/profile/corrections` | bearer | — | own-record | `{changes:{…},note?}` | `201` request — `approved` if self-service only, else `pending` | address and contact apply immediately; **name, birth date, sex, civil status and barangay are proposals only**; `verification_tier` and `is_active` are rejected, never ignored | `implemented` |
+| My corrections | `GET /api/v1/me/profile/corrections` | bearer | — | own-record | `?page=&per_page=` | paginated own requests | reviewer's note is returned, reviewer's identity is not | `implemented` |
+| Withdraw | `DELETE /api/v1/me/profile/corrections/{correction}` | bearer | — | own-record | — | withdrawn request | scoped to the caller's own resident — another citizen's id resolves to `404`, not `403` | `implemented` |
+
+### Staff — the registry
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Resident search | `GET /api/v1/admin/residents` | bearer | `resident.view` | role scope | `?q=&barangay_id=&verification_tier=&status=&page=&per_page=` | paginated summaries | scoped **at the query**, so the pagination total never counts another barangay's rows; `q` also matches preserved aliases | `implemented` |
+| Resident detail | `GET /api/v1/admin/residents/{resident}` | bearer | `resident.view` | role scope | — | operational record | **audited read** (`resident.viewed`); income, PhilSys digits and the fingerprint are absent by construction | `implemented` |
+| Create resident | `POST /api/v1/admin/residents` | bearer | `resident.manage` | role scope | resident payload | `201` resident | always starts `unverified` — there is no field by which a create can assert a tier | `implemented` |
+| Correct fields | `PATCH /api/v1/admin/residents/{resident}` | bearer | `resident.manage` | role scope | partial payload + `reason?` | resident | every field writes a history row; a name change records an alias and re-keys the fingerprint | `implemented` |
+| Change verification | `POST /api/v1/admin/residents/{resident}/verification` | bearer | `resident.verify` | role scope | `{verification_tier,reason}` | resident | **reason mandatory in both directions**; demotion clears `verified_at` | `implemented` |
+| Deactivate / reactivate | `POST /api/v1/admin/residents/{resident}/activation` | bearer | `resident.verify` | role scope | `{is_active,reason}` | resident | never a hard delete — retention is statutory | `implemented` |
+| Record history | `GET /api/v1/admin/residents/{resident}/history` | bearer | `resident.view` | role scope | — | `{events[],aliases[]}` | audited read; append-only, carries before/after per field | `implemented` |
+
+### Staff — correction review
+
+Only requests touching a reviewed field ever reach this queue. A resident changing their own
+mobile number is applied immediately and recorded — making staff rubber-stamp phone numbers
+would bury the requests that actually matter, which are the ones proposing to change a
+verified name or birth date.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Correction queue | `GET /api/v1/admin/resident-corrections` | bearer | `resident.manage` | role scope | `?status=&page=&per_page=` | paginated requests | scoped through the resident's barangay by subquery — the correction table carries no barangay of its own, and denormalising one would be a second copy of a fact that moves whenever a resident does | `implemented` |
+| Correction detail | `GET /api/v1/admin/resident-corrections/{correction}` | bearer | `resident.manage` | role scope | — | request + per-field `current`/`proposed` | both values shown so a reviewer can see the record moved since filing, rather than approving a stale proposal | `implemented` |
+| Approve | `POST /api/v1/admin/resident-corrections/{correction}/approve` | bearer | `resident.manage` | role scope | `{review_note?}` | approved request | applied through the registry, so it produces the same history, alias and fingerprint rebuild as any other edit; a resolved request cannot be decided twice (`409`) | `implemented` |
+| Reject | `POST /api/v1/admin/resident-corrections/{correction}/reject` | bearer | `resident.manage` | role scope | `{review_note}` | rejected request | **note mandatory** — a refusal the resident cannot read is one they cannot act on or appeal (RA 10173 §16) | `implemented` |
+
+### Staff — account links
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Link review | `GET /api/v1/admin/residents/{resident}/account-links` | bearer | `resident.link_review` | role scope | — | active and revoked links | who linked whom, when and on what authority | `implemented` |
+| Attach an account | `POST /api/v1/admin/residents/{resident}/account-links` | bearer | `resident.link_review` | role scope | `{account_id}` | `201` link | refuses a staff account, and refuses an account already linked elsewhere (`409`) rather than silently repointing it | `implemented` |
+| Withdraw a link | `DELETE /api/v1/admin/residents/{resident}/account-links/{link}` | bearer | `resident.link_review` | role scope | `{reason}` | revoked link | the row is **kept and marked revoked** — "this account could once act for that resident" is what a privacy complaint asks about | `implemented` |
+
+### Staff — duplicates and merge
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Duplicate queue | `GET /api/v1/admin/resident-duplicates` | bearer | `resident.merge` | role scope | `?decision=&page=&per_page=` | paginated pairs | a pair outside the caller's scope is omitted from the page, not summarised | `implemented` |
+| Run detection | `POST /api/v1/admin/resident-duplicates/detect` | bearer | `resident.merge` | role scope | `?barangay_id=` | counts | deterministic only; idempotent, and decisions already made survive a re-run | `implemented` |
+| Rule on a pair | `POST /api/v1/admin/resident-duplicates/{pair}/decide` | bearer | `resident.merge` | role scope | `{decision,note?}` | pair | `same-person` **does not merge** — it only unlocks the merge call | `implemented` |
+| Merge preview | `POST /api/v1/admin/resident-duplicates/{pair}/preview` | bearer | `resident.merge` | role scope | `{survivor_resident_id}` | field-by-field comparison, conflicts, reassignment counts | the reviewer's last chance to notice the two records disagree about a birth date | `implemented` |
+| Execute merge | `POST /api/v1/admin/resident-duplicates/{pair}/merge` | bearer | `resident.merge` | role scope | `{survivor_resident_id,reason}` | merge record | **one transaction**; refused unless a reviewer confirmed this exact pair; absorbed row is soft-deleted, never destroyed | `implemented` |
+
+Scope is enforced on **both** residents in a pair. A clerk who could merge a record they
+can see into one they cannot would be able to move a resident beyond their own reach, or
+rewrite a record in a barangay they were never granted.
+
+`resident.merge` belongs to no role by default beyond `lgu_admin`. It is the most
+destructive permission in the catalog: a wrong merge makes one resident disappear and hands
+their assistance history to somebody else, by destroying the evidence that they were two
+people.
+
+---
 
 ## 12. Citizen clients
 

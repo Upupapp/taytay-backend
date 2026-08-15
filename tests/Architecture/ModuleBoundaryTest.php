@@ -113,6 +113,77 @@ final class ModuleBoundaryTest extends TestCase
     }
 
     #[Test]
+    public function the_module_dependency_graph_has_no_cycles(): void
+    {
+        /*
+         * The boundary map says "no cycles — if you need one, you have found a missing
+         * module or a domain event", and until now nothing checked.
+         *
+         * That gap was not theoretical. TAB 08 needed a resident merge to repoint the
+         * absorbed person's credentials, and the obvious implementation — call
+         * `Credential\Application` from `ResidentProfile` — closed the cycle
+         * ResidentProfile → Credential → ResidentProfile. Every other assertion in this
+         * file passed, because the import was of a *public* layer; only the direction was
+         * wrong. It was inverted with a domain event (ADR 0013 §6), and this test is here
+         * so the next one is caught by the suite rather than by review.
+         *
+         * `Shared` is excluded: everything depends on it and it depends on nothing, which
+         * `shared_depends_on_no_other_module()` already enforces.
+         */
+        $graph = [];
+
+        foreach (self::modules() as $module) {
+            if ($module === self::SHARED_KERNEL) {
+                continue;
+            }
+
+            $graph[$module] = [];
+
+            foreach (self::phpFilesIn(self::modulePath($module)) as $file) {
+                foreach (self::moduleImports($file) as [$importedModule]) {
+                    if ($importedModule === $module || $importedModule === self::SHARED_KERNEL) {
+                        continue;
+                    }
+
+                    $graph[$module][$importedModule] = true;
+                }
+            }
+        }
+
+        $cycles = [];
+
+        // Depth-first search, tracking the path so the failure names the actual loop
+        // rather than merely asserting that one exists.
+        $visit = function (string $module, array $path) use (&$visit, $graph, &$cycles): void {
+            if (in_array($module, $path, true)) {
+                $loop = array_slice($path, array_search($module, $path, true));
+                $loop[] = $module;
+                $cycles[] = implode(' → ', $loop);
+
+                return;
+            }
+
+            $path[] = $module;
+
+            foreach (array_keys($graph[$module] ?? []) as $dependency) {
+                $visit($dependency, $path);
+            }
+        };
+
+        foreach (array_keys($graph) as $module) {
+            $visit($module, []);
+        }
+
+        $this->assertSame(
+            [],
+            array_values(array_unique($cycles)),
+            "Cyclic module dependencies (docs/architecture/domain-boundary-map.md §2).\n"
+                ."Invert the downward call with a domain event rather than importing back:\n"
+                .implode("\n", array_unique($cycles)),
+        );
+    }
+
+    #[Test]
     public function every_registered_module_exists_and_is_wired(): void
     {
         $enabled = require self::basePath('config/modules.php');

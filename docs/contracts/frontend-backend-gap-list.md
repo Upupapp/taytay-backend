@@ -27,6 +27,7 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-16](#g-16) | Separation of duties asserted only in the client | high | backend |
 | [G-17](#g-17) | `request.view-sensitive` vs `case.view-sensitive` | low | Angular |
 | [G-18](#g-18) | No file-upload contract | medium | backend |
+| [G-19](#g-19) | Angular resident routes point at pre-TAB-08 paths | medium | Angular |
 
 ---
 
@@ -294,6 +295,30 @@ mechanism. They are the most sensitive artifacts in the system.
 `public` disk — via an authorization-gated endpoint, and are read back through a
 short-lived signed URL issued after a server-side authorization decision. The concrete
 request/response shape is specified in the TAB that builds intake.
+
+---
+
+### G-19
+**The Angular resident screens call pre-TAB-08 paths.** `medium`
+
+`ResidentRepository` calls `/api/v1/residents…`. TAB 08 built the canonical registry at
+`/api/v1/admin/residents…`, matching every other staff surface in this backend — the
+`/admin` segment is a routing convention and confers no authority (ADR 0002), but the two
+paths do not agree.
+
+The backend was **not** bent to the client here. Serving the registry from an unprefixed
+path would put a permission-guarded staff endpoint in the same namespace as the public
+catalog, and the next reader auditing "which routes are citizen-reachable" would have to
+open every controller to find out.
+
+*Resolution:* the Angular console repoints `ResidentRepository` at the `/admin` paths in
+§11d. Until it does, the §4 rows stay `planned` and describe what that client calls today,
+so the matrix keeps telling the truth about both sides rather than quietly adopting the
+backend's shape as though the client had already changed.
+
+Also settled by TAB 08: **G-08** (no resident verification state) — `verification_tier`,
+`verified_at` and an append-only history are now canonical and exposed on the detail and
+history endpoints.
 
 ---
 

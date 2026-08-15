@@ -33,6 +33,7 @@ final class KycCaseService
     public function __construct(
         private readonly ResidentMatcher $matcher,
         private readonly ResidentProfileAudit $audit,
+        private readonly AccountLinkService $links,
     ) {}
 
     /**
@@ -161,6 +162,21 @@ final class KycCaseService
                 : $this->linkExistingResident($case, $linkResidentUuid);
 
             $this->transition($case, KycStatus::Approved, 'Approved by reviewer', $actor->subjectId);
+
+            /*
+             * Attach the applicant's account to the resident it now acts for.
+             *
+             * Until this exists, approval produced a canonical resident that the applicant
+             * could not reach: `kyc_cases.resolved_resident_id` recorded the outcome, but
+             * `accounts.resident_id` stayed null, so `me/profile` would answer "no resident
+             * record is linked to this account" to somebody who had just been verified.
+             *
+             * Routed through AccountLinkService rather than writing the column directly so
+             * that onboarding produces the same reviewable link history as a staff-made one
+             * (ADR 0013 §5) — inside this transaction, so a failure here rolls the approval
+             * back rather than leaving a verified resident nobody is attached to.
+             */
+            $this->links->link($resident, (string) $case->account_id, 'kyc-approval', $actor);
 
             $case->forceFill([
                 'resolved_resident_id' => $resident->uuid,
