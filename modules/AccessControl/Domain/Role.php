@@ -28,6 +28,9 @@ enum Role: string
     /** LGU administrator for the service catalog and staff-facing configuration. */
     case LguAdmin = 'lgu_admin';
 
+    /** Provisions staff and their scopes. Holds no operational permission over residents. */
+    case SecurityOfficer = 'security_officer';
+
     /**
      * @return list<Permission>
      */
@@ -55,6 +58,18 @@ enum Role: string
                 Permission::KycReview,
                 Permission::KycApprove,
                 Permission::CredentialManage,
+                // Sees who holds what. Provisioning is deliberately absent — see below.
+                Permission::StaffView,
+            ],
+
+            // Separation of duties: the person who hands out authority is not the person
+            // who exercises it over residents. A security officer provisions staff and can
+            // read the directory, but holds no KYC, resident or credential permission —
+            // and because a granter may only pass on authority they hold themselves
+            // (StaffProvisioningService), they cannot mint it for a confederate either.
+            self::SecurityOfficer => [
+                Permission::StaffView,
+                Permission::StaffManage,
             ],
         };
     }

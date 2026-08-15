@@ -5,18 +5,19 @@ declare(strict_types=1);
 namespace Modules\AccessControl\Infrastructure;
 
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\Query\Builder;
 use Modules\AccessControl\Domain\Role;
 use Modules\AccessControl\Domain\RoleAssignmentRepository;
 
 /**
- * Reads role assignments from the canonical `role_assignments` table (gap G-09 closed).
+ * Reads role assignments and barangay grants from the canonical tables.
  *
- * Replaces the provisional config map now that Identity's accounts exist and
- * `subject_id` has something real to mean. The interface is unchanged, so no call site
- * moved — which is the whole point of having had the seam since TAB 01.
+ * Every query joins nothing across a module boundary: `subject_id` is an account UUID held
+ * by identifier only (CLAUDE.md Article 2.2).
  *
- * The query joins nothing. `subject_id` is an account UUID held by identifier only, and
- * AccessControl must not reach into Identity's tables (CLAUDE.md Article 2.2).
+ * All three methods filter on the validity window, so an assignment that has not started
+ * or has ended grants nothing while the row survives for the audit question "was this
+ * person allowed to do that in March" (ADR 0008 §11).
  */
 final class DatabaseRoleAssignmentRepository implements RoleAssignmentRepository
 {
@@ -27,24 +28,63 @@ final class DatabaseRoleAssignmentRepository implements RoleAssignmentRepository
      */
     public function rolesFor(string $subjectId): array
     {
+        return array_values(array_map(
+            static fn (array $assignment): string => $assignment['role'],
+            $this->assignmentsFor($subjectId),
+        ));
+    }
+
+    /**
+     * @return list<array{role: string, scope_type: string, barangay_id: int|null}>
+     */
+    public function assignmentsFor(string $subjectId): array
+    {
+        $rows = $this->liveAssignments($subjectId)
+            ->get(['role', 'scope_type', 'barangay_id']);
+
+        $assignments = [];
+
+        foreach ($rows as $row) {
+            // Deny by default: a role no longer in the catalog grants nothing, so removing
+            // one from the enum revokes it everywhere without a data migration.
+            if (! is_string($row->role) || Role::tryFrom($row->role) === null) {
+                continue;
+            }
+
+            $assignments[] = [
+                'role' => $row->role,
+                'scope_type' => (string) $row->scope_type,
+                'barangay_id' => $row->barangay_id === null ? null : (int) $row->barangay_id,
+            ];
+        }
+
+        return $assignments;
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function grantedBarangayIdsFor(string $subjectId): array
+    {
         $now = now();
 
-        $roles = $this->connection->table('role_assignments')
+        return array_values(array_map('intval', $this->connection->table('staff_barangay_grants')
             ->where('subject_id', $subjectId)
             ->whereNull('deleted_at')
-            // Effective dating (ADR 0008 §11): an assignment that has not started, or has
-            // ended, grants nothing. "Was this person allowed to do that in March" stays
-            // answerable because the row survives its own expiry.
             ->where('valid_from', '<=', $now)
             ->where(fn ($query) => $query->whereNull('valid_until')->orWhere('valid_until', '>', $now))
-            ->pluck('role')
-            ->all();
+            ->pluck('barangay_id')
+            ->all()));
+    }
 
-        // Deny by default: a role that is no longer in the catalog grants nothing, so
-        // removing a role from the enum revokes it everywhere without a data migration.
-        return array_values(array_filter(
-            $roles,
-            static fn (mixed $role): bool => is_string($role) && Role::tryFrom($role) !== null,
-        ));
+    private function liveAssignments(string $subjectId): Builder
+    {
+        $now = now();
+
+        return $this->connection->table('role_assignments')
+            ->where('subject_id', $subjectId)
+            ->whereNull('deleted_at')
+            ->where('valid_from', '<=', $now)
+            ->where(fn ($query) => $query->whereNull('valid_until')->orWhere('valid_until', '>', $now));
     }
 }

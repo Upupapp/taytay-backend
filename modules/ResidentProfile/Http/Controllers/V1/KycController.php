@@ -91,7 +91,18 @@ final class KycController
         $pagination = PaginationParams::fromRequest($request);
         $status = $request->query('status');
 
-        $query = KycCase::query()->orderBy('submitted_at');
+        // Scope at the query, not after fetching: filtering in PHP still pulls other
+        // barangays' rows from the database, and the pagination total would count them.
+        $query = $this->authorization->scopeToBarangays(
+            $actor,
+            KycCase::query()->orderBy('submitted_at'),
+            'claimed_barangay_id',
+        );
+
+        // `assigned-cases` is the narrowest scope: the barangay bound AND ownership.
+        if ($actor->scope->requiresCaseAssignment()) {
+            $query->where('assigned_to', $actor->subjectId);
+        }
 
         if (is_string($status) && KycStatus::tryFrom($status) !== null) {
             $query->where('status', $status);
@@ -110,7 +121,7 @@ final class KycController
     {
         $this->authorization->authorize($actor, Permission::KycReview);
 
-        $model = $this->caseOrFail($case);
+        $model = $this->caseOrFail($actor, $case);
 
         return ApiResponse::item(
             $this->reviewerProjection($model) + ['candidates' => $this->candidateProjection($model)],
@@ -124,7 +135,7 @@ final class KycController
     {
         $this->authorization->authorize($actor, Permission::KycReview);
 
-        $model = $this->caseOrFail($case);
+        $model = $this->caseOrFail($actor, $case);
         $this->matcher->screen($model);
 
         return ApiResponse::item(['candidates' => $this->candidateProjection($model->refresh())]);
@@ -144,7 +155,7 @@ final class KycController
             'decision' => ['required', 'string', 'in:same-person,different-person'],
         ]);
 
-        $model = $this->caseOrFail($case);
+        $model = $this->caseOrFail($actor, $case);
 
         /** @var ResidentMatchCandidate|null $row */
         $row = $model->candidates()->where('uuid', $candidate)->first();
@@ -175,7 +186,7 @@ final class KycController
         ]);
 
         $model = $this->cases->approve(
-            $this->caseOrFail($case),
+            $this->caseOrFail($actor, $case),
             $actor,
             $validated['link_resident_id'] ?? null,
             $validated['message'] ?? null,
@@ -194,7 +205,7 @@ final class KycController
         ]);
 
         $model = $this->cases->reject(
-            $this->caseOrFail($case),
+            $this->caseOrFail($actor, $case),
             $actor,
             $validated['reason'],
             $validated['message'] ?? null,
@@ -209,7 +220,7 @@ final class KycController
 
         $validated = $request->validate(['message' => ['required', 'string', 'max:255']]);
 
-        $model = $this->cases->requestMoreInformation($this->caseOrFail($case), $actor, $validated['message']);
+        $model = $this->cases->requestMoreInformation($this->caseOrFail($actor, $case), $actor, $validated['message']);
 
         return ApiResponse::item($this->reviewerProjection($model));
     }
@@ -308,12 +319,33 @@ final class KycController
         return $case;
     }
 
-    private function caseOrFail(string $uuid): KycCase
+    /**
+     * Loads a case and enforces scope on it.
+     *
+     * Every staff route goes through here — index, show, rescreen, candidate decisions,
+     * approve, reject, request-information — so there is no verb a caller can switch to in
+     * order to reach a case their scope excludes. Authorization at the *loader* rather than
+     * per-action is what makes that guarantee hold as endpoints are added.
+     *
+     * Out-of-scope returns NOT FOUND, never FORBIDDEN: "exists but not yours" is enough to
+     * enumerate applicants one guessed id at a time (OWASP API1).
+     */
+    private function caseOrFail(ActorContext $actor, string $uuid): KycCase
     {
         /** @var KycCase|null $case */
         $case = KycCase::query()->where('uuid', $uuid)->first();
 
         if ($case === null) {
+            throw ResourceNotFoundException::make('That application was not found.');
+        }
+
+        $this->authorization->authorizeBarangay(
+            $actor,
+            $case->claimed_barangay_id === null ? null : (int) $case->claimed_barangay_id,
+            'That application was not found.',
+        );
+
+        if ($actor->scope->requiresCaseAssignment() && $case->assigned_to !== $actor->subjectId) {
             throw ResourceNotFoundException::make('That application was not found.');
         }
 

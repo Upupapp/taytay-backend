@@ -39,6 +39,10 @@ class DatabaseSeeder extends Seeder
                     'email_verified_at' => now(),
                 ],
             );
+
+            // After the account exists: grants it the one bootstrap role that can then
+            // provision everybody else (ADR 0012).
+            $this->call(AccessControlSeeder::class);
         }
     }
 }

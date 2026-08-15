@@ -133,6 +133,15 @@ final class CredentialController
             throw ResourceNotFoundException::make('That resident record was not found.');
         }
 
+        // Scope, not just permission: holding `credential.manage` does not make every
+        // resident in the municipality yours to issue for. Out of scope reads as NOT
+        // FOUND so a guessed id cannot confirm the record exists (ADR 0012).
+        $this->authorization->authorizeBarangay(
+            $actor,
+            $resident->barangayId,
+            'That resident record was not found.',
+        );
+
         $credential = $this->credentials->issue($resident, $actor->subjectId);
 
         return ApiResponse::item([
@@ -158,6 +167,15 @@ final class CredentialController
         if ($model === null) {
             throw ResourceNotFoundException::make('That credential was not found.');
         }
+
+        // Revocation is scoped too. Revoking somebody else's barangay's card is a denial
+        // of service against a resident the actor has no business touching.
+        $holder = $this->residents->summaryFor((string) $model->resident_id);
+        $this->authorization->authorizeBarangay(
+            $actor,
+            $holder?->barangayId,
+            'That credential was not found.',
+        );
 
         $this->credentials->revoke($model, $validated['reason'], $actor->subjectId);
 

@@ -29,11 +29,18 @@ final readonly class ActorContext
         public array $roles,
         public array $permissions,
         public ClientChannel $channel,
+        /**
+         * How much of the municipality this actor may reach (ADR 0012).
+         *
+         * Resolved server-side from persisted assignments and grants on every request.
+         * Deny by default: a guest carries DataScope::none(), which reaches nothing.
+         */
+        public DataScope $scope,
     ) {}
 
     public static function guest(ClientChannel $channel = ClientChannel::Unknown): self
     {
-        return new self(null, [], [], $channel);
+        return new self(null, [], [], $channel, DataScope::none());
     }
 
     /**
@@ -45,12 +52,15 @@ final readonly class ActorContext
         array $roles = [],
         array $permissions = [],
         ClientChannel $channel = ClientChannel::Unknown,
+        ?DataScope $scope = null,
     ): self {
         return new self(
             $subjectId,
             array_values(array_unique($roles)),
             array_values(array_unique($permissions)),
             $channel,
+            // Authenticating proves who you are and reaches nothing on its own (ADR 0009).
+            $scope ?? DataScope::none(),
         );
     }
 
@@ -91,7 +101,7 @@ final readonly class ActorContext
     /**
      * Safe for audit logs: identifiers and authority only, never personal data.
      *
-     * @return array{subject_id: string|null, roles: list<string>, channel: string}
+     * @return array{subject_id: string|null, roles: list<string>, channel: string, scope: array{type: string, barangay_ids: list<int>}}
      */
     public function forAudit(): array
     {
@@ -99,6 +109,7 @@ final readonly class ActorContext
             'subject_id' => $this->subjectId,
             'roles' => $this->roles,
             'channel' => $this->channel->value,
+            'scope' => $this->scope->forAudit(),
         ];
     }
 }

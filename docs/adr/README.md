@@ -16,6 +16,7 @@ supersede it with a new one and update the status here.
 | [0009](0009-account-model-and-authentication-factors.md) | Accounts are separate from residents; factors differ by account type | Accepted |
 | [0010](0010-kyc-matching-and-resident-canonicity.md) | Deterministic matching with human adjudication; no silent resident creation | Accepted |
 | [0011](0011-digital-id-and-qr-verification.md) | Digital ID: feature-flagged, and the QR is a handle, not a record | Accepted |
+| [0012](0012-staff-scopes-and-provisioning.md) | Data scopes are enforced server-side, and provisioning cannot escalate | Accepted |
 
 An ADR is required when a change alters a module boundary, an API convention, an
 authentication/authorization model, a persistence source of truth, or a lifecycle state

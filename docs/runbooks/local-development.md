@@ -172,6 +172,9 @@ with PHP 8.3.30, PostgreSQL 16.14 and Redis 5.0.14 as native processes:
 | Pinned image tags | all five verified to exist in their registries |
 | **TAB 04 foundation schema on PostgreSQL** | `migrate` from empty → `migrate:reset` (clean, only `migrations` left) → re-apply; then `migrate:fresh --seed`, `db:seed` twice more (idempotent: still 5 barangays, 1 user), rollback again **with data present**, re-apply. 20 indexes and 10 unique/check/FK constraints verified |
 | Constraint behaviour on PostgreSQL | duplicate `(subject_id, role)` rejected by `uniq_role_assignments_subject_role`; invalid `scope_type` rejected by the check constraint compiled from `->enum()`; all 14 datetime columns are `timestamp with time zone`; `audit_entries` has `created_at`/`occurred_at` and no mutation column |
+| **TAB 07 staff scope schema on PostgreSQL** | `migrate` applied `create_staff_scope_tables` on a populated database, then `migrate:rollback --step=1` dropped `staff_barangay_grants` and `kyc_cases.assigned_to` cleanly, then re-applied. `db:seed` run twice — one bootstrap `security_officer` assignment, still one after the second run |
+| Scope constraints on PostgreSQL | `staff_barangay_grants` carries `uniq_staff_barangay_grants (subject_id, barangay_id)`, an FK to `barangays` with `ON DELETE RESTRICT`, and `idx_staff_barangay_grants_validity`; `role_assignments_scope_type_check` admits exactly `all-barangays`, `own-barangay`, `assigned-cases`, so a scope the catalog does not know cannot be written |
+| `lguids:readiness` after TAB 07 | database `ok`, cache `ok`, queue `ok`, storage `ok`; 9 `/api/v1/staff` routes registered under `auth:sanctum` |
 
 The Compose CLI used for validation was the official release binary, checksum-verified
 against Docker's published `.sha256`, run from a temporary directory and not installed.

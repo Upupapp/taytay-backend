@@ -40,8 +40,40 @@ enum Permission: string
     /** Create, edit and publish catalog entries. */
     case ServicesManage = 'services.manage';
 
+    /**
+     * Provision staff: create accounts, assign and revoke roles, grant and withdraw
+     * barangay access.
+     *
+     * The most dangerous permission in the catalog, because it is the one that hands out
+     * the others. It is deliberately NOT sufficient on its own — StaffProvisioningService
+     * additionally refuses to grant authority the actor does not already hold, and refuses
+     * to act on the actor's own account (ADR 0012).
+     */
+    case StaffManage = 'staff.manage';
+
+    /** Read the staff directory and each member's effective authority. */
+    case StaffView = 'staff.view';
+
     public static function tryFromName(string $permission): ?self
     {
         return self::tryFrom($permission);
+    }
+
+    /**
+     * Whether this permission is about *staffing the office* rather than about serving a
+     * resident.
+     *
+     * The distinction is what makes delegated provisioning safe. A security officer may
+     * appoint a KYC reviewer without being able to approve a KYC case themselves — that is
+     * separation of duties working, not a hole. What they may never do is hand out
+     * administrative permissions they do not hold, because that is the step that turns one
+     * compromised provisioner into two (StaffProvisioningService).
+     */
+    public function isAdministrative(): bool
+    {
+        return match ($this) {
+            self::StaffManage, self::StaffView => true,
+            default => false,
+        };
     }
 }

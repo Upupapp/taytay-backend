@@ -130,7 +130,20 @@ abstract class KycTestCase extends TestCase
 
     protected function barangayId(): int
     {
-        $existing = DB::table('barangays')->value('id');
+        return $this->barangay('brgy-san-juan', 'San Juan');
+    }
+
+    /**
+     * A second barangay, so scope tests have somewhere a clerk is not allowed to reach.
+     */
+    protected function otherBarangayId(): int
+    {
+        return $this->barangay('brgy-dolores', 'Dolores');
+    }
+
+    protected function barangay(string $code, string $name): int
+    {
+        $existing = DB::table('barangays')->where('code', $code)->value('id');
 
         if ($existing !== null) {
             return (int) $existing;
@@ -138,8 +151,8 @@ abstract class KycTestCase extends TestCase
 
         return (int) DB::table('barangays')->insertGetId([
             'uuid' => (string) Str::uuid7(),
-            'code' => 'brgy-san-juan',
-            'name' => 'San Juan',
+            'code' => $code,
+            'name' => $name,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

@@ -208,9 +208,15 @@ gap **G-11**.
 
 | Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Staff list (`/administration/staff`) | `GET /api/v1/staff` | bearer | `staff.view` | all-barangays | `?search=&role=&include_inactive=&page=&per_page=` | paginated staff | staff personal data — never reaches a citizen channel | `planned` |
-| Staff detail | `GET /api/v1/staff/{staff_user_id}` | bearer | `staff.view` | all-barangays | — | staff user | — | `planned` |
-| Create / update staff, assign role | `POST` / `PATCH /api/v1/staff[/{staff_user_id}]` | bearer | `staff.manage` | all-barangays | staff payload | staff user | **privilege granting** — always audited | `planned` |
+| Staff list (`/administration/staff`) | `GET /api/v1/staff` | bearer | `staff.view` | all-barangays | `?page=&per_page=` | paginated staff + effective authority | staff personal data — never reaches a citizen channel | `implemented` |
+| Staff detail | `GET /api/v1/staff/{staff}` | bearer | `staff.view` | all-barangays | — | staff + effective authority | — | `implemented` |
+| Create staff | `POST /api/v1/staff` | bearer | `staff.manage` | all-barangays | `{email, display_name}` | staff (no authority yet) | **no password is set or returned** — staff activate through password reset | `implemented` |
+| Deactivate staff | `DELETE /api/v1/staff/{staff}` | bearer | `staff.manage` | all-barangays | — | staff | drops every live token; role history is retained as evidence | `implemented` |
+| Assign role + scope | `POST /api/v1/staff/{staff}/roles` | bearer | `staff.manage` | all-barangays | `{role, scope_type, barangay_id?}` | effective authority | **privilege granting** — audited; a granter may not exceed their own authority or act on themselves (ADR 0012) | `implemented` |
+| Revoke role | `DELETE /api/v1/staff/{staff}/roles/{role}` | bearer | `staff.manage` | all-barangays | — | effective authority | ends validity, never deletes the row | `implemented` |
+| Grant extra barangay | `POST /api/v1/staff/{staff}/barangays` | bearer | `staff.manage` | granter's own scope | `{barangay_id, reason, valid_until?}` | effective authority | the only way to widen a barangay scope; reason mandatory | `implemented` |
+| Revoke barangay grant | `DELETE /api/v1/staff/{staff}/barangays/{barangay}` | bearer | `staff.manage` | all-barangays | — | effective authority | — | `implemented` |
+| Authority catalog (grant screen) | `GET /api/v1/staff/authority-catalog` | bearer | `staff.view` | — | — | permissions, roles (+`grantable`), scope types | reference data — knowing a permission name grants nothing | `implemented` |
 | Audit trail (`/administration/audit`) | `GET /api/v1/audit-entries` | bearer | `audit.view` | all-barangays | `?entity_type=&entity_id=&actor_id=&from=&to=&page=&per_page=` | paginated entries | the audit log itself is sensitive; **append-only, never editable or deletable** | `planned` |
 | Settings (`/administration/settings`) | `GET` / `PATCH /api/v1/settings` | bearer | `settings.manage` | all-barangays | settings payload | settings | office configuration | `planned` |
 | Barangay reference list | `GET /api/v1/barangays` | bearer | — | — | — | barangays + PSGC | public reference data | `planned` |

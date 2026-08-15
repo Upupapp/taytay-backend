@@ -16,7 +16,7 @@ abstract class TestCase extends BaseTestCase
      * of these tests is that authority is resolved server-side from persisted state, and
      * a stub would prove only that the stub works.
      */
-    protected function grantRole(Account $account, string $role, ?string $barangayId = null): void
+    protected function grantRole(Account $account, string $role, ?int $barangayId = null): void
     {
         DB::table('role_assignments')->insert([
             'uuid' => (string) Str::uuid7(),

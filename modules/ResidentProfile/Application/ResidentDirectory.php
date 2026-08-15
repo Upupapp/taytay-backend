@@ -29,6 +29,7 @@ final class ResidentDirectory
             id: $resident->uuid,
             displayName: $resident->displayName(),
             verificationTier: $resident->verification_tier,
+            barangayId: $resident->barangay_id === null ? null : (int) $resident->barangay_id,
         );
     }
 }

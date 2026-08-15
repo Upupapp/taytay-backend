@@ -13,7 +13,7 @@ Eloquent relationship across the boundary.
 | Module | Owns (canonical source of truth) | Must NOT own | Status |
 | --- | --- | --- | --- |
 | `Shared` | API envelope, error codes, pagination, request context, actor context, base contracts | any business rule, any table | **implemented** |
-| `AccessControl` | roles, permission catalog, role→permission mapping, staff scope (office/jurisdiction), authorization decisions | who a person *is*, credential validity | **implemented** |
+| `AccessControl` | roles, permission catalog, role→permission mapping, staff scope resolution and enforcement, explicit barangay grants, staff provisioning, authorization decisions | who a person *is*, staff accounts themselves (asks `Identity`), credential validity | **implemented** (TAB 07) |
 | `ServiceCatalog` | the catalog of LGU services offered (code, name, category, channel availability, publication state) | applications submitted against a service | **implemented (reference vertical)** |
 | `Identity` | accounts, credentials-to-log-in, sessions, tokens, devices, MFA, account lifecycle | resident demographics, ID cards | **implemented** (TAB 05) |
 | `ResidentProfile` | resident master record, demographics, addresses, household links, verification tier, KYC cases | login credentials, issued ID cards | **implemented** (TAB 06) |
@@ -32,6 +32,12 @@ force a rewrite later.
 `Credential` and `Verification` are separate because verification must be able to run at
 the edge (kiosk/verifier device, possibly offline) against published key material without
 being granted read access to the credential holder's personal data.
+
+`AccessControl` owns *authority*; `Identity` owns *accounts*. Staff provisioning therefore
+spans both, as two collaborating application services rather than one writing the other's
+tables: `AccessControl\Application\StaffProvisioningService` decides and records who may do
+what, and calls `Identity\Application\StaffAccountProvisioner` for the account itself
+(ADR 0012). Neither reads the other's schema.
 
 ---
 

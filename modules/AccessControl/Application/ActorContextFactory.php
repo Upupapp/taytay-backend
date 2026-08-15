@@ -25,6 +25,7 @@ final class ActorContextFactory
         private readonly AuthFactory $auth,
         private readonly RoleAssignmentRepository $roleAssignments,
         private readonly RequestContext $requestContext,
+        private readonly ScopeResolver $scopes,
         private readonly string $guard,
     ) {}
 
@@ -37,6 +38,19 @@ final class ActorContextFactory
         $user = $this->auth->guard($this->guard)->user();
 
         if ($user === null) {
+            return ActorContext::guest($this->requestContext->channel());
+        }
+
+        /*
+         * An account that is no longer active carries no authority, even holding a valid
+         * token (ADR 0012). Suspension has to bite before the token expires, or revoking a
+         * staff member's access means waiting up to twelve hours for it to take effect.
+         *
+         * Guest rather than an exception: the caller is still authenticated, they simply
+         * reach nothing. Endpoints then fail with their own 403/404 rather than a special
+         * case that every controller would have to know about.
+         */
+        if (method_exists($user, 'canAuthenticate') && ! $user->canAuthenticate()) {
             return ActorContext::guest($this->requestContext->channel());
         }
 
@@ -58,6 +72,9 @@ final class ActorContextFactory
             // never stored per account and never accepted from a client.
             permissions: Role::permissionsFor($roles),
             channel: $this->requestContext->channel(),
+            // Resolved from current database state on every request, so a revoked
+            // assignment stops applying immediately rather than when the token expires.
+            scope: $this->scopes->forSubject($subjectId),
         );
     }
 }

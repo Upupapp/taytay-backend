@@ -18,6 +18,10 @@ final readonly class ResidentSummary
         public string $id,
         public string $displayName,
         public VerificationTier $verificationTier,
+        // Carried so consumers can ask AccessControl whether the caller's scope reaches
+        // this resident. Without it, a barangay-scoped clerk could act on a resident from
+        // another barangay simply because the consuming module could not tell (ADR 0012).
+        public ?int $barangayId = null,
     ) {}
 
     public function isVerified(): bool

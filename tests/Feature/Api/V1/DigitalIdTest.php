@@ -117,7 +117,21 @@ final class DigitalIdTest extends KycTestCase
         // A sequential serial tells any holder how many IDs the LGU has issued and lets
         // them guess their neighbour's.
         $this->assertCount(3, array_unique($serials));
-        $this->assertNotSame(1, (int) preg_replace('/\D/', '', (string) $serials[0]));
+
+        /*
+         * Consecutive is the property that matters, so assert that directly on the digits
+         * of all three rather than on the first one's value.
+         *
+         * The earlier form asserted the first serial's digits were not `1`, which a random
+         * serial containing exactly one digit satisfies by accident — a test that fails a
+         * few runs in a hundred while the code is correct trains people to re-run it.
+         */
+        $numbers = array_map(
+            static fn (string $serial): int => (int) preg_replace('/\D/', '', $serial),
+            array_map(strval(...), $serials),
+        );
+
+        $this->assertNotSame([$numbers[0], $numbers[0] + 1, $numbers[0] + 2], $numbers);
     }
 
     // ── the QR payload ────────────────────────────────────────────────────────────────

@@ -66,7 +66,15 @@ final class ActorContextTest extends TestCase
         $actor = ActorContext::authenticated('subject-1', ['lgu_staff'], ['services.view_unpublished'], ClientChannel::AdminConsole);
 
         $this->assertSame(
-            ['subject_id' => 'subject-1', 'roles' => ['lgu_staff'], 'channel' => 'admin-console'],
+            [
+                'subject_id' => 'subject-1',
+                'roles' => ['lgu_staff'],
+                'channel' => 'admin-console',
+                // Scope belongs in the trail: "an admin changed this" is a much weaker
+                // fact than "an admin who could reach that barangay changed this". It is a
+                // scope type and barangay ids — no name, no address, no personal data.
+                'scope' => ['type' => 'none', 'barangay_ids' => []],
+            ],
             $actor->forAudit(),
             'Audit records must carry identifiers and authority only (CLAUDE.md Article 5.5).'
         );
