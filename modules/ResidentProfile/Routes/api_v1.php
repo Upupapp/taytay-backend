@@ -10,6 +10,7 @@ use Modules\ResidentProfile\Http\Controllers\V1\RelationshipController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentCorrectionController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentDuplicateController;
+use Modules\ResidentProfile\Http\Controllers\V1\VulnerabilityController;
 
 /*
  * ResidentProfile routes. Mounted under /api/v1 by routes/api.php.
@@ -108,4 +109,27 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // remove-then-add could leave a real person belonging to no household at all.
     Route::post('admin/households/{household}/transfers', [HouseholdController::class, 'transferMember'])->name('v1.admin.households.transfers');
     Route::post('admin/households/{household}/families', [HouseholdController::class, 'storeFamily'])->name('v1.admin.households.families.store');
+
+    /*
+     * ── vulnerability ─────────────────────────────────────────────────────────────────
+     *
+     * Staff only, and deliberately so. There is no citizen route here: a resident's right to
+     * see their own data is served by the data-access workflow in TAB 29, where a person asks
+     * and a human answers. A live score endpoint would invite gaming, present a placeholder
+     * ordering as a verdict, and — for someone whose device is monitored by the person they
+     * are protected from — hand a disclosure channel to the abuser (ADR 0015 §5).
+     *
+     * `admin/vulnerability/ruleset` is declared before the `{resident}` routes so the literal
+     * segment is not swallowed by a wildcard.
+     */
+    Route::get('admin/vulnerability/ruleset', [VulnerabilityController::class, 'ruleset'])->name('v1.admin.vulnerability.ruleset');
+
+    Route::get('admin/residents/{resident}/vulnerability', [VulnerabilityController::class, 'showResident'])->name('v1.admin.residents.vulnerability.show');
+    Route::post('admin/residents/{resident}/vulnerability-factors', [VulnerabilityController::class, 'storeResidentFactor'])->name('v1.admin.residents.vulnerability.store');
+    Route::post('admin/residents/{resident}/vulnerability-factors/{factor}/review', [VulnerabilityController::class, 'reviewResidentFactor'])->name('v1.admin.residents.vulnerability.review');
+    Route::delete('admin/residents/{resident}/vulnerability-factors/{factor}', [VulnerabilityController::class, 'endResidentFactor'])->name('v1.admin.residents.vulnerability.destroy');
+
+    Route::get('admin/households/{household}/vulnerability', [VulnerabilityController::class, 'showHousehold'])->name('v1.admin.households.vulnerability.show');
+    Route::post('admin/households/{household}/vulnerability-factors', [VulnerabilityController::class, 'storeHouseholdFactor'])->name('v1.admin.households.vulnerability.store');
+    Route::delete('admin/households/{household}/vulnerability-factors/{factor}', [VulnerabilityController::class, 'endHouseholdFactor'])->name('v1.admin.households.vulnerability.destroy');
 });

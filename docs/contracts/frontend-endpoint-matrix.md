@@ -446,6 +446,49 @@ opposite view is computed, which is also what makes the duplicate check possible
 
 ---
 
+## 11f. Vulnerability profiles — built in TAB 10
+
+Factors are **time-bounded observations**, not labels: what was seen, by whom, how, when, and
+whether anyone has since confirmed or refuted it. The score built from them is **decision
+support that decides nothing** — it orders a queue, and no status, tier, eligibility or
+approval anywhere in this backend reads it. Full reasoning: ADR 0015.
+
+Every snapshot carries the arithmetic that produced it — each factor with its weight,
+severity, multiplier and points, plus the ruleset version — because a total on its own cannot
+be explained to the resident it is about.
+
+**Safeguarding factors** (`vawc-survivor`, `cicl`, `child-at-risk`, `trafficking-survivor`)
+carry weight 0 and require `vulnerability.view_protected`. Without that permission the
+response is **identical to that of a resident who has none** — no count, no placeholder — the
+factor is absent from the list, contributes nothing to the score, is missing from the
+published catalog, and a guessed factor id returns `404`, never `403`.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Published ruleset | `GET /api/v1/admin/vulnerability/ruleset` | bearer | `vulnerability.view` | — | — | weights, multipliers, bands, factor catalog, `decision_support_only`, `status` | catalog **filtered** — safeguarding categories are absent without `vulnerability.view_protected`, or the catalog itself becomes the disclosure | `implemented` |
+| Resident snapshot | `GET /api/v1/admin/residents/{resident}/vulnerability` | bearer | `vulnerability.view` | role scope | — | `score`, `band`, `ruleset`, `contributions[]`, `uncapped_subtotal`, `dependant_count`, factors by level | **audited read**; combines the resident's own factors, their current household's factors, and dependants derived from kinship — never re-tagged | `implemented` |
+| Record a factor | `POST /api/v1/admin/residents/{resident}/vulnerability-factors` | bearer | `vulnerability.manage` | role scope | `{factor_code,status?,severity?,source?,note?,effective_from?}` | `201` factor | idempotent per open factor; a household-level code is refused (`400`); a **safeguarding code additionally requires `vulnerability.view_protected`** | `implemented` |
+| Confirm / refute | `POST /api/v1/admin/residents/{resident}/vulnerability-factors/{factor}/review` | bearer | `vulnerability.manage` | role scope | `{status,note?}` | factor | a refuted factor is **kept and stops counting** — deleting it means the claim gets re-raised forever | `implemented` |
+| End a factor | `DELETE /api/v1/admin/residents/{resident}/vulnerability-factors/{factor}` | bearer | `vulnerability.manage` | role scope | `{end_reason}` | closed factor | effective-dated close, never a delete — "pregnant" is not permanent | `implemented` |
+| Household snapshot | `GET /api/v1/admin/households/{household}/vulnerability` | bearer | `vulnerability.view` | role scope | — | same shape, household factors only | audited read | `implemented` |
+| Record household factor | `POST /api/v1/admin/households/{household}/vulnerability-factors` | bearer | `vulnerability.manage` | role scope | as above | `201` factor | a resident-level code is refused (`400`) | `implemented` |
+| End household factor | `DELETE /api/v1/admin/households/{household}/vulnerability-factors/{factor}` | bearer | `vulnerability.manage` | role scope | `{end_reason}` | closed factor | — | `implemented` |
+| Citizen vulnerability view | — | — | — | — | — | — | — | `mock-only` |
+
+`me/vulnerability` is a **deliberate non-endpoint**, on the same footing as `signInAs` in §2.
+A resident's right to see their own data (RA 10173 §16(c)) is served by the data-access
+request workflow in TAB 29, where a person asks and a human answers with context. A live score
+endpoint would invite gaming, present a placeholder ordering as a verdict about someone's
+life, and — for a protected individual whose device is monitored by the person they are being
+protected from — hand a disclosure channel straight to the abuser. It must not be implemented
+without a new ADR.
+
+The ruleset weights are **placeholders awaiting MSWDO validation**, and say so in their own
+payload (`status: placeholder-pending-lgu-approval`). The master command forbids hardcoding
+Taytay policy that has not been supplied; see gap **G-20**.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

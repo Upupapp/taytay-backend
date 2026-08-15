@@ -28,6 +28,7 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-17](#g-17) | `request.view-sensitive` vs `case.view-sensitive` | low | Angular |
 | [G-18](#g-18) | No file-upload contract | medium | backend |
 | [G-19](#g-19) | Angular resident routes point at pre-TAB-08 paths | medium | Angular |
+| [G-20](#g-20) | Vulnerability weights are placeholders, not Taytay policy | high | LGU (MSWDO) |
 
 ---
 
@@ -319,6 +320,36 @@ backend's shape as though the client had already changed.
 Also settled by TAB 08: **G-08** (no resident verification state) — `verification_tier`,
 `verified_at` and an append-only history are now canonical and exposed on the detail and
 history endpoints.
+
+---
+
+### G-20
+**The vulnerability weights are a plausible ordering, not Taytay policy.** `high`
+
+`config/vulnerability.php` assigns a weight to every factor and a band to every score range.
+Nobody at the MSWDO has approved those numbers. The master command forbids hardcoding LGU
+policy that has not been supplied, so the ruleset declares itself
+`status: placeholder-pending-lgu-approval` and `decision_support_only: true` **inside its own
+payload**, and every snapshot carries the version that produced it.
+
+This is recorded as a gap rather than a defect because the alternative — shipping no ordering
+at all — would leave case workers with a queue sorted by arrival time, which is worse and also
+unstated policy.
+
+*Resolution:* the MSWDO reviews the factor catalog and weights, the version is bumped, and
+`status` becomes `approved`. Nothing else changes: the numbers live in one reviewable file
+precisely so that approving them is a diff rather than a migration.
+
+**Not blocking**, because no eligibility outcome follows from the score — that is asserted by
+`VulnerabilityProfileTest::a_high_score_changes_nothing_about_the_resident_record`. It becomes
+blocking the moment any TAB reads the score to decide something, and that TAB must resolve
+this first.
+
+Also settled by TAB 10: **G-07** (sensitive-sector suppression is presentation-only) — for
+vulnerability factors, safeguarding suppression is now server-side and total: absent from the
+list, absent from the score, absent from the published catalog, and `404` on a guessed id.
+`resident_sectors` still carries the older sector tags and is not yet served by an endpoint;
+when it is, it must adopt the same rule rather than the presentation-layer one.
 
 ---
 

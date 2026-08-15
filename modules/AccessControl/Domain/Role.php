@@ -54,6 +54,12 @@ enum Role: string
                 // and in the field; withholding it would push the work to an admin who was
                 // not there.
                 Permission::HouseholdManage,
+                // Field work is where vulnerability is observed, so front-line staff both
+                // read and record it. Safeguarding factors are deliberately NOT included:
+                // recording that somebody is a VAWC survivor is a protection decision, not
+                // an intake one.
+                Permission::VulnerabilityView,
+                Permission::VulnerabilityManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -67,6 +73,11 @@ enum Role: string
                 Permission::ResidentMerge,
                 Permission::ResidentLinkReview,
                 Permission::HouseholdManage,
+                Permission::VulnerabilityView,
+                Permission::VulnerabilityManage,
+                // See the note on the permission: this belongs to a dedicated protection
+                // officer, and sits here only because that role does not exist yet.
+                Permission::VulnerabilityViewProtected,
                 Permission::KycReview,
                 Permission::KycApprove,
                 Permission::CredentialManage,

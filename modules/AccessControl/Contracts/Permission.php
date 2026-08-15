@@ -80,6 +80,25 @@ enum Permission: string
      */
     case HouseholdManage = 'household.manage';
 
+    /** Read vulnerability factors and the decision-support snapshot built from them. */
+    case VulnerabilityView = 'vulnerability.view';
+
+    /** Record, review and end vulnerability observations. */
+    case VulnerabilityManage = 'vulnerability.manage';
+
+    /**
+     * See safeguarding factors — VAWC, CICL, child-at-risk, trafficking.
+     *
+     * The narrowest permission in the catalog. Membership of these categories can endanger
+     * someone, so a caller without this sees a response identical to that of a person with no
+     * such factors: no count, no placeholder, nothing to infer from (ADR 0015 §4).
+     *
+     * Held by `lgu_admin` today only because that is the most senior role that exists. It
+     * belongs to a dedicated protection officer, and the LGU should move it to one before
+     * production.
+     */
+    case VulnerabilityViewProtected = 'vulnerability.view_protected';
+
     /** Issue or revoke a digital ID credential. */
     case CredentialManage = 'credential.manage';
 

@@ -19,6 +19,7 @@ supersede it with a new one and update the status here.
 | [0012](0012-staff-scopes-and-provisioning.md) | Data scopes are enforced server-side, and provisioning cannot escalate | Accepted |
 | [0013](0013-canonical-resident-registry-and-account-linking.md) | Registry writes leave history; merge is gated and transactional; an account link is a reviewable record | Accepted |
 | [0014](0014-household-family-and-relationship-domain.md) | Household ≠ family; membership is effective-dated; one directed kinship row; the citizen household view is minimised | Accepted |
+| [0015](0015-vulnerability-as-explainable-decision-support.md) | Vulnerability is time-bounded observations plus a versioned, itemised score that decides nothing; safeguarding factors are gated, unweighted and omitted without trace | Accepted |
 
 An ADR is required when a change alters a module boundary, an API convention, an
 authentication/authorization model, a persistence source of truth, or a lifecycle state
