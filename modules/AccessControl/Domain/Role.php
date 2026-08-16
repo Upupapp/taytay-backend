@@ -134,6 +134,15 @@ enum Role: string
                 // Front-line staff draft announcements. Putting one on the municipal feed is not
                 // theirs: a published post cannot be unpublished from the people who read it.
                 Permission::NewsfeedManage,
+                /*
+                 * Front-line staff draft events too — they are the ones running the feeding
+                 * programme and they know the venue, the contact and the instructions.
+                 *
+                 * `EventPublish` is NOT theirs, for the same reason as the newsfeed and one more:
+                 * cancelling lives there as well, and an event called off by mistake sends people
+                 * home from a covered court they travelled to (ADR 0030 §4).
+                 */
+                Permission::EventManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -208,6 +217,8 @@ enum Role: string
                 Permission::NewsfeedManage,
                 Permission::NewsfeedPublish,
                 Permission::NewsfeedModerate,
+                Permission::EventManage,
+                Permission::EventPublish,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *

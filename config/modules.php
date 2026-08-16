@@ -62,6 +62,12 @@ return [
          * by people who are not their subject, which inverts the usual risk (ADR 0028).
          */
         'Content',
+        /*
+         * Official LGU events. Separate from Content even though both publish to the public: a
+         * post is a statement, an event is an operational commitment with a venue, a capacity and
+         * a list of people expecting to be let in (ADR 0030 §1).
+         */
+        'Events',
     ],
 
 ];

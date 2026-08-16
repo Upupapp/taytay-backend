@@ -384,6 +384,20 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 25: **G-39** — **event reminders are not built.** Telling a registrant the day
+before, or telling everybody an event was cancelled, is the obvious next thing and it needs
+registrations (TAB 26) before there is anybody to tell. The cancellation reason is already stored
+and public, so the data a reminder would carry exists; what does not exist is the trigger or the
+recipient list. Owner: this backend, after TAB 26.
+
+Opened by TAB 25: **G-38** — **anonymous reading is ON for events and OFF for the newsfeed.** The
+asymmetry is deliberate (ADR 0030 §5): a poster with a QR code is read by somebody with no account,
+and events have no audience targeting, so the barangay-disclosure risk that keeps G-36 shut does
+not arise here. It is recorded as a gap rather than a decision because **the LGU has not been asked
+to confirm it**, and because per-barangay events would bring both questions back together. If
+Taytay wants events behind a login, that is a middleware line and a test, not a redesign. Owner:
+LGU.
+
 Opened by TAB 24: **G-37** — **no moderation provider.** `review-needed` exists as a comment state
 that nothing currently sets. The master command asks for a hook and explicitly says not to build AI
 moderation now, so the state machine, the queue and the audit trail are all in place and the only

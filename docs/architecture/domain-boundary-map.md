@@ -27,6 +27,7 @@ Eloquent relationship across the boundary.
 | `Reporting` | dashboard aggregates, the closed report catalogue, and the export request/build/download lifecycle | **any fact** — every number is counted from another module's tables, and a read model that could write would be a second authority; also any per-caseworker grouping (ADR 0026 §1, §4) | **implemented** (TAB 21) |
 | `Search` | record discovery and saved filter presets | **any record and any index** — every searcher runs a scoped query against the owning module's table, because an index maintained alongside the authorization rules eventually disagrees with them, invisibly (ADR 0027 §1) | **implemented** (TAB 22) |
 | `Content` | admin-authored public communication: newsfeed posts, their lifecycle, schedule, audience and media alt text; resident reactions, comments, share counts and moderation | any relationship between residents — no follow graph, no profiles, no mentions; and any external share destination, which it must never record (ADR 0029 §3) | **implemented** (TAB 23; engagement TAB 24) |
+| `Events` | official LGU events: the event record, its state machine, the registration *configuration* (window, capacity, waitlist) and the **derived** availability answer | **a stored availability value** — it is computed on every read, because a column saying `open` at 17:00 for a window that shut at 16:59 needs a job that will one day not run (ADR 0030 §2); also newsfeed posts, and any citizen write path | **implemented** (TAB 25; registration TAB 26) |
 | `Audit` | append-only audit trail of privileged actions, personal-data reads and lifecycle transitions | anything mutable | planned |
 
 `Identity` and `ResidentProfile` are deliberately **separate**. An account is a way to
@@ -38,6 +39,13 @@ force a rewrite later.
 `Credential` and `Verification` are separate because verification must be able to run at
 the edge (kiosk/verifier device, possibly offline) against published key material without
 being granted read access to the credential holder's personal data.
+
+`Content` and `Events` are deliberately **separate**, though both publish to the public. A
+newsfeed post's hardest problem is scheduling its own publication; an event's hardest problems are
+capacity, registration windows and attendance — real concurrent state with races. One module
+holding both kinds of correctness means the one with a race condition loses to the one without.
+They also fail differently: a wrong post is corrected by editing it, a wrong event has already sent
+people somewhere (ADR 0030 §1).
 
 `AccessControl` owns *authority*; `Identity` owns *accounts*. Staff provisioning therefore
 spans both, as two collaborating application services rather than one writing the other's

@@ -323,6 +323,19 @@ enum Permission: string
      */
     case NewsfeedModerate = 'newsfeed.moderate';
 
+    /** Author and edit official LGU events, configure registration, and archive them. */
+    case EventManage = 'event.manage';
+
+    /**
+     * Put an event in front of the public — publish it, or call it off.
+     *
+     * Cancelling sits here rather than under `event.manage` because it is the same kind of act as
+     * publishing, in reverse: both change what residents believe is happening on a given morning,
+     * and an event cancelled by mistake sends people home from a covered court they travelled to.
+     * Drafting one costs nobody a trip (ADR 0030 §4).
+     */
+    case EventPublish = 'event.publish';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 

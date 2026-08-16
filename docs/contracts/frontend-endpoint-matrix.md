@@ -1243,6 +1243,59 @@ provider writes into, so adding one is a listener rather than a migration (gap G
 
 ---
 
+## 11u. Events and public scheduling — built in TAB 25
+
+**An event is not a post.** A post is a statement; an event is an operational commitment with a
+venue, a time and a set of people who will physically travel somewhere because this system told
+them to. Full reasoning: ADR 0030.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Public events list | `GET /api/v1/events` | **anonymous allowed** | — | — | `?category=&include_past=&page=` | published, cancelled and completed events | a draft is **absent**, not filtered; upcoming only unless `include_past` | `implemented` |
+| Read an event | `GET /api/v1/events/{event}` | **anonymous allowed** | — | — | — | the event | accepts **a slug or a UUID** — a slug is what is on the poster; the lookup runs **against the public query**, so a guessed draft slug is `404` with no status check after it | `implemented` |
+| Staff list | `GET /api/v1/admin/events` | bearer | `event.manage` | — | `?status=&category=&search=` | all events incl. drafts | — | `implemented` |
+| Staff detail | `GET /api/v1/admin/events/{event}` | bearer | `event.manage` | — | — | the event incl. status and author | the staff projection; a draft is readable here and nowhere else | `implemented` |
+| Draft | `POST /api/v1/admin/events` | bearer | `event.manage` | — | `{title,description,category,starts_at,ends_at,venue_name,venue_address,…}` | `201` event | end must be **after** start (`422`); a cover needs alt text (`422`) | `implemented` |
+| Edit | `PATCH /api/v1/admin/events/{event}` | bearer | `event.manage` | — | partial | event | times validated against **merged** values, so a one-field update cannot invert the schedule | `implemented` |
+| Publish / cancel / complete / archive | `POST /api/v1/admin/events/{event}/status` | bearer | **from the target state** | — | `{status,reason?}` | event | publishing and cancelling cost `event.publish`; a cancellation **must say why** (`422`); cancelled is not un-cancelled (`409`) | `implemented` |
+| Duplicate | `POST /api/v1/admin/events/{event}/duplicate` | bearer | `event.manage` | — | — | `201` **draft** copy | fresh slug, no `published_at`, no cancellation carried over | `implemented` |
+| Registration summary | `GET /api/v1/admin/events/{event}/registration-summary` | bearer | `event.manage` | — | — | window, capacity, computed availability, counts | `registered_count`/`waitlisted_count` are **present placeholders at 0** until TAB 26 | `implemented` |
+
+### Availability is computed on every read
+
+There is **no `registration_availability` column**, and `EventTest::there_is_no_stored_availability_column`
+fails the build if one appears. A stored answer is wrong the moment the clock moves past it, and
+whatever job was meant to rewrite it will one day not run — stale in the one direction that matters,
+saying **open** to somebody registering for a window that shut.
+
+Five distinct values: `not-required`, `not-open`, `open`, `closed`, `full`. `not-required` is not
+`open` (a walk-in event told to a resident as "closed" turns them away from something they could
+just attend), and `full` is not `closed` (a waitlist accepts in the first case and not the second).
+The human wording travels with the state, so no client can invent a friendlier phrasing.
+
+### Anonymous reading is ON for events and OFF for the newsfeed
+
+Deliberate, and the asymmetry is the point. A poster with a QR code is read by somebody with no
+account. The newsfeed carries **barangay-targeted** advisories, so anonymous access there would show
+a relief schedule to people who are not on that hall's list (gap G-36); events have no audience
+targeting at all — one municipality-wide list — so the same risk does not arise. If per-barangay
+events are ever wanted, both questions come back together in a new ADR.
+
+### Cancelled and completed events stay visible
+
+Only `draft` and `archived` are invisible. **A cancelled event stays on the public list with its
+reason showing** — somebody arranged their day around it, and removing it silently means they
+travel to a covered court to find nobody there. `archived` is the separate, deliberate act for
+taking something off the list.
+
+### There is no citizen write path
+
+Not a permission check that a future endpoint might omit: **`EventService` has no method a citizen
+could call**, and the route file mounts no citizen write route. The test walks all seven staff
+endpoints as a resident, asserts `403` on each, and re-reads the row to confirm nothing landed.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)
