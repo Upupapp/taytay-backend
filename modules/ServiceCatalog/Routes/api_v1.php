@@ -19,6 +19,10 @@ use Modules\ServiceCatalog\Http\Controllers\V1\ServiceCatalogController;
 // must be able to browse it before registering. Unpublished entries are excluded by the
 // permission check inside ListServicesQuery, not by this route being public.
 Route::get('services', [ServiceCatalogController::class, 'index'])
+    // Cacheable only for an ANONYMOUS caller. The same URL returns drafts to an admin, so the
+    // directive is downgraded to `private` the moment there is somebody behind the request
+    // (ADR 0032 §4).
+    ->defaults('cache', 'public')
     ->name('v1.services.index');
 
 /*
@@ -43,8 +47,12 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function (): void {
  * One controller, one service, two audiences. What a caller sees is decided by their
  * server-resolved permissions, never by which URL they used (ADR 0002).
  */
-Route::get('programs', [ProgramController::class, 'index'])->name('v1.programs.index');
-Route::get('programs/{program}', [ProgramController::class, 'show'])->name('v1.programs.show');
+Route::get('programs', [ProgramController::class, 'index'])
+    ->defaults('cache', 'public')
+    ->name('v1.programs.index');
+Route::get('programs/{program}', [ProgramController::class, 'show'])
+    ->defaults('cache', 'public')
+    ->name('v1.programs.show');
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('admin/programs', [ProgramController::class, 'store'])->name('v1.admin.programs.store');

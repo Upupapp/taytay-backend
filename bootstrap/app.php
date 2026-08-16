@@ -4,6 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Modules\Shared\Http\Exceptions\ApiExceptionRenderer;
+use Modules\Shared\Http\Middleware\ApplyCacheDirectives;
 use Modules\Shared\Http\Middleware\AssignRequestId;
 use Modules\Shared\Http\Middleware\ForceJsonResponse;
 use Modules\Shared\Http\Middleware\ResolveClientChannel;
@@ -38,6 +39,15 @@ return Application::configure(basePath: dirname(__DIR__))
             ForceJsonResponse::class,
             AssignRequestId::class,
             ResolveClientChannel::class,
+            /*
+             * Prepended, so it wraps every other middleware and sets a directive on whatever
+             * comes back — including an authentication failure, which is also a response that
+             * must not sit in a shared cache. The default is `no-store`: a route that forgets to
+             * declare itself is private, because the failure mode of forgetting must be "we
+             * cached less than we could" and never "we served somebody else's file"
+             * (ADR 0032 §4).
+             */
+            ApplyCacheDirectives::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -1385,6 +1385,83 @@ PostgreSQL is **gap G-40**.
 
 ---
 
+## 11w. Citizen API composition — built in TAB 27
+
+**No business logic was added by this TAB, and that is the design.** Every citizen endpoint the
+master command lists already existed in the module that owns the fact behind it. What was missing
+was a way to know what the citizen surface *is*, an enforced guarantee that nothing internal
+reaches it, and the two platform concerns no domain module owns. Full reasoning: ADR 0032.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| App bootstrap | `GET /api/v1/app/bootstrap` | **anonymous** | — | — | `X-Client-Channel?` | api version, server time, minimum client version, feature flags, header conventions, support contact | **carries nothing worth protecting** — it must answer a client that cannot yet sign in; asserted against secret-shaped words | `implemented` |
+
+### The citizen surface is declared, not inferred
+
+`Modules\Shared\Support\CitizenSurface` lists every citizen route name and every staff route name
+that does not sit behind `admin/`. `CitizenSurfaceTest` fails the build for a registered route in
+neither list.
+
+A prefix rule would have been wrong on day one: `staff/*` and `tasks/*` are staff endpoints with no
+`admin` prefix, and a path test classifies all fourteen as citizen-facing. The list is the
+*mechanism*, not the documentation — declaring a route "citizen" enrols it in the leak scan
+automatically, and there is no way to abstain.
+
+### Internal fields are absent by construction
+
+`CitizenLeakScanTest` calls every readable citizen endpoint as a real resident, against rows
+deliberately poisoned first — a staff note on their event registration, a moderation reason and
+moderating officer on their comment, an assigned caseworker on their welfare case — and scans the
+whole response tree at any depth, inside paginated arrays included.
+
+Three things make it trustworthy: **the fixture asserts the poison landed** (an `UPDATE` matching
+no rows returns zero and throws nothing, so a scan against an empty table would be green for the
+reason it exists to rule out); **the scanner is tested positively and negatively** before it is
+trusted; and **the scan proves its own coverage** — a declared citizen `GET` that is never called
+fails the build.
+
+One stated exemption: `GET /api/v1/me` returns the caller's **own** `permissions` and `roles`.
+Article 3.4 forbids the server *trusting* an authority list from a client, which is not the same as
+telling a client what it holds — the admin console cannot render a menu otherwise. Keyed to that
+URL and those two fields, with the reason recorded; the list entry still catches an authority list
+turning up inside a case, a comment or a registration.
+
+### Web and mobile see the same business outcome
+
+Every readable citizen URL is called twice with different `X-Client-Channel` values and the `data`
+payloads must be equal. `meta` is not compared — the channel picks a default page size, which is
+presentation (ADR 0002). Asserted across the whole surface rather than one endpoint, because the
+one that drifts will be the one nobody chose. `app/bootstrap` is exempt: describing the client is
+its job.
+
+### Cache directives
+
+| Response | Directive |
+| --- | --- |
+| Authenticated, any route | `no-store, no-cache, private, must-revalidate` + `Vary: Authorization, X-Client-Channel` |
+| A route that declares nothing | the same — **private is the default** |
+| Error or write | the same |
+| `events`, `events/{event}`, `services`, `programs`, `programs/{program}` — **anonymous only** | `public, max-age=<PUBLIC_CACHE_SECONDS>` |
+
+`no-store`, not `no-cache`: the two are routinely confused and only one means what is needed —
+`no-cache` permits storage and requires revalidation, so a resident's file is still written to a
+proxy's disk.
+
+Public is opt-in per route and **downgraded the moment there is an authenticated caller**. The
+events list is genuinely public until a signed-in resident asks for it, at which point the response
+is about somebody. No `ETag` is emitted: on a private response it is a small fingerprint of that
+response sitting in a proxy's memory, and `max-age` is the part that saves a phone real time.
+
+### Netlify origins
+
+`config/cors.php` was already a deny-by-default allow-list with credentials off. What TAB 27 adds
+is that weakening it now fails a test: no wildcard origin while credentials are enabled, no origin
+patterns while credentials are enabled, and **no `*.netlify.app` in any pattern** — anybody can
+create a site on that domain, so allowing the suffix allows every Netlify user. Deploy previews
+point at staging and must never reach production.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

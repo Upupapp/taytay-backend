@@ -384,6 +384,21 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 27: **G-44** — **there is no generated OpenAPI 3.1 document.** The stack baseline names
+one and none is produced. The contract matrix is the current specification, and it is not merely
+prose: `ContractMatrixTest` checks it against the registered routes in **both** directions, so a
+row without a route and a route without a row both fail the build. What a generated document would
+add is machine-readable request/response *schemas* — useful for client codegen, and a second
+artefact to keep true. Owner: this backend, when a client team asks for codegen.
+
+Opened by TAB 27: **G-43** — **the citizen web portal uses bearer tokens, not Sanctum cookie mode.**
+The master command mentions stateful cookie/session authentication for first-party web SPAs "where
+deployment domains permit it". ADR 0005 chose first-party bearer tokens instead, because the cookie
+route would have required widening cookie scope, enabling credentialed CORS and adding a CSRF
+surface — and Article 8.7 says change the approach, not the control. Recorded here so the choice
+stays visible rather than being assumed: if Taytay later wants cookie mode, it needs the custom
+domains verified first and a new ADR. Owner: LGU + deployment, then this backend.
+
 Opened by TAB 26: **G-42** — **there are no per-event eligibility rules.** The master command says
 registration is for an *"authenticated verified/eligible citizen according to event rules"*, and the
 only event rules that exist are capacity and the registration window. "Seniors only", "one per

@@ -24,8 +24,14 @@ use Modules\Events\Http\Controllers\V1\EventRegistrationController;
  * there is nothing for one to call.
  */
 
-Route::get('events', [EventController::class, 'publicIndex'])->name('v1.events.index');
-Route::get('events/{event}', [EventController::class, 'publicShow'])->name('v1.events.show');
+Route::get('events', [EventController::class, 'publicIndex'])
+    // Public and read-mostly: a poster's worth of information, identical for every reader.
+    // Downgraded to `private` the moment a signed-in resident asks (ADR 0032 §4).
+    ->defaults('cache', 'public')
+    ->name('v1.events.index');
+Route::get('events/{event}', [EventController::class, 'publicShow'])
+    ->defaults('cache', 'public')
+    ->name('v1.events.show');
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('admin/events', [EventController::class, 'index'])->name('v1.admin.events.index');
