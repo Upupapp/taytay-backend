@@ -90,6 +90,17 @@ enum Role: string
                  * images and outward copies are separate decisions with separate trails.
                  */
                 Permission::DocumentManage,
+                /*
+                 * Front-line staff prepare referrals — routing a family to a hospital's medical
+                 * social worker is ordinary casework and often urgent.
+                 *
+                 * `ReferralSend` is NOT theirs. Sending is the one irreversible step: once the
+                 * sheet is out, this office no longer controls who reads it. Nor is
+                 * `ReferralDiscloseProtected` — releasing a home address or a sector membership
+                 * is a protection decision, not an intake one (ADR 0021 §5).
+                 */
+                Permission::ReferralView,
+                Permission::ReferralManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -136,6 +147,13 @@ enum Role: string
                 // Sits here for the same reason as VulnerabilityViewProtected: it belongs to a
                 // dedicated protection officer, and that role does not exist yet.
                 Permission::DocumentViewSensitive,
+                Permission::ReferralView,
+                Permission::ReferralManage,
+                // The disclosure decisions. Held here because sending a referral releases a
+                // person's information outside this office, and that is the MSWDO head's call.
+                Permission::ReferralSend,
+                Permission::ReferralDiscloseProtected,
+                Permission::ProviderManage,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *

@@ -130,6 +130,12 @@ erDiagram
     DOCUMENT_VERSIONS }o--o| STORED_FILES : "points at (null for encoded)"
     STORED_FILES ||--o{ FILE_ACCESS_GRANTS : "opened by (single-use)"
 
+    SERVICE_PROVIDERS ||--o{ REFERRALS : "receives (snapshotted, never re-read)"
+    WELFARE_CASES ||--o{ REFERRALS : "routed from (optional)"
+    REFERRALS ||--o{ REFERRAL_SHARED_FIELDS : "released (one row per field, with a reason)"
+    REFERRALS ||--o{ REFERRAL_ATTACHMENTS : "released (opt-in, never automatic)"
+    REFERRALS ||--o{ REFERRAL_NOTES : "annotated (append-only, split by audience)"
+
     ASSISTANCE_REQUESTS ||--o{ REQUEST_REQUIREMENTS : "must satisfy"
     ASSISTANCE_REQUESTS ||--o{ REQUEST_TRANSITIONS : "lifecycle (append-only)"
     ASSISTANCE_REQUESTS ||--o{ CASE_NOTES : "annotated by"
@@ -166,9 +172,12 @@ erDiagram
 | `welfare_case_requirements.document_id` | document | Files | Welfare holds the pointer and asks `DocumentLibrary`; it never holds a Files model |
 | `stored_files.uploaded_by` | account | Identity | the uploader may be deactivated; the evidence of who supplied a document must outlive the account |
 | `file_access_grants.issued_to` | account | Identity | a grant is bound to a person, and outlives their session by design |
+| `referrals.resident_id` | resident | ResidentProfile | **a referral always links to a client** — a disclosure about nobody in particular cannot be audited or answered to a subject-access request |
+| `referrals.provider_id` | provider | ServiceCatalog | Welfare asks the directory; the name and type are **snapshotted** so a renamed office does not rewrite where a referral actually went |
+| `referral_attachments.document_id` | document | Files | opt-in, one at a time, each with a reason |
 
-Twenty-one references, twenty-one places a convenient join would have silently welded two modules
-together. Each is an identifier plus a service call.
+Twenty-four references, twenty-four places a convenient join would have silently welded two
+modules together. Each is an identifier plus a service call.
 
 **Every table above carrying `resident_id` must be repointed by a merge**, and
 `ResidentMergeCoverageTest` fails the build if a module holding one has no mechanism to do it.

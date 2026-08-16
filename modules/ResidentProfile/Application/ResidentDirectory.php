@@ -117,4 +117,76 @@ final class ResidentDirectory
         // about what is actually known.
         return array_filter($facts, static fn (mixed $value): bool => $value !== null);
     }
+
+    /**
+     * Values for the fields a referral summary may release, as printable strings.
+     *
+     * SEPARATE FROM {@see eligibilityFactsFor()} AND DELIBERATELY SO. They answer different
+     * questions and the difference is not cosmetic:
+     *
+     *  * eligibility facts feed an automated comparison, so sensitive sectors are excluded
+     *    outright — a criterion reading `vawc-survivor` would leak protection status to everyone
+     *    who can see a guidance result (ADR 0015 §4);
+     *  * disclosure values are read by a **named human** who has stated a reason and holds
+     *    `referral.disclose.protected`, and sector membership is frequently the entire point of
+     *    the referral. Withholding it from a referral to the Women and Children Protection Desk
+     *    would produce a sheet that cannot be acted on.
+     *
+     * The protection is therefore the permission and the recorded reason, not the absence of the
+     * data. Nothing here is released without both.
+     *
+     * Keys match `Welfare\Domain\SharedField`. A key that is absent means the office does not
+     * hold that fact, and the caller omits the line rather than printing it empty.
+     *
+     * @return array<string, string>
+     */
+    public function disclosureFactsFor(string $residentUuid): array
+    {
+        /** @var Resident|null $resident */
+        $resident = Resident::query()->where('uuid', $residentUuid)->first();
+
+        if ($resident === null) {
+            return [];
+        }
+
+        $values = [
+            'birth-date' => $resident->birth_date?->toDateString(),
+            'address' => $resident->street_address,
+            'contact-number' => $resident->mobile_number,
+        ];
+
+        if ($resident->monthly_income_centavos !== null) {
+            $values['income'] = 'PHP '.number_format(((int) $resident->monthly_income_centavos) / 100, 2).' per month';
+        }
+
+        $sectors = ResidentSector::query()
+            ->where('resident_id', $resident->id)
+            ->pluck('sector')
+            ->map(static fn (mixed $sector): string => (string) $sector)
+            ->values()
+            ->all();
+
+        if ($sectors !== []) {
+            $values['vulnerability-sectors'] = implode(', ', $sectors);
+        }
+
+        $householdId = HouseholdMembership::query()
+            ->where('resident_id', $resident->id)
+            ->whereNull('effective_to')
+            ->value('household_id');
+
+        if ($householdId !== null) {
+            $size = HouseholdMembership::query()
+                ->where('household_id', $householdId)
+                ->whereNull('effective_to')
+                ->count();
+
+            // A count, not a roster. The receiving office needs to know the family's size to plan
+            // for it; naming the other members would disclose people who are not being referred
+            // and were never asked.
+            $values['household-composition'] = $size.' '.($size === 1 ? 'member' : 'members');
+        }
+
+        return array_filter($values, static fn (?string $value): bool => $value !== null && $value !== '');
+    }
 }

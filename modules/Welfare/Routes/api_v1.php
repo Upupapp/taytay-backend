@@ -11,7 +11,9 @@ use Modules\Welfare\Http\Controllers\V1\DocumentDownloadController;
 use Modules\Welfare\Http\Controllers\V1\EnrollmentController;
 use Modules\Welfare\Http\Controllers\V1\MyAssistanceController;
 use Modules\Welfare\Http\Controllers\V1\MyCaseController;
+use Modules\Welfare\Http\Controllers\V1\MyReferralController;
 use Modules\Welfare\Http\Controllers\V1\MyRequirementController;
+use Modules\Welfare\Http\Controllers\V1\ReferralController;
 
 /*
  * Welfare routes. Mounted under /api/v1 by routes/api.php.
@@ -155,4 +157,40 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * controller issued it — which is what makes a guessed id worthless.
      */
     Route::get('documents/{handle}', DocumentDownloadController::class)->name('v1.documents.download');
+
+    /*
+     * ── referrals ─────────────────────────────────────────────────────────────────────
+     *
+     * A REFERRAL IS THE ONE RECORD THAT LEAVES THE BUILDING, so the surface is shaped around the
+     * moment it does. Drafting, disclosure planning and status-recording are all `referral.manage`;
+     * `send` alone carries `referral.send`, because once the sheet is out this office no longer
+     * controls who reads it and nothing can be taken back (ADR 0021 §5).
+     *
+     * The disclosure endpoints are separate from the referral itself on purpose: what was
+     * released, to whom and why is a record in its own right, not a field on a form.
+     */
+    Route::get('admin/referrals', [ReferralController::class, 'index'])->name('v1.admin.referrals.index');
+    Route::post('admin/referrals', [ReferralController::class, 'store'])->name('v1.admin.referrals.store');
+    Route::get('admin/referrals/{referral}', [ReferralController::class, 'show'])->name('v1.admin.referrals.show');
+    Route::patch('admin/referrals/{referral}', [ReferralController::class, 'update'])->name('v1.admin.referrals.update');
+
+    Route::post('admin/referrals/{referral}/authority', [ReferralController::class, 'recordAuthority'])->name('v1.admin.referrals.authority');
+    Route::post('admin/referrals/{referral}/shared-fields', [ReferralController::class, 'shareField'])->name('v1.admin.referrals.shared-fields.store');
+    Route::delete('admin/referrals/{referral}/shared-fields/{field}', [ReferralController::class, 'withholdField'])->name('v1.admin.referrals.shared-fields.destroy');
+    Route::post('admin/referrals/{referral}/attachments', [ReferralController::class, 'attachDocument'])->name('v1.admin.referrals.attachments.store');
+    Route::delete('admin/referrals/{referral}/attachments/{document}', [ReferralController::class, 'detachDocument'])->name('v1.admin.referrals.attachments.destroy');
+
+    // The sheet itself. Producing one is a disclosure event and is audited as such, because a
+    // printed sheet exists whether or not it is ever sent.
+    Route::get('admin/referrals/{referral}/summary', [ReferralController::class, 'summary'])->name('v1.admin.referrals.summary');
+
+    Route::post('admin/referrals/{referral}/send', [ReferralController::class, 'send'])->name('v1.admin.referrals.send');
+    Route::post('admin/referrals/{referral}/status', [ReferralController::class, 'recordStatus'])->name('v1.admin.referrals.status');
+    Route::post('admin/referrals/{referral}/notes', [ReferralController::class, 'addNote'])->name('v1.admin.referrals.notes.store');
+
+    /*
+     * The applicant's own view. Status and a fixed message only — never the reason, the
+     * destination contact, the outcome text or any note (ADR 0021 §6).
+     */
+    Route::get('me/referrals', [MyReferralController::class, 'index'])->name('v1.me.referrals.index');
 });

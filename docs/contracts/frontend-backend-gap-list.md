@@ -372,6 +372,21 @@ behind an explicit LGU-approved deterministic rule.
 *Resolution:* MSWDO reviews the templates and bumps their versions; the DPO sets the retention
 figures. Both live in one reviewable file each, precisely so approving them is cheap.
 
+Opened by TAB 16: **G-28** — `ProgramCatalog` does not audit its own writes. Publishing a
+programme is at least as consequential as editing a directory entry, which TAB 16 does audit.
+Not retrofitted here because it belongs with a review of what a programme change means, not with a
+referral TAB. Owner: this backend.
+
+Opened by TAB 16: **G-29** — `assistance-history` is a releasable referral field with no value
+wired. It is assembled across cases and enrolments, and `disclosureFactsFor()` returns nothing for
+it rather than an invented value, so choosing it simply omits the line from the sheet. A client
+may offer the field; it will print nothing until this is wired. Owner: this backend.
+
+Sharpened by TAB 16: **G-26** — `document.share` is held by nobody, and that now **blocks a real
+workflow**: referral attachments are refused, because attaching a document to a referral is the
+same outward disclosure that permission governs. The referral itself sends fine. This is intended
+behaviour, not a defect — but it is the point at which the LGU needs to name a holder.
+
 Opened by TAB 15: **G-24** — the admin console receives a full `documentNumber` and masks it in the
 view with `maskDocumentNumber`. **This backend never sends one.** Only the last four characters are
 stored, and only where the document has no file; the API returns the display form (`••••3456`)

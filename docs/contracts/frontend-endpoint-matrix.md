@@ -774,6 +774,58 @@ from that case. Another applicant's case id resolves to **`404`**, never `403`.
 
 ---
 
+## 11l. Referrals and the service provider directory — built in TAB 16
+
+**A referral is the one record that leaves the building.** Every other endpoint here can be
+tightened later; once a referral sheet is out, this office no longer controls who reads it and
+nothing can be taken back. That shapes the whole surface. Full reasoning: ADR 0021.
+
+### Staff — the directory
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Directory | `GET /api/v1/admin/service-providers` | bearer | `referral.view` | — | `?search=&destination_type=&status=` | paginated providers | **staff-only** — a public list of offices welfare clients are sent to is a map of where vulnerable people go, and invites impersonation of exactly the offices families are told to trust | `implemented` |
+| Detail | `GET /api/v1/admin/service-providers/{provider}` | bearer | `referral.view` | — | — | provider + `problems[]` | `problems` is surfaced so the console can say *why* an entry cannot be activated | `implemented` |
+| Add | `POST /api/v1/admin/service-providers` | bearer | `provider.manage` | — | `{name,destination_type,services_offered[],channels[],contact…}` | `201` provider | — | `implemented` |
+| Edit | `PATCH /api/v1/admin/service-providers/{provider}` | bearer | `provider.manage` | — | partial | provider | editing contact details silently redirects every referral that follows, so it is audited | `implemented` |
+| Activate / suspend / retire | `POST /api/v1/admin/service-providers/{provider}/status` | bearer | `provider.manage` | — | `{status}` | provider | **refuses to activate an unusable entry** (`409`) — "accepting referrals" with no channel and no contact produces referrals nobody can follow up | `implemented` |
+| Re-check | `POST /api/v1/admin/service-providers/{provider}/verification` | bearer | `provider.manage` | — | — | provider | a directory nobody re-checks is a list of disconnected numbers within two years, and the failure is silent | `implemented` |
+
+### Staff — referrals
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Queue | `GET /api/v1/admin/referrals` | bearer | `referral.view` | via case | `?status=&urgency=&destination_type=&resident_id=&overdue_only=&open_only=` | paginated referrals | ordered overdue → urgent → oldest, the order a queue is actually worked in | `implemented` |
+| Detail | `GET /api/v1/admin/referrals/{referral}` | bearer | `referral.view` | via case | — | referral + disclosure record + notes + `blockers[]` | the disclosure record *is* the audit trail: every field released, with its reason | `implemented` |
+| Draft | `POST /api/v1/admin/referrals` | bearer | `referral.manage` | client's barangay | `{resident_id,case_id?,provider_id?,destination_name?,urgency?,service_requested,reason}` | `201` referral | **`resident_id` is mandatory**; a case is optional but must belong to the same client (`409`); destination is **snapshotted**, never read through | `implemented` |
+| Edit | `PATCH /api/v1/admin/referrals/{referral}` | bearer | `referral.manage` | via case | partial | referral | `409` once sent — corrections afterwards are notes | `implemented` |
+| Record the lawful basis | `POST /api/v1/admin/referrals/{referral}/authority` | bearer | `referral.manage` | via case | `{basis,note}` | referral | RA 10173. Note **mandatory**, and each basis needs a different fact — a vital-interest referral noting "client agreed" contradicts its own basis | `implemented` |
+| Release a field | `POST /api/v1/admin/referrals/{referral}/shared-fields` | bearer | `referral.manage` (+`referral.disclose.protected`) | via case | `{field,because}` | the plan | `because` **mandatory**; address / sector membership / assistance history need the second permission | `implemented` |
+| Withhold a field | `DELETE /api/v1/admin/referrals/{referral}/shared-fields/{field}` | bearer | `referral.manage` | via case | — | the plan | withheld means **absent from the sheet**, never "withheld" printed on it | `implemented` |
+| Attach a document | `POST /api/v1/admin/referrals/{referral}/attachments` | bearer | `referral.manage` **+ `document.share`** | via case | `{document_id,label,because}` | the plan | the **same** permission as any outward share (ADR 0020 §7), which nobody holds — so this is refused today, deliberately (gap G-26). `sensitive` files are refused outright | `implemented` |
+| Detach | `DELETE /api/v1/admin/referrals/{referral}/attachments/{document}` | bearer | `referral.manage` | via case | — | the plan | — | `implemented` |
+| The sheet | `GET /api/v1/admin/referrals/{referral}/summary` | bearer | `referral.view` | via case | — | lines, attachments, authority statement, handling notice | **producing one is audited** — a printed sheet exists whether or not it is sent | `implemented` |
+| Send | `POST /api/v1/admin/referrals/{referral}/send` | bearer | **`referral.send`** | via case | — | referral | the one irreversible act, and its own permission; `422` with `blockers[]` when the disclosure record is incomplete | `implemented` |
+| Record what they reported | `POST /api/v1/admin/referrals/{referral}/status` | bearer | `referral.manage` | via case | `{status,outcome?}` | referral | nothing past `sent` is inferred from elapsed time; `declined`/`served`/`closed` **require** an outcome | `implemented` |
+| Note | `POST /api/v1/admin/referrals/{referral}/notes` | bearer | `referral.manage` | via case | `{audience,body}` | `201` note | `internal` vs `receiving-office` is a **column**, not a flag — a flag is what gets forgotten on export day | `implemented` |
+
+### Citizen
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| My referrals | `GET /api/v1/me/referrals` | bearer | — | own record | — | reference, office name, status, fixed message, date | the narrowest citizen projection here: **no reason, no notes, no contact, no outcome, no urgency** | `implemented` |
+
+**The minimum is the default.** A referral sheet carries the client's name, the reference number
+and the reason. Everything else is opt-in, one field at a time, each with a stated need, each its
+own row — because *"which referrals released a home address"* is the first question asked after a
+protection incident, and a JSON blob cannot answer it.
+
+**Overdue is derived, never stored.** One query serves both the staff filter and the nightly
+sweep, so they cannot disagree. The sweep writes nothing and raises `ReferralBecameOverdue`, which
+TAB 19's tasks and TAB 20's notifications will listen for.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

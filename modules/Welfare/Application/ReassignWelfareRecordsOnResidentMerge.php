@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\ResidentProfile\Contracts\ResidentMerged;
 use Modules\Welfare\Infrastructure\Eloquent\AssistanceDraft;
 use Modules\Welfare\Infrastructure\Eloquent\AssistanceIntake;
+use Modules\Welfare\Infrastructure\Eloquent\Referral;
 use Modules\Welfare\Infrastructure\Eloquent\WelfareCase;
 
 /**
@@ -60,6 +61,25 @@ final class ReassignWelfareRecordsOnResidentMerge
             AssistanceDraft::query()
                 ->where('resident_id', $event->absorbedResidentUuid)
                 ->whereNull('submitted_at')
+                ->update(['resident_id' => $event->survivorResidentUuid]);
+
+            /*
+             * Referrals, added in TAB 15's successor and repointed HERE rather than left for the
+             * coverage test to notice.
+             *
+             * `ResidentMergeCoverageTest` only asserts that a module has *a* mechanism; Welfare
+             * already had one, so a forgotten table would have passed. That is the honest limit
+             * of that test, and the reason adding a `resident_id` column still means opening this
+             * file.
+             *
+             * Sent referrals are repointed as readily as drafts. The disclosure already happened
+             * and the sheet already names whoever it named; what is being corrected is which
+             * canonical person this office's own record says it was about — and leaving that
+             * pointing at a deleted record would lose the referral from the surviving client's
+             * file entirely.
+             */
+            Referral::query()
+                ->where('resident_id', $event->absorbedResidentUuid)
                 ->update(['resident_id' => $event->survivorResidentUuid]);
 
             return WelfareCase::query()

@@ -199,6 +199,41 @@ enum Permission: string
      */
     case DocumentShare = 'document.share';
 
+    /** Read the referral queue and the service provider directory. */
+    case ReferralView = 'referral.view';
+
+    /**
+     * Draft a referral, record what the receiving office reports, close it out.
+     *
+     * Everything except the moment it leaves the building.
+     */
+    case ReferralManage = 'referral.manage';
+
+    /**
+     * **Send** a referral — the act that discloses a person's information to another
+     * organisation.
+     *
+     * Separate from `referral.manage` because it is the only irreversible step: once the sheet
+     * is out, the MSWDO no longer controls who reads it and nothing can be taken back. Drafting
+     * is casework; sending is a disclosure decision, and an office may want the second held by
+     * fewer people than the first.
+     */
+    case ReferralSend = 'referral.send';
+
+    /**
+     * Release a field that can endanger the client — home address, sector membership,
+     * assistance history.
+     *
+     * A home address is the field an abuser needs; sector membership can disclose that somebody
+     * is a VAWC survivor or a child in conflict with the law. Held separately so releasing one is
+     * a second decision rather than one more checkbox on a form somebody is working through
+     * quickly.
+     */
+    case ReferralDiscloseProtected = 'referral.disclose.protected';
+
+    /** Maintain the service provider directory. */
+    case ProviderManage = 'provider.manage';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 
