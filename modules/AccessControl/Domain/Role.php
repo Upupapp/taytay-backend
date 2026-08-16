@@ -74,6 +74,9 @@ enum Role: string
                 Permission::RequestAssess,
                 Permission::RequestEndorse,
                 Permission::RequestAssign,
+                // Front-line staff read the programme catalogue to advise applicants. Authoring
+                // programmes and their guidance is not theirs.
+                Permission::ProgramView,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -111,6 +114,8 @@ enum Role: string
                 Permission::RequestSchedule,
                 Permission::RequestClose,
                 Permission::RequestAssign,
+                Permission::ProgramView,
+                Permission::ProgramManage,
                 Permission::KycReview,
                 Permission::KycApprove,
                 Permission::CredentialManage,

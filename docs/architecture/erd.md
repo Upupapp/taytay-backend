@@ -104,7 +104,12 @@ erDiagram
     VERIFICATION_ATTEMPTS }o--|| VERIFIER_DEVICES : "scanned by"
 
     PROGRAMS ||--o{ PROGRAM_REQUIREMENTS : requires
-    PROGRAMS ||--o{ PROGRAM_ELIGIBILITY : "gated by"
+    PROGRAMS ||--o{ PROGRAM_ELIGIBILITY_CRITERIA : "advised by (never gated)"
+    PROGRAM_REQUIREMENTS ||--o{ PROGRAM_REQUIREMENT_DOCUMENTS : accepts
+    PROGRAMS ||--o{ PROGRAM_INTAKE_CHANNELS : "accepts via"
+    PROGRAMS ||--o{ PROGRAM_APPROVERS : "signed by"
+    WELFARE_CASES ||--o{ WELFARE_CASE_ELIGIBILITY_CHECKS : "checked against"
+    WELFARE_CASE_ELIGIBILITY_CHECKS ||--o{ WELFARE_CASE_ELIGIBILITY_RESULTS : explains
     SERVICES ||--o{ SERVICE_CHANNELS : "offered on"
 
     WELFARE_CASES ||--o{ WELFARE_CASE_TRANSITIONS : "lifecycle (append-only)"
@@ -161,8 +166,8 @@ together. Each is an identifier plus a service call.
 | **Audit** | `audit_entries` | `internal` (records access, never the data) | **built** |
 | **Identity** | `accounts`, `auth_tokens`, `devices`, `mfa_factors` | `personal` | planned — TAB 05 |
 | **ResidentProfile** | `residents`, `resident_sectors`, `kyc_cases`, `resident_match_candidates`, `resident_status_events`, `resident_aliases`, `resident_duplicate_pairs`, `resident_merges`, `resident_correction_requests`, `resident_correction_fields`, `account_resident_links`, `households`, `families`, `household_memberships`, `family_memberships`, `resident_relationships`, `resident_vulnerability_factors`, `household_vulnerability_factors` | **`sensitive`** | **built** — TAB 06, TAB 08, TAB 09, TAB 10 |
-| **ServiceCatalog** | `services`, `service_channels`, `programs`, `program_requirements`, `program_eligibility` | `public` | planned (config-backed today) |
-| **Welfare** | `welfare_cases`, `welfare_case_transitions`, `welfare_case_assignments`, `welfare_case_events`, `assistance_drafts`, `assistance_intakes`, `assessments`, `assessment_answers` | **`sensitive`** | **built** — TAB 11, TAB 12 |
+| **ServiceCatalog** | `programs`, `program_requirements`, `program_requirement_documents`, `program_eligibility_criteria`, `program_intake_channels`, `program_approvers`; `services` and `service_channels` remain config-backed | `public` | **built** — TAB 13 (services: config) |
+| **Welfare** | `welfare_cases`, `welfare_case_transitions`, `welfare_case_assignments`, `welfare_case_events`, `assistance_drafts`, `assistance_intakes`, `assessments`, `assessment_answers`, `welfare_case_eligibility_checks`, `welfare_case_eligibility_results` | **`sensitive`** | **built** — TAB 11, TAB 12, TAB 13 |
 | **Credential** | `credentials`, `credential_artifacts`, `credential_transitions` | `personal` | planned |
 | **Verification** | `verification_attempts`, `verifier_devices` | `internal` | planned |
 | **ServiceDelivery** | `assistance_requests`, `request_requirements`, `request_transitions`, `case_notes`, `assessments`, `disbursements`, `disbursement_transitions`, `referrals` | **`sensitive`** | planned |

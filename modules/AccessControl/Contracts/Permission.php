@@ -152,6 +152,18 @@ enum Permission: string
     /** Issue or revoke a digital ID credential. */
     case CredentialManage = 'credential.manage';
 
+    /** Read the programme catalogue, including drafts and retired programmes. */
+    case ProgramView = 'program.view';
+
+    /**
+     * Author programmes: create, edit, publish, and open a new eligibility guidance version.
+     *
+     * Editing guidance changes who the office will be *advised* to help. It never decides
+     * anything on its own (ADR 0018 §3), but it shapes what every caseworker sees, so it is
+     * held apart from reading the catalogue.
+     */
+    case ProgramManage = 'program.manage';
+
     /** See catalog entries that are not published to citizens (drafts, retired). */
     case ServicesViewUnpublished = 'services.view_unpublished';
 

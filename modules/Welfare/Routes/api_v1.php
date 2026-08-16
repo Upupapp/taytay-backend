@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Modules\Welfare\Http\Controllers\V1\AssessmentController;
 use Modules\Welfare\Http\Controllers\V1\CaseController;
+use Modules\Welfare\Http\Controllers\V1\CaseEligibilityController;
 use Modules\Welfare\Http\Controllers\V1\MyAssistanceController;
 use Modules\Welfare\Http\Controllers\V1\MyCaseController;
 
@@ -74,4 +75,17 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::patch('admin/cases/{case}/assessment', [AssessmentController::class, 'answer'])->name('v1.admin.cases.assessment.answer');
     Route::post('admin/cases/{case}/assessment/complete', [AssessmentController::class, 'complete'])->name('v1.admin.cases.assessment.complete');
     Route::get('admin/cases/{case}/prior-cases', [AssessmentController::class, 'history'])->name('v1.admin.cases.prior-cases');
+
+    /*
+     * ── eligibility guidance against a case ───────────────────────────────────────────
+     *
+     * Staff only. There is no citizen route, for the same reason there is none for the
+     * vulnerability score: "you are likely ineligible" reads as a refusal however it is worded,
+     * and it is not one — nobody has decided anything (ADR 0018 §3).
+     *
+     * Running a check writes an append-only row pinning the guidance version, which is the
+     * audit requirement this TAB had to meet.
+     */
+    Route::get('admin/cases/{case}/eligibility-checks', [CaseEligibilityController::class, 'index'])->name('v1.admin.cases.eligibility.index');
+    Route::post('admin/cases/{case}/eligibility-checks', [CaseEligibilityController::class, 'store'])->name('v1.admin.cases.eligibility.store');
 });

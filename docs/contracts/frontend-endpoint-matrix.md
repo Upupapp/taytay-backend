@@ -596,6 +596,63 @@ explicit LGU-approved deterministic rule — none has been supplied. The vulnera
 
 ---
 
+## 11i. Programmes and eligibility guidance — built in TAB 13
+
+Programmes are **rows, not config** — unlike the vulnerability ruleset and the assessment forms.
+An MSWDO officer opens a relief programme on Tuesday because a storm landed on Monday, and a
+config deploy is the wrong instrument for that. Full reasoning: ADR 0018.
+
+**Publication and visibility are separate columns.** An internal referral programme can be
+published and operational while invisible to the public catalogue; both are filtered at the
+query, so an unannounced programme is absent from the rows *and* the pagination total.
+
+### Public
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Programme catalogue | `GET /api/v1/programs` | public | — | — | `?page=&per_page=` | published + citizen-visible programmes | a caller holding `program.view` gets drafts through the same endpoint — the URL confers nothing (ADR 0002) | `implemented` |
+| Programme detail | `GET /api/v1/programs/{program}` | public | — | — | — | requirements, instructions, conditions **in words** | **no comparators, thresholds or blocking flags** — publishing the numbers turns a programme into a form to be gamed; unpublished ids return `404`, never `403` | `implemented` |
+
+### Staff — authoring
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Create | `POST /api/v1/admin/programs` | bearer | `program.manage` | — | programme payload | `201` programme | always starts draft and invisible — publishing and exposing are two deliberate acts | `implemented` |
+| Update | `PATCH /api/v1/admin/programs/{program}` | bearer | `program.manage` | — | partial payload | programme | — | `implemented` |
+| Publish / retire | `POST /api/v1/admin/programs/{program}/status` | bearer | `program.manage` | — | `{status}` | programme | **refuses to publish with no requirements** (`409`) — a programme asking for nothing sends people to a counter to be told what to bring | `implemented` |
+| Add requirement | `POST /api/v1/admin/programs/{program}/requirements` | bearer | `program.manage` | — | `{code,label,obligation,citizen_instructions,accepted_documents[]}` | `201` requirement | instructions are **mandatory**; versioned per programme | `implemented` |
+| Add criterion | `POST /api/v1/admin/programs/{program}/eligibility-criteria` | bearer | `program.manage` | — | `{code,fact,comparator,value,citizen_explanation,is_blocking?}` | `201` criterion | `citizen_explanation` **mandatory**; `fact` is a closed set that excludes the vulnerability score; unsupported comparators are refused | `implemented` |
+| New guidance version | `POST /api/v1/admin/programs/{program}/guidance-versions` | bearer | `program.manage` | — | `{version}` | programme | **copies criteria forward** — editing in place would rewrite the rules a past decision was made against | `implemented` |
+
+### Staff — guidance against a case
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Run a check | `POST /api/v1/admin/cases/{case}/eligibility-checks` | bearer | `request.assess` | role scope | `{program_id}` | `201` check + per-criterion results | **advisory** (`is_advisory: true` in the payload); pins `guidance_version`; **moves nothing** | `implemented` |
+| Check history | `GET /api/v1/admin/cases/{case}/eligibility-checks` | bearer | `request.view` | role scope | — | every check ever run | append-only; the audit record behind a decision | `implemented` |
+| Citizen eligibility view | — | — | — | — | — | — | — | `mock-only` |
+
+**Guidance flags; it never decides.** Four structural controls, each enforced where a change
+would have to notice:
+
+* the verdict vocabulary has **no `ineligible`** — only `likely-eligible`, `likely-ineligible`
+  and `needs-review`;
+* every criterion carries a **mandatory** `citizen_explanation` — a rule nobody can explain to
+  the person it excludes *is* the opaque denial;
+* there is **no score, threshold or auto-deny column** anywhere in the schema;
+* the fact vocabulary is a short closed set that **excludes the vulnerability score** (gap
+  **G-20**) and admits no rule-expression language.
+
+**Absence is `unknown`, never `not-met`**, and any unknown sends the check to `needs-review` —
+outranking even a clear blocking mismatch, because the unknown may be what explains it. A
+missing income figure means nobody has asked, not that the applicant earns too much.
+
+`me/eligibility` is a **deliberate non-endpoint**, on the same footing as the citizen
+vulnerability view in §11f: "you are likely ineligible" reads as a refusal however it is worded,
+and nobody has decided anything.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

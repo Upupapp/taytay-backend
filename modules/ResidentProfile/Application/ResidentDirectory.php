@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Modules\ResidentProfile\Application;
 
 use Modules\ResidentProfile\Contracts\ResidentSummary;
+use Modules\ResidentProfile\Infrastructure\Eloquent\HouseholdMembership;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
+use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentSector;
 
 /**
  * The published way for other modules to ask about a resident.
@@ -31,5 +33,88 @@ final class ResidentDirectory
             verificationTier: $resident->verification_tier,
             barangayId: $resident->barangay_id === null ? null : (int) $resident->barangay_id,
         );
+    }
+
+    /**
+     * The facts a programme's eligibility guidance is allowed to read (ADR 0018 §3).
+     *
+     * THIS MODULE DECIDES WHAT IT DISCLOSES. The alternative — letting ServiceCatalog or
+     * Welfare reach into residents, households and sectors to assemble facts themselves —
+     * would put the decision about what may be used for eligibility in three places, and the
+     * one that drifts is always the one nobody reviewed.
+     *
+     * A plain keyed array rather than a typed object on purpose: the keys are ServiceCatalog's
+     * `EligibilityFact` vocabulary, and importing that enum here would make ResidentProfile
+     * depend on a module that does not depend on it — a downward reach the boundary map
+     * forbids (§2).
+     *
+     * ABSENT FACTS ARE ABSENT, NOT ZERO. A resident with no recorded income yields no
+     * `monthly-income` key, and the guidance engine reads that as `unknown` and sends the case
+     * to a human. Substituting 0 would silently satisfy every income ceiling in the system.
+     *
+     * NOT INCLUDED, AND NOT AN OVERSIGHT: the vulnerability score. It is unapproved placeholder
+     * weighting (gap G-20) and declares itself decision-support-only; exposing it here would be
+     * the shortest path to it deciding who gets help.
+     *
+     * @return array<string, mixed>
+     */
+    public function eligibilityFactsFor(string $residentUuid): array
+    {
+        /** @var Resident|null $resident */
+        $resident = Resident::query()->where('uuid', $residentUuid)->first();
+
+        if ($resident === null) {
+            return [];
+        }
+
+        $facts = [
+            'barangay' => $resident->barangay_id === null ? null : (string) $resident->barangay_id,
+            'verification-tier' => $resident->verification_tier->value,
+        ];
+
+        if ($resident->birth_date !== null) {
+            $facts['age'] = $resident->birth_date->age;
+        }
+
+        if ($resident->monthly_income_centavos !== null) {
+            $facts['monthly-income'] = (int) $resident->monthly_income_centavos;
+        }
+
+        $sectors = ResidentSector::query()
+            ->where('resident_id', $resident->id)
+            /*
+             * Sensitive sectors are excluded from eligibility facts entirely.
+             *
+             * A criterion that read `vawc-survivor` would leak protection status to everyone
+             * who can see a guidance result — the same disclosure ADR 0015 §4 keeps out of the
+             * vulnerability score, arriving by a different route. Protection cases are served
+             * by referral and field response, not by qualifying for a grant automatically.
+             */
+            ->whereNotIn('sector', ResidentSector::SENSITIVE)
+            ->pluck('sector')
+            ->map(static fn (mixed $sector): string => (string) $sector)
+            ->values()
+            ->all();
+
+        if ($sectors !== []) {
+            $facts['sector'] = $sectors;
+        }
+
+        $householdId = HouseholdMembership::query()
+            ->where('resident_id', $resident->id)
+            ->whereNull('effective_to')
+            ->value('household_id');
+
+        if ($householdId !== null) {
+            $facts['household-size'] = HouseholdMembership::query()
+                ->where('household_id', $householdId)
+                ->whereNull('effective_to')
+                ->count();
+        }
+
+        // Absent keys are dropped rather than sent as null: the guidance engine treats a
+        // missing key and a null value identically, and dropping them keeps the payload honest
+        // about what is actually known.
+        return array_filter($facts, static fn (mixed $value): bool => $value !== null);
     }
 }
