@@ -653,6 +653,59 @@ and nobody has decided anything.
 
 ---
 
+## 11j. Beneficiary enrolment and assistance history — built in TAB 14
+
+**A beneficiary is a canonical resident on a roll — there is no `beneficiaries` table.** Resident,
+applicant, beneficiary and enrollee are four *roles* of one person, not four records: the
+applicant is an account (`assistance_intakes.submitted_by`, because a daughter may apply for her
+mother), the beneficiary is `program_enrollments.resident_id`, and an enrollee is the same row
+with `household_id` set. Full reasoning: ADR 0019.
+
+### Citizen
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Assistance received | `GET /api/v1/me/assistance-history` | bearer | — | own record | — | programme reference, type, date, outcome | resident resolved **from the token** — there is no identifier in the contract to tamper with; additively projected, so no case worker, reason, assessment, barangay, priority or programme id | `implemented` |
+
+**In-flight cases are absent by design.** Those are tracked through `me/cases`, whose vocabulary
+is built for it. Listing an open case under "assistance received" tells somebody they have been
+given what they have not.
+
+### Staff — programme rolls
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Roll listing | `GET /api/v1/admin/enrollments` | bearer | `enrollment.view` | via source case | `?program_id=&status=&resident_id=&from=&to=&as_of=` | paginated enrolments | `as_of` answers "who was on this roll when the October tranche went out" from the effective dates rather than today's status | `implemented` |
+| Enrol | `POST /api/v1/admin/enrollments` | bearer | `enrollment.manage` | beneficiary's barangay | `{program_id,resident_id,household_id?,source_case_id?,effective_from?,entry_reason?}` | `201` enrolment | **idempotent** — an existing open enrolment is returned, not a second opened; a retired programme is `409`; an out-of-scope beneficiary is `404` | `implemented` |
+| Suspend / reactivate | `POST /api/v1/admin/enrollments/{enrollment}/status` | bearer | `enrollment.manage` | via beneficiary | `{status,note?}` | enrolment | `active`/`suspended` only; an ended enrolment is `409` — reviving it would rewrite a period they were genuinely off the roll | `implemented` |
+| Exit | `POST /api/v1/admin/enrollments/{enrollment}/exit` | bearer | `enrollment.manage` | via beneficiary | `{exit_reason,effective_to?}` | enrolment | **`exit_reason` mandatory**; closes the period, never deletes the row | `implemented` |
+| Beneficiary history | `GET /api/v1/admin/residents/{resident}/assistance-history` | bearer | `enrollment.view` | resident's barangay | — | granted cases + every enrolment held | includes exited enrolments — the only way to see somebody was removed, when and by whom | `implemented` |
+
+**Two permissions, split at the money.** `enrollment.view` goes to front-line staff, who answer
+"am I enrolled?" at the counter; `enrollment.manage` is `lgu_admin` only, because putting a name
+on a roll is money-adjacent.
+
+**Scope runs through the source case**, since an enrolment has no barangay of its own and
+denormalising the beneficiary's would be a second copy that stops moving when they do. An
+enrolment with **no** source case — a bulk or legacy import — is visible only to an unrestricted
+actor: it carries no barangay evidence, and guessing one would be worse than admitting there is
+none.
+
+**At most one *open* enrolment per programme per resident**, enforced twice: the service returns
+the existing row so a double-tap is harmless, and a unique index refuses a second open row so a
+write path added later cannot create one either. Two open enrolments is one person counted twice
+on every payment run.
+
+**Money is not here.** `released_amount_centavos` is present and `null` — TAB 18's release ledger
+is the authority, and this shape is built for it to join onto rather than replace.
+
+**Enrolment reads no score, guidance outcome or recommendation.** Guidance advises (§11i), an
+assessment recommends (§11h), a case is approved by somebody who did not endorse it (§11g), and
+only then does a human enrol. Gap **G-20** stays non-consequential: there is no path from
+`config/vulnerability.php` to a roll.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

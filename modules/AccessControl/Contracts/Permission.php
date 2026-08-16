@@ -152,6 +152,18 @@ enum Permission: string
     /** Issue or revoke a digital ID credential. */
     case CredentialManage = 'credential.manage';
 
+    /** Read programme rolls and a beneficiary's assistance history. */
+    case EnrollmentView = 'enrollment.view';
+
+    /**
+     * Enrol a beneficiary, suspend them, or take them off a roll.
+     *
+     * Money-adjacent: being on a roll is what makes somebody a recipient in TAB 18's release
+     * run. Deliberately separate from `request.approve` — approving a case and putting a name on
+     * a payment roll are two decisions, and an office may want them held by different people.
+     */
+    case EnrollmentManage = 'enrollment.manage';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 

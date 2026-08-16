@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Welfare\Providers;
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use Modules\ResidentProfile\Contracts\ResidentMerged;
+use Modules\Welfare\Application\ReassignWelfareRecordsOnResidentMerge;
 
 /**
  * Welfare owns social welfare casework: the case, its lifecycle, its assignment and its
@@ -24,5 +27,21 @@ final class WelfareServiceProvider extends ServiceProvider
     public function register(): void
     {
         //
+    }
+
+    public function boot(): void
+    {
+        /*
+         * Welfare listens for a resident merge and repoints its own rows.
+         *
+         * Registered HERE, in the module that owns the data, which is what keeps the dependency
+         * one-directional: ResidentProfile announces and knows nothing about who cares
+         * (ADR 0013 §6).
+         *
+         * This closes a defect that opened when Welfare arrived in TAB 11 — the merge service
+         * repointed the consumers that existed when it was written, and cases were not among
+         * them, so a merge left them attached to a soft-deleted resident (ADR 0019 §4).
+         */
+        Event::listen(ResidentMerged::class, ReassignWelfareRecordsOnResidentMerge::class);
     }
 }

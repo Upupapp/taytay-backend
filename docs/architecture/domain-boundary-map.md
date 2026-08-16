@@ -19,7 +19,7 @@ Eloquent relationship across the boundary.
 | `ResidentProfile` | resident master record, demographics, addresses, verification tier, KYC cases, change history and aliases, duplicate pairs and merges, correction requests, account→resident links, households, families, effective-dated membership, kinship, vulnerability observations and the decision-support snapshot | login credentials, issued ID cards, eligibility decisions (the vulnerability score gates nothing — ADR 0015 §3) | **implemented** (TAB 06, TAB 08, TAB 09, TAB 10) |
 | `Credential` | LGU ID lifecycle, card artifacts, QR credential material | who may approve (asks `AccessControl`) | **implemented, feature-flagged off** (TAB 06) |
 | `Verification` | verification attempts, scan events, verifier registry, offline-verification key distribution | credential state (asks `Credential`) | planned |
-| `Welfare` | social welfare cases: the canonical lifecycle, transitions, assignment, priority, the case timeline, assistance intake, drafts and assessment | who a person *is* (asks `ResidentProfile`), eligibility decisions derived from a vulnerability score (ADR 0016 §4), money movement (TAB 18) | **implemented** (TAB 11) |
+| `Welfare` | social welfare cases: the canonical lifecycle, transitions, assignment, priority, the case timeline, assistance intake, drafts, assessment, **programme enrolment and assistance history** | who a person *is* (asks `ResidentProfile`), the programme catalogue (asks `ServiceCatalog`), eligibility decisions derived from a vulnerability score (ADR 0016 §4), money movement (TAB 18) | **implemented** (TAB 11; enrolment TAB 14) |
 | `ServiceDelivery` | service applications/transactions against catalog entries (dokumento, buwis, kalusugan, trabaho, national referrals), their state machines and attachments | the catalog itself (asks `ServiceCatalog`); welfare casework (asks `Welfare`) | planned |
 | `Notification` | outbound notification dispatch, delivery receipts, per-resident channel preferences | why a notification was triggered | planned |
 | `Audit` | append-only audit trail of privileged actions, personal-data reads and lifecycle transitions | anything mutable | planned |
@@ -89,6 +89,20 @@ credentials exist.
 
 Such listeners run **synchronously, inside the originating transaction**. Queued handling
 would let a merge commit while a credential still pointed at a soft-deleted resident.
+
+**The inversion is not a style preference.** Where ResidentProfile *already* depends on a module
+it calls it outright — `AccountLinkService::reassign()` repoints `accounts.resident_id` directly,
+because ResidentProfile → Identity is the established direction. The event exists only for the
+modules that depend on ResidentProfile and would therefore close a cycle. Picking the wrong one
+does not produce a worse design; it produces a failing `ModuleBoundaryTest`.
+
+**And a module with neither is the failure this pattern actually has.** Welfare was added in
+TAB 11 storing `resident_id` on four tables and nothing connected it to the merge, so a merge
+stranded welfare cases on a soft-deleted resident with no exception, no constraint and no red
+test — a domain event with one listener looks exactly like a domain event with a missing one.
+Since TAB 14, `ResidentMergeCoverageTest` reads the live schema and requires every module holding
+`resident_id` to have one of the two mechanisms. **Adding a module now means answering it**
+(Article 2.4).
 
 ---
 

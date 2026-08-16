@@ -77,6 +77,9 @@ enum Role: string
                 // Front-line staff read the programme catalogue to advise applicants. Authoring
                 // programmes and their guidance is not theirs.
                 Permission::ProgramView,
+                // Front-line staff read rolls to answer "am I enrolled?" at the counter. Putting
+                // a name on one is money-adjacent and is not theirs.
+                Permission::EnrollmentView,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -116,6 +119,8 @@ enum Role: string
                 Permission::RequestAssign,
                 Permission::ProgramView,
                 Permission::ProgramManage,
+                Permission::EnrollmentView,
+                Permission::EnrollmentManage,
                 Permission::KycReview,
                 Permission::KycApprove,
                 Permission::CredentialManage,

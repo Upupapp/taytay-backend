@@ -12,6 +12,7 @@ use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
 use Modules\Shared\Http\ApiResponse;
+use Modules\Welfare\Application\AssistanceHistory;
 use Modules\Welfare\Application\CaseService;
 use Modules\Welfare\Application\CaseTimeline;
 use Modules\Welfare\Infrastructure\Eloquent\CaseEvent;
@@ -42,7 +43,27 @@ final class MyCaseController
         private readonly AccountDirectory $accounts,
         private readonly CaseTimeline $timeline,
         private readonly CaseService $cases,
+        private readonly AssistanceHistory $history,
     ) {}
+
+    /**
+     * What the applicant has actually received (ADR 0019 §3).
+     *
+     * Narrower than the staff view and additively built: programme reference, type, date and
+     * outcome. No case worker, no internal reason, no assessment, no barangay, no priority.
+     *
+     * In-flight cases are absent entirely — those are tracked through `me/cases`, where the
+     * status vocabulary is designed for it. Listing an open case under "assistance received"
+     * would tell somebody they have been given something they have not.
+     */
+    public function history(Request $request, ActorContext $actor): JsonResponse
+    {
+        $residentId = $this->ownResidentIdOrFail($actor);
+
+        return ApiResponse::item([
+            'received' => $this->history->citizenHistoryFor($residentId),
+        ]);
+    }
 
     public function index(Request $request, ActorContext $actor): JsonResponse
     {

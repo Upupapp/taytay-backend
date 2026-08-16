@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Welfare\Http\Controllers\V1\AssessmentController;
 use Modules\Welfare\Http\Controllers\V1\CaseController;
 use Modules\Welfare\Http\Controllers\V1\CaseEligibilityController;
+use Modules\Welfare\Http\Controllers\V1\EnrollmentController;
 use Modules\Welfare\Http\Controllers\V1\MyAssistanceController;
 use Modules\Welfare\Http\Controllers\V1\MyCaseController;
 
@@ -28,6 +29,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('me/cases', [MyCaseController::class, 'index'])->name('v1.me.cases.index');
     Route::get('me/cases/{case}', [MyCaseController::class, 'show'])->name('v1.me.cases.show');
     Route::post('me/cases/{case}/cancel', [MyCaseController::class, 'cancel'])->name('v1.me.cases.cancel');
+
+    // What the applicant has actually received. In-flight cases are absent — those are tracked
+    // through me/cases, and listing one here would say somebody was given what they were not.
+    Route::get('me/assistance-history', [MyCaseController::class, 'history'])->name('v1.me.assistance-history');
 
     // ── the staff queue and case file ─────────────────────────────────────────────────
     Route::get('admin/cases', [CaseController::class, 'index'])->name('v1.admin.cases.index');
@@ -88,4 +93,20 @@ Route::middleware('auth:sanctum')->group(function (): void {
      */
     Route::get('admin/cases/{case}/eligibility-checks', [CaseEligibilityController::class, 'index'])->name('v1.admin.cases.eligibility.index');
     Route::post('admin/cases/{case}/eligibility-checks', [CaseEligibilityController::class, 'store'])->name('v1.admin.cases.eligibility.store');
+
+    /*
+     * ── programme rolls and assistance history ────────────────────────────────────────
+     *
+     * A beneficiary is a canonical resident on a roll, never a second person row — which is why
+     * one resident can hold many enrolments without any duplicate record, and why duplicate
+     * detection continues to operate on the resident alone (ADR 0019 §1).
+     *
+     * Enrolment is a human decision. Nothing here reads guidance, a recommendation or a score.
+     */
+    Route::get('admin/enrollments', [EnrollmentController::class, 'index'])->name('v1.admin.enrollments.index');
+    Route::post('admin/enrollments', [EnrollmentController::class, 'store'])->name('v1.admin.enrollments.store');
+    Route::post('admin/enrollments/{enrollment}/status', [EnrollmentController::class, 'changeStatus'])->name('v1.admin.enrollments.status');
+    Route::post('admin/enrollments/{enrollment}/exit', [EnrollmentController::class, 'exit'])->name('v1.admin.enrollments.exit');
+
+    Route::get('admin/residents/{resident}/assistance-history', [EnrollmentController::class, 'historyForResident'])->name('v1.admin.residents.assistance-history');
 });

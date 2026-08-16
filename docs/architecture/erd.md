@@ -120,6 +120,9 @@ erDiagram
     ASSESSMENTS ||--o{ ASSESSMENT_ANSWERS : records
     ASSISTANCE_DRAFTS ||--o| ASSISTANCE_INTAKES : "becomes (on submit)"
 
+    PROGRAMS ||--o{ PROGRAM_ENROLLMENTS : "enrols onto (effective-dated)"
+    WELFARE_CASES ||--o{ PROGRAM_ENROLLMENTS : "produced (where one did)"
+
     ASSISTANCE_REQUESTS ||--o{ REQUEST_REQUIREMENTS : "must satisfy"
     ASSISTANCE_REQUESTS ||--o{ REQUEST_TRANSITIONS : "lifecycle (append-only)"
     ASSISTANCE_REQUESTS ||--o{ CASE_NOTES : "annotated by"
@@ -149,9 +152,17 @@ erDiagram
 | `account_resident_links.account_id` | account | Identity | the link is ResidentProfile's record of Identity's account; written with `accounts.resident_id` in one transaction |
 | `resident_correction_requests.requested_by` | account | Identity | the requester may be deactivated later; the request must survive |
 | `resident_status_events.actor_subject_id` | account | Identity | history outlives the staff member who made it |
+| `program_enrollments.resident_id` | resident | ResidentProfile | **the beneficiary is the canonical resident** — a `beneficiaries` table would be a second population for duplicate detection to reconcile (ADR 0019 §1) |
+| `program_enrollments.household_id` | household | ResidentProfile | set for household-scoped programmes; relief is per household, 4Ps is per family |
+| `program_enrollments.program_id` | programme | ServiceCatalog | Welfare asks the catalogue, never joins it |
 
-Fourteen references, fourteen places a convenient join would have silently welded two modules
+Seventeen references, seventeen places a convenient join would have silently welded two modules
 together. Each is an identifier plus a service call.
+
+**Every table above carrying `resident_id` must be repointed by a merge**, and
+`ResidentMergeCoverageTest` fails the build if a module holding one has no mechanism to do it.
+That test exists because `welfare_cases.resident_id` sat in this list for three TABs with nothing
+moving it (ADR 0019 §4).
 
 ---
 

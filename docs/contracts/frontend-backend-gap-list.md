@@ -372,6 +372,20 @@ behind an explicit LGU-approved deterministic rule.
 *Resolution:* MSWDO reviews the templates and bumps their versions; the DPO sets the retention
 figures. Both live in one reviewable file each, precisely so approving them is cheap.
 
+Also found and closed by TAB 14: **G-22** — a resident merge left welfare records pointing at the
+soft-deleted resident. Not a frontend gap; a backend defect, recorded here because its symptom is
+purely client-visible and would have been reported as one. The applicant's own `me/cases` and
+`me/assistance-history` went empty while the staff console showed a complete and correct file, so
+each side would have been certain the other was broken. Closed by
+`ReassignWelfareRecordsOnResidentMerge`, and the class is now barred by
+`ResidentMergeCoverageTest` (ADR 0019 §4). **No client change required.**
+
+Also opened by TAB 14: **G-23** — assistance history reports
+`released_amount_centavos: null` on every granted case. The field is present and deliberately
+unfilled: TAB 18 owns the release ledger and this payload is shaped for it to join onto. A client
+rendering assistance history must show the outcome and date, and must **not** render an amount
+until TAB 18 lands. Owner: this backend, TAB 18.
+
 Also settled by TAB 12: **G-15** (no idempotency on money or intake operations) — for intake.
 `idempotency_keys` had existed since TAB 04 with no caller; `Shared\Application\IdempotencyService`
 is now that caller, wired into citizen submission and counter intake. The money half stays
