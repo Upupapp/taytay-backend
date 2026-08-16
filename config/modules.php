@@ -46,6 +46,11 @@ return [
         // Outbound dispatch. Owns HOW somebody is told, never WHY — Welfare decides that a case
         // was approved, and a provider outage here cannot reach welfare work (ADR 0025 §1).
         'Notification',
+        /*
+         * Aggregates and exports. Owns no facts: every number is counted from another module's
+         * tables, and a read model that could write would be a second authority (ADR 0026 §1).
+         */
+        'Reporting',
     ],
 
 ];

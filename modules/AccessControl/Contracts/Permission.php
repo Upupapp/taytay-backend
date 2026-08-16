@@ -279,6 +279,19 @@ enum Permission: string
     /** Raise, reassign and close a task. */
     case TaskManage = 'task.manage';
 
+    /** Read dashboard metrics and request an aggregate export. */
+    case ReportView = 'report.view';
+
+    /**
+     * Export a report that NAMES INDIVIDUALS.
+     *
+     * Separate from `report.view` because the two are different acts. An aggregate leaves the
+     * building as a statistic; a person-level export leaves as a copy of a caseload, and once it
+     * is on a laptop none of this system's authorization applies to it any more — no scope, no
+     * audit, no revocation (ADR 0026 §3).
+     */
+    case ReportExportPersonLevel = 'report.export.person-level';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 

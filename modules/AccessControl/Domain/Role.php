@@ -128,6 +128,9 @@ enum Role: string
                 // Work queues are how front-line staff know what they owe today.
                 Permission::TaskView,
                 Permission::TaskManage,
+                // Front-line staff read the dashboard for their own barangay. Person-level export
+                // is deliberately not theirs.
+                Permission::ReportView,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -196,6 +199,8 @@ enum Role: string
                 Permission::SafeguardingManage,
                 Permission::TaskView,
                 Permission::TaskManage,
+                Permission::ReportView,
+                Permission::ReportExportPersonLevel,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *

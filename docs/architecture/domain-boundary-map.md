@@ -24,6 +24,7 @@ Eloquent relationship across the boundary.
 | `Tasks` | work queues, the tasks in them, and the listeners that raise tasks from domain events | **what a task points at** — it holds a type and an identifier and never a title, a name or a narrative; and **case outcomes**, which a queue action must never change (ADR 0024 §2–3) | **implemented** (TAB 19) |
 | `ServiceDelivery` | service applications/transactions against catalog entries (dokumento, buwis, kalusugan, trabaho, national referrals), their state machines and attachments | the catalog itself (asks `ServiceCatalog`); welfare casework (asks `Welfare`) | planned |
 | `Notification` | outbound dispatch, delivery receipts, device push registrations, per-person channel preferences | **why** a notification was triggered — Welfare decides that a case moved, this module decides how to say it; and any push payload beyond routing information (ADR 0025 §2) | **implemented** (TAB 20) |
+| `Reporting` | dashboard aggregates, the closed report catalogue, and the export request/build/download lifecycle | **any fact** — every number is counted from another module's tables, and a read model that could write would be a second authority; also any per-caseworker grouping (ADR 0026 §1, §4) | **implemented** (TAB 21) |
 | `Audit` | append-only audit trail of privileged actions, personal-data reads and lifecycle transitions | anything mutable | planned |
 
 `Identity` and `ResidentProfile` are deliberately **separate**. An account is a way to

@@ -384,6 +384,16 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 21: **G-34** — the small-cell suppression threshold is **5**, the convention most
+statistical agencies use, and it is not a Taytay policy decision yet. It is a named constant
+(`MetricsService::MINIMUM_CELL`) rather than a literal so approving a different figure is a
+one-line change. Owner: LGU (MSWDO + DPO).
+
+Also from TAB 21: **no materialised views exist**, deliberately. The master command says to use
+them only when measurements prove they help, and there are none — Taytay's caseload is thousands,
+not millions. An unmeasured read model is a second copy of the truth with its own refresh bug.
+When the numbers justify one it gets its own ADR. Owner: this backend, when measured.
+
 Opened by TAB 20: **G-33** — **the FCM transport is not wired.** The push adapter, its data-only payload shape, the bounded retry, the dead-token deactivation and the `skipped` behaviour are all built and tested; the OAuth exchange and HTTP post are not, because service-account credentials are environment configuration this repository must not assume. Turning push on is `FCM_PROJECT_ID` + `FCM_CREDENTIALS_PATH` and an implementation of one method. Every TAB 20 acceptance criterion holds without it. Owner: this backend + deployment.
 
 Opened by TAB 19: **G-32** — `tasks.team` is a label rather than a foreign key. Taytay's MSWDO has no formal team structure in this system, and inventing a table to hold a string would be one nobody maintains. If team structure is formalised, that is a new table and a migration from the label. Owner: LGU, then this backend.

@@ -1057,6 +1057,56 @@ acceptance criterion holds without it.
 
 ---
 
+## 11q. Dashboard metrics, reports and exports — built in TAB 21
+
+**Aggregate-first**, and **no employee performance rankings** — the two instructions the master
+command gives in prose, and the two that shape this section more than the acceptance criteria do.
+Full reasoning: ADR 0026.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Dashboard | `GET /api/v1/admin/dashboard` | bearer | `report.view` | caller's barangays | `?from=&to=&barangay_id=&program_id=&status=&assigned_to=` | summary, aging, reach, utilization, referral outcomes, workload, completeness | **no names anywhere**; every metric scoped; cells below 5 suppressed | `implemented` |
+| My exports | `GET /api/v1/admin/exports` | bearer | `report.view` | own requests | — | export records | scoped to the caller's own requests; **no storage key in the payload** | `implemented` |
+| Request an export | `POST /api/v1/admin/exports` | bearer | **from the report** | caller's barangays | `{report,format?,filters?}` | `201` `queued` | aggregate costs `report.view`; person-level costs `report.export.person-level` | `implemented` |
+| Download | `GET /api/v1/admin/exports/{export}/download` | bearer | re-checked at download | requester only | — | the file | unknown / another person's / expired / unfinished / no-longer-permitted all answer **`404`** | `implemented` |
+
+### A small cell is a person
+
+"3 households with a safeguarding concern in Barangay Dolores" is a statistic; **"1 household" is
+an identification.** Counts below **5** report `null` with `suppressed: true`. The row is kept
+rather than dropped — dropping it would say the barangay has zero, and a reader comparing two
+filtered views could recover the number from the difference in totals. Money follows the count, so
+a suppressed cell publishes no peso total either. The threshold is in the payload so a client can
+label a blank cell honestly.
+
+### Exports are copies that leave this system's control
+
+Always **queued**, never inline — not a size threshold, which somebody eventually tunes wrong on
+the day the data grows. The request records **what the asker was allowed to see at that moment**,
+because permissions change and a March export by somebody who has since moved offices must still be
+explicable. The job rebuilds scope from that snapshot. Download is **re-authorized** and scoped to
+the requester. The file expires (24h person-level, 7d aggregate); **the row does not**, because the
+record that an export happened is what an audit needs. Requesting and downloading are audited as
+**separate** acts.
+
+### No per-caseworker report
+
+Workload is reported **by team**. There is no grouping by caseworker anywhere and no report
+returning one row per worker — one `GROUP BY assigned_to` and the office has a leaderboard.
+
+A caseworker's open-case count measures the cases they were *given*: the worker handed the hardest
+families has the longest queue and the slowest closures, and a ranking presents that as
+underperformance. **Filtering to one named worker is still allowed** — that is how somebody sees
+their own queue — and is not the same thing.
+
+### One person-level report
+
+`release-manifest`, because a payout table needs a printed list of who is expected. It carries the
+reference, beneficiary identifier, amount and schedule — and **not** the case narrative or the
+eligibility reasoning. A manifest is a list of who is coming, not a summary of their circumstances.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)
