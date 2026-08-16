@@ -13,6 +13,7 @@ use Modules\Content\Application\NewsfeedService;
 use Modules\Content\Domain\PostStatus;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedMedia;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedPost;
+use Modules\Files\Application\DocumentLibrary;
 use Modules\Identity\Application\AccountDirectory;
 use Modules\ResidentProfile\Application\ResidentDirectory;
 use Modules\Shared\Application\ActorContext;
@@ -37,6 +38,7 @@ final class NewsfeedController
         private readonly AccountDirectory $accounts,
         private readonly ResidentDirectory $residents,
         private readonly AuthorizationService $authorization,
+        private readonly DocumentLibrary $library,
     ) {}
 
     // ── staff ─────────────────────────────────────────────────────────────────────────
@@ -125,12 +127,23 @@ final class NewsfeedController
          */
         $this->authorization->authorize($actor, $target->requiredPermission());
 
-        return ApiResponse::item($this->adminProjection($this->newsfeed->transition(
+        $updated = $this->newsfeed->transition(
             $model,
             $target,
             $actor,
             isset($validated['publish_at']) ? Carbon::parse($validated['publish_at']) : null,
-        )));
+        );
+
+        /*
+         * OUTSIDE the transition, and in BOTH directions.
+         *
+         * Publishing derives the public renditions; archiving or returning to draft removes them.
+         * The reverse is the one that matters more — a post taken down whose image stayed at a
+         * public URL would be a takedown that did not take anything down (ADR 0033 §3).
+         */
+        $this->newsfeed->syncPublishedMedia($updated);
+
+        return ApiResponse::item($this->adminProjection($updated));
     }
 
     public function setPinned(Request $request, ActorContext $actor, string $post): JsonResponse
@@ -167,6 +180,12 @@ final class NewsfeedController
             (bool) ($validated['is_decorative'] ?? false),
             (int) ($validated['position'] ?? 0),
         );
+
+        // An image attached to an ALREADY-LIVE post must become publicly deliverable now; one
+        // attached to a draft must not. Deciding from the post's live state rather than from
+        // which endpoint was called means there is no ordering of these two operations that
+        // leaves an image public on a draft or private on a published post.
+        $this->newsfeed->syncPublishedMedia($model->refresh());
 
         return ApiResponse::item($this->adminProjection($model->refresh()));
     }
@@ -280,11 +299,18 @@ final class NewsfeedController
             // The moment it became public, which is the date a reader means by "when was this
             // posted". Never `created_at`, which is when somebody started drafting it.
             'published_at' => $post->published_at?->toIso8601ZuluString(),
-            'media' => $post->media()->get()->map(static fn (NewsfeedMedia $media): array => [
+            'media' => $post->media()->get()->map(fn (NewsfeedMedia $media): array => [
                 'file_id' => $media->stored_file_id,
                 // Always present, so a client never has to decide what to do with a missing one.
                 'alt_text' => (string) $media->alt_text,
                 'is_decorative' => (bool) $media->is_decorative,
+                /*
+                 * Public URLs of the RE-ENCODED renditions — never of the uploaded file, which
+                 * stays private for its whole life. Empty for a post that is not live, which is
+                 * the same answer as for a post that never had an image, so the absence tells a
+                 * reader nothing about whether a draft exists (ADR 0033 §3).
+                 */
+                'urls' => $this->library->publicMediaUrls((string) $media->stored_file_id),
             ])->all(),
         ];
     }

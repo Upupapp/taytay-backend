@@ -54,6 +54,35 @@ enum FileClassification: string
     }
 
     /**
+     * The largest upload accepted for this context, in bytes (ADR 0033 §5).
+     *
+     * PER CONTEXT, because one global ceiling is wrong at both ends. A multi-page scanned PDF of
+     * a barangay certificate genuinely needs several megabytes and refusing it sends a resident
+     * back to a photocopier; an advisory image for the public feed needs a fraction of that, and
+     * a generous limit there is an invitation to put a 10 MB photograph on a page that people
+     * open on mobile data.
+     *
+     * **Every value must stay below the reverse proxy's `client_max_body_size`.** If nginx
+     * rejects the body first it answers 413 without running PHP — and therefore without CORS
+     * headers — so a browser sees a network failure with status 0 rather than a message anybody
+     * can act on. The runbook carries the required nginx value; these constants are the ones that
+     * should win.
+     */
+    public function maxBytes(): int
+    {
+        return match ($this) {
+            // Published to the feed and re-encoded on the way out, so the original need not be
+            // large. It is also the only class anybody outside the office ever downloads.
+            self::PublicReference => 4 * 1024 * 1024,
+            self::Operational => 8 * 1024 * 1024,
+            // The generous one, and deliberately: this is where a resident's multi-page scan
+            // lands, and a rejection here is a trip back to a photocopier.
+            self::Personal => 10 * 1024 * 1024,
+            self::Sensitive => 10 * 1024 * 1024,
+        };
+    }
+
+    /**
      * How long the object is kept after the record it belongs to closes, in days.
      *
      * Placeholder pending the LGU's approved retention schedule (gap G-25). Deliberately

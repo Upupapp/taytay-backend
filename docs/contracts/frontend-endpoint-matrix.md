@@ -1462,6 +1462,78 @@ point at staging and must never reach production.
 
 ---
 
+## 11x. Media and object-storage security — built in TAB 28
+
+**No new endpoint.** This TAB changed what two existing projections carry and added a second object
+store behind them. Full reasoning: ADR 0033.
+
+| Projection | New field | Meaning |
+| --- | --- | --- |
+| `GET /api/v1/newsfeed`, `GET /api/v1/newsfeed/{post}` | `media[].urls` | `{thumbnail, web}` public URLs of the **re-encoded** renditions. **Empty until the post is live**, and empty is also the answer for a post that never had an image — so the absence discloses nothing about a draft. |
+| `GET /api/v1/events`, `GET /api/v1/events/{event}` | `cover_urls` | the same, for an event cover. Empty until published; **kept when the event is cancelled** (ADR 0030 §3); removed when archived. |
+
+`file_id` and `cover_file_id` are unchanged and still name the **private** original, which staff
+reach through the authorization-gated document endpoint. Nothing about the private path moved.
+
+### Publication derives; it never promotes
+
+The uploaded file is never moved, copied or re-permissioned. Publishing derives a **new** object by
+re-encoding the image and writes that to a separate bucket, so "do not place sensitive attachments
+in a public bucket even temporarily" is not a rule anybody follows — there is no code path that
+could.
+
+Four gates, all inside Files rather than in the calling module: the classification must be
+`public-reference` (personal, sensitive and operational are refused outright), the scan must not
+have failed, it must be an image, and the derivation must succeed. A module that attached a KYC
+photograph to a post cannot publish it by being wrong.
+
+### EXIF is never present, rather than stripped
+
+Stripping requires knowing every segment that can carry a location — EXIF, XMP and IPTC in JPEG;
+`eXIf`, `tEXt` and `iTXt` in PNG — and a stripper that knows five of six leaks silently. Re-encoding
+decodes to a pixel buffer and writes a new file: **there is nowhere for a coordinate to be.**
+
+`MediaSecurityTest` builds a JPEG carrying a real GPS block, asserts the fixture really carries it,
+publishes through the real workflow and reads the bytes back out of the public bucket.
+
+Orientation is baked into the pixels **before** the re-encode — otherwise an image that displayed
+correctly beforehand displays on its side afterwards, and nothing looks wrong because the file is
+genuinely valid.
+
+If the image library is missing, **no public object is produced**. A fallback to copying the
+original would leak metadata on exactly the one host where the library was absent.
+
+### Withdrawal is the direction that matters
+
+Archiving a post or an event removes the public objects and their rows. A takedown whose image
+stayed at a public URL would not have taken anything down, and the URL is the part that gets
+shared, screenshotted and indexed. Driven by the content's own visibility predicate, so a status
+added to either enum later cannot leave an image public on content nobody can see.
+
+### Two buckets, one writer
+
+| Disk | Holds | Visibility | Base URL |
+| --- | --- | --- | --- |
+| `object-storage` | every upload: KYC IDs, case requirements, referral attachments, welfare documents | private | **none** — delivered by an authorization-gated stream or a short-lived grant |
+| `public-media` | re-encoded renditions of published content, and nothing else ever | public | yes |
+
+Separate buckets with separate credentials, not a public prefix in the private one: one misapplied
+policy on a shared bucket exposes everything in it. `PublicMediaHasOneWriterTest` fails the build if
+any file under `modules/` other than `MediaPublisher` names the public disk, and if any declared
+disk but the public ones publishes a base `url`.
+
+### Uploads
+
+| Rule | Value |
+| --- | --- |
+| Type | read from the **leading bytes**; the declared `Content-Type` and the extension are both caller-supplied and both look correct on a file that is neither |
+| Storage key | opaque, UUID-derived; nothing the caller sent contributes a character |
+| Size | **per context** — 4 MiB `public-reference`, 8 `operational`, 10 `personal`/`sensitive`, all under the proxy's `client_max_body_size` |
+| Duplicates | detected by checksum and **recorded, not refused** — re-sending one clearance against a second requirement is legitimate; the office wants to be told, not to block the resident |
+| Variants | `thumbnail` 400px and `web` 1280px, longest edge, never enlarged |
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

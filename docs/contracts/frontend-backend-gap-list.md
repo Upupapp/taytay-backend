@@ -384,6 +384,16 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 28: **G-45** — **image derivation runs inline, not queued.** Publishing a post or an
+event re-encodes its images during the request. That is fast for two variants of one image and slow
+for a post with ten, and the master command asks for the transformations to be queued. It was left
+inline deliberately rather than queued speculatively: a queued derivation means a published post
+whose image appears some seconds later, which needs a decision about what the feed shows in the
+meantime — and that decision belongs with whoever sees the real posting volume. Moving it is a
+one-line change behind the same interface, since `MediaPublisher::publish()` is already idempotent
+and already called from outside the transition transaction. Owner: this backend, once posting
+volume is known.
+
 Opened by TAB 27: **G-44** — **there is no generated OpenAPI 3.1 document.** The stack baseline names
 one and none is produced. The contract matrix is the current specification, and it is not merely
 prose: `ContractMatrixTest` checks it against the registered routes in **both** directions, so a

@@ -21,6 +21,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Where PUBLISHED media renditions are stored
+    |--------------------------------------------------------------------------
+    |
+    | A SEPARATE BUCKET WITH SEPARATE CREDENTIALS (ADR 0033 §4). Not a public prefix inside the
+    | private bucket, which is the arrangement that looks equivalent and is not: one misapplied
+    | policy on a shared bucket exposes everything in it, and the blast radius of a mistake is
+    | the whole store rather than the derived images.
+    |
+    | Nothing is ever WRITTEN here except a re-encoded rendition produced by `MediaPublisher`
+    | after the owning module publishes its content. No uploaded file reaches this disk — not
+    | copied, not moved, not temporarily. `NoSensitiveMediaInPublicBucketTest` enforces it.
+    |
+    */
+
+    'public_disk' => env('FILES_PUBLIC_DISK', 'public-media'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Malware scanner
     |--------------------------------------------------------------------------
     |

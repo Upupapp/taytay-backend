@@ -12,6 +12,7 @@ use Modules\Events\Application\EventRegistrationService;
 use Modules\Events\Application\EventService;
 use Modules\Events\Domain\EventStatus;
 use Modules\Events\Infrastructure\Eloquent\Event;
+use Modules\Files\Application\DocumentLibrary;
 use Modules\Shared\Application\ActorContext;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
@@ -33,6 +34,7 @@ final class EventController
         private readonly EventService $events,
         private readonly EventRegistrationService $registrations,
         private readonly AuthorizationService $authorization,
+        private readonly DocumentLibrary $library,
     ) {}
 
     // ── staff ─────────────────────────────────────────────────────────────────────────
@@ -102,6 +104,9 @@ final class EventController
          */
         $this->registrations->promoteFromWaitlist($updated);
 
+        // A cover swapped on an already-published event must become deliverable now.
+        $this->syncCoverMedia($updated);
+
         return ApiResponse::item($this->adminProjection($updated->refresh()));
     }
 
@@ -123,12 +128,21 @@ final class EventController
         // plan their week around, and an office may want those held more narrowly than drafting.
         $this->authorization->authorize($actor, $target->requiredPermission());
 
-        return ApiResponse::item($this->adminProjection($this->events->transition(
-            $model,
-            $target,
-            $actor,
-            $validated['reason'] ?? null,
-        )));
+        $updated = $this->events->transition($model, $target, $actor, $validated['reason'] ?? null);
+
+        /*
+         * The cover becomes publicly deliverable when the event is published, and stops being so
+         * when it is archived. Driven by `isPubliclyVisible()` rather than by which transition was
+         * requested, so a state added to the enum later cannot leave an image public on an event
+         * nobody can see (ADR 0033 §3).
+         *
+         * A CANCELLED EVENT KEEPS ITS COVER. It stays on the public list with its reason showing
+         * (ADR 0030 §3), and a listing that lost its image the moment it was called off would look
+         * broken to exactly the people who most need to read it.
+         */
+        $this->syncCoverMedia($updated);
+
+        return ApiResponse::item($this->adminProjection($updated));
     }
 
     public function duplicate(Request $request, ActorContext $actor, string $event): JsonResponse
@@ -206,6 +220,30 @@ final class EventController
         return ApiResponse::item($this->publicProjection($model));
     }
 
+    /**
+     * Keeps the cover's public renditions in step with whether the event is visible.
+     *
+     * Outside the transition transaction: re-encoding an image is slow, and a failure to resize a
+     * poster must not roll back the publication of an event. The event is published either way,
+     * and a missing cover is a smaller problem than an announcement that silently did not go out.
+     */
+    private function syncCoverMedia(Event $event): void
+    {
+        $cover = $event->cover_file_id;
+
+        if ($cover === null) {
+            return;
+        }
+
+        if ($event->status->isPubliclyVisible()) {
+            $this->library->publishMedia([(string) $cover]);
+
+            return;
+        }
+
+        $this->library->withdrawMedia([(string) $cover]);
+    }
+
     // ── projections ───────────────────────────────────────────────────────────────────
 
     /**
@@ -246,6 +284,11 @@ final class EventController
             'description' => $event->description,
             'category' => $event->category,
             'cover_file_id' => $event->cover_file_id,
+            /*
+             * Public URLs of the RE-ENCODED renditions, never of the uploaded original — which
+             * stays on the private disk for its whole life. Empty until the event is published.
+             */
+            'cover_urls' => $this->library->publicMediaUrls($event->cover_file_id),
             // Always emitted when there is a cover, so a client never has to decide what to do
             // with a missing one.
             'cover_alt_text' => $event->cover_alt_text,

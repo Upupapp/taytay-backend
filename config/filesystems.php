@@ -77,6 +77,40 @@ return [
             'report' => true,
         ],
 
+        /*
+        |----------------------------------------------------------------------
+        | Published media — Akamai Object Storage, SEPARATE bucket
+        |----------------------------------------------------------------------
+        |
+        | Derived renditions of newsfeed and event images, and nothing else ever (ADR 0033 §4).
+        |
+        | A SEPARATE BUCKET WITH SEPARATE CREDENTIALS, not a public prefix inside the private
+        | one. The two arrangements look equivalent and are not: a single misapplied policy on
+        | a shared bucket exposes everything in it, so the blast radius of one mistake is the
+        | whole store rather than some already-published images. Least-privilege keys mean the
+        | credential that can write here cannot read a KYC document, and vice versa.
+        |
+        | Nothing uploaded is ever written here. `MediaPublisher` is the only writer, it only
+        | writes bytes it re-encoded from a decoded pixel buffer, and it only does so after the
+        | module owning the content says the content is published.
+        |
+        | `url` IS set, unlike the private disk — that is the whole purpose of this bucket. It
+        | is also why nothing citizen-derived may reach it.
+        */
+        'public-media' => [
+            'driver' => 's3',
+            'key' => env('PUBLIC_MEDIA_KEY'),
+            'secret' => env('PUBLIC_MEDIA_SECRET'),
+            'region' => env('PUBLIC_MEDIA_REGION'),
+            'bucket' => env('PUBLIC_MEDIA_BUCKET'),
+            'endpoint' => env('PUBLIC_MEDIA_ENDPOINT'),
+            'url' => env('PUBLIC_MEDIA_URL'),
+            'use_path_style_endpoint' => env('PUBLIC_MEDIA_PATH_STYLE', false),
+            'visibility' => 'public',
+            'throw' => true,
+            'report' => true,
+        ],
+
     ],
 
     /*

@@ -63,7 +63,13 @@ final class FileStore
             throw new ApiException(ErrorCode::ValidationFailed, 'That file is empty.');
         }
 
-        if ($size > AcceptedMediaType::MAX_BYTES) {
+        /*
+         * PER CONTEXT, not one global ceiling (ADR 0033 §5). A resident's multi-page scan and an
+         * advisory image for the public feed have genuinely different right answers, and a single
+         * number is wrong at one end or the other. `MAX_BYTES` remains the absolute ceiling that
+         * no classification may exceed.
+         */
+        if ($size > min($classification->maxBytes(), AcceptedMediaType::MAX_BYTES)) {
             throw new ApiException(ErrorCode::PayloadTooLarge, 'That file is larger than this endpoint accepts.');
         }
 
@@ -93,6 +99,28 @@ final class FileStore
 
         Storage::disk($disk)->put($key, $contents, 'private');
 
+        $hash = hash('sha256', $contents);
+
+        /*
+         * THE SAME BYTES, ALREADY HERE.
+         *
+         * Detected and recorded, never refused. The master command asks for checksum detection of
+         * *accidental* duplicates, and refusing the second upload would be wrong: re-sending one
+         * barangay clearance against a second requirement is legitimate, and a household sharing
+         * a scanned certificate is normal. What the office wants is to be told, so a console can
+         * say "this is the file you sent on Tuesday" instead of quietly accumulating identical
+         * objects nobody can tell apart.
+         *
+         * Scoped to the same uploader. Two residents happening to submit an identical blank form
+         * is not a duplicate worth pointing at, and linking their records across that coincidence
+         * would be a small disclosure of one to the other.
+         */
+        $duplicate = $actor->subjectId === null ? null : StoredFile::query()
+            ->where('content_hash', $hash)
+            ->where('uploaded_by', $actor->subjectId)
+            ->whereNull('purged_at')
+            ->value('uuid');
+
         $file = StoredFile::query()->create([
             'disk' => $disk,
             'storage_key' => $key,
@@ -101,7 +129,8 @@ final class FileStore
             'original_name' => $this->safeDisplayName($upload->getClientOriginalName(), $type),
             'mime_type' => $type->value,
             'byte_size' => $size,
-            'content_hash' => hash('sha256', $contents),
+            'content_hash' => $hash,
+            'duplicate_of_file_id' => $duplicate,
             'classification' => $classification,
             'scan_status' => ScanStatus::Pending,
             'uploaded_by' => $actor->subjectId,

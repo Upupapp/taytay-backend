@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\Content\Domain\PostStatus;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedMedia;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedPost;
+use Modules\Files\Application\DocumentLibrary;
 use Modules\Shared\Application\ActorContext;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
@@ -29,7 +30,10 @@ use Modules\Shared\Exceptions\InvalidStateTransitionException;
  */
 final class NewsfeedService
 {
-    public function __construct(private readonly ContentAudit $audit) {}
+    public function __construct(
+        private readonly ContentAudit $audit,
+        private readonly DocumentLibrary $library,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $attributes
@@ -131,6 +135,38 @@ final class NewsfeedService
 
             return $post->refresh();
         });
+    }
+
+    /**
+     * Derives the public renditions of a post's images, or removes them.
+     *
+     * **PUBLICATION IS THE ONLY ROUTE TO A PUBLIC OBJECT** (ADR 0033 §3). Content decides that a
+     * post is live; Files derives a re-encoded, metadata-free rendition and writes *that* to the
+     * public bucket. The uploaded original never moves and never touches it.
+     *
+     * Called OUTSIDE the transition transaction on purpose. Deriving an image is slow, and a
+     * failure to resize a photograph must not roll back the publication of an advisory — the post
+     * is live either way, and a missing thumbnail is a smaller problem than an announcement that
+     * silently did not go out.
+     *
+     * The reverse matters more: archiving withdraws the objects, because a post taken down whose
+     * image stayed at a public URL would be a takedown that did not take anything down.
+     */
+    public function syncPublishedMedia(NewsfeedPost $post): void
+    {
+        $fileIds = $post->media()->pluck('stored_file_id')->map(strval(...))->all();
+
+        if ($fileIds === []) {
+            return;
+        }
+
+        if ($post->isLive()) {
+            $this->library->publishMedia($fileIds);
+
+            return;
+        }
+
+        $this->library->withdrawMedia($fileIds);
     }
 
     public function setPinned(NewsfeedPost $post, bool $pinned, ActorContext $actor): NewsfeedPost

@@ -9,6 +9,7 @@ use Modules\Files\Contracts\DocumentVersionView;
 use Modules\Files\Contracts\FileClassification;
 use Modules\Files\Contracts\StoredFileView;
 use Modules\Files\Contracts\VerificationStatus;
+use Modules\Files\Domain\MediaVariant;
 use Modules\Files\Infrastructure\Eloquent\Document;
 use Modules\Files\Infrastructure\Eloquent\DocumentVersion;
 use Modules\Files\Infrastructure\Eloquent\StoredFile;
@@ -40,6 +41,7 @@ final class DocumentLibrary
         private readonly DocumentService $documents,
         private readonly DocumentAccess $access,
         private readonly DocumentPresenter $presenter,
+        private readonly MediaPublisher $media,
     ) {}
 
     // ── storing bytes ─────────────────────────────────────────────────────────────────
@@ -54,6 +56,96 @@ final class DocumentLibrary
     public function store(UploadedFile $upload, FileClassification $classification, ActorContext $actor): StoredFileView
     {
         return $this->presenter->file($this->files->store($upload, $classification, $actor));
+    }
+
+    // ── published media ───────────────────────────────────────────────────────────────
+
+    /**
+     * Derives the public renditions of an image, because its content just went live.
+     *
+     * **THE ONLY ROUTE TO A PUBLIC OBJECT** (ADR 0033 §3), and it deliberately reads as a
+     * side effect of publication rather than as an operation somebody can perform. There is no
+     * "make this file public" verb here, because a verb like that is one somebody eventually
+     * calls on a file whose content was never published.
+     *
+     * The original is not moved, copied or re-permissioned: a NEW object is derived by
+     * re-encoding, so an uploaded file never touches the public bucket even briefly.
+     *
+     * Refuses silently for anything that may not be published — personal or sensitive material,
+     * an infected file, a PDF. Silently, because the caller is a publish workflow and the
+     * absence of an image is not a reason to fail a publication; the refusal lives here so a
+     * module that attached the wrong file cannot publish it by being wrong.
+     *
+     * @param  list<string>  $fileUuids
+     */
+    public function publishMedia(array $fileUuids): void
+    {
+        foreach ($this->filesFor($fileUuids) as $file) {
+            $this->media->publish($file);
+        }
+    }
+
+    /**
+     * Removes the public renditions, because the content came down.
+     *
+     * A post archived or an event cancelled whose image stayed at a public URL would be a
+     * takedown that did not take anything down.
+     *
+     * @param  list<string>  $fileUuids
+     */
+    public function withdrawMedia(array $fileUuids): void
+    {
+        foreach ($this->filesFor($fileUuids) as $file) {
+            $this->media->withdraw($file);
+        }
+    }
+
+    /**
+     * The public URLs of an image's renditions, keyed by variant.
+     *
+     * EMPTY IS THE ANSWER FOR UNPUBLISHED CONTENT, and it is the same answer as for content that
+     * never had an image — so the absence discloses nothing about whether a draft exists.
+     *
+     * @return array<string, string>
+     */
+    public function publicMediaUrls(?string $fileUuid): array
+    {
+        if ($fileUuid === null) {
+            return [];
+        }
+
+        $file = $this->filesFor([$fileUuid])[0] ?? null;
+
+        if ($file === null) {
+            return [];
+        }
+
+        $urls = [];
+
+        foreach (MediaVariant::all() as $variant) {
+            $url = $this->media->publicUrl($file, $variant);
+
+            if ($url !== null) {
+                $urls[$variant->value] = $url;
+            }
+        }
+
+        return $urls;
+    }
+
+    /**
+     * @param  list<string>  $fileUuids
+     * @return list<StoredFile>
+     */
+    private function filesFor(array $fileUuids): array
+    {
+        $uuids = array_values(array_filter($fileUuids));
+
+        if ($uuids === []) {
+            return [];
+        }
+
+        return StoredFile::query()->whereIn('uuid', $uuids)->get()->all();
     }
 
     // ── documents ─────────────────────────────────────────────────────────────────────
