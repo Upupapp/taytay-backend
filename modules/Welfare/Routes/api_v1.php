@@ -6,14 +6,17 @@ use Illuminate\Support\Facades\Route;
 use Modules\Welfare\Http\Controllers\V1\AssessmentController;
 use Modules\Welfare\Http\Controllers\V1\CaseController;
 use Modules\Welfare\Http\Controllers\V1\CaseEligibilityController;
+use Modules\Welfare\Http\Controllers\V1\CaseNoteController;
 use Modules\Welfare\Http\Controllers\V1\CaseRequirementController;
 use Modules\Welfare\Http\Controllers\V1\DocumentDownloadController;
 use Modules\Welfare\Http\Controllers\V1\EnrollmentController;
+use Modules\Welfare\Http\Controllers\V1\FieldVisitController;
 use Modules\Welfare\Http\Controllers\V1\MyAssistanceController;
 use Modules\Welfare\Http\Controllers\V1\MyCaseController;
 use Modules\Welfare\Http\Controllers\V1\MyReferralController;
 use Modules\Welfare\Http\Controllers\V1\MyRequirementController;
 use Modules\Welfare\Http\Controllers\V1\ReferralController;
+use Modules\Welfare\Http\Controllers\V1\SafeguardingController;
 
 /*
  * Welfare routes. Mounted under /api/v1 by routes/api.php.
@@ -193,4 +196,45 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * destination contact, the outcome text or any note (ADR 0021 §6).
      */
     Route::get('me/referrals', [MyReferralController::class, 'index'])->name('v1.me.referrals.index');
+
+    /*
+     * ── field visits ──────────────────────────────────────────────────────────────────
+     *
+     * NO COORDINATE REACHES THIS CONTRACT. There is no check-in, no arrival ping, no route and no
+     * field to send one to — `NoLocationTrackingTest` fails the build if one appears. A visit
+     * records what was found, never where a worker was (ADR 0022 §1).
+     *
+     * An observation carries whose claim it is, which is the difference between "the roof is
+     * missing sheets", "she says her husband stopped sending money" and "the household appears
+     * unable to cope". As prose those become indistinguishable in six months.
+     */
+    Route::get('admin/visits', [FieldVisitController::class, 'index'])->name('v1.admin.visits.index');
+    Route::post('admin/visits', [FieldVisitController::class, 'store'])->name('v1.admin.visits.store');
+    Route::get('admin/visits/{visit}', [FieldVisitController::class, 'show'])->name('v1.admin.visits.show');
+    Route::post('admin/visits/{visit}/observations', [FieldVisitController::class, 'observe'])->name('v1.admin.visits.observations.store');
+    Route::post('admin/visits/{visit}/checklist', [FieldVisitController::class, 'check'])->name('v1.admin.visits.checklist');
+    Route::post('admin/visits/{visit}/conclusion', [FieldVisitController::class, 'conclude'])->name('v1.admin.visits.conclusion');
+
+    /*
+     * ── the running record ────────────────────────────────────────────────────────────
+     *
+     * A reader without clearance still sees that a protected note EXISTS, who wrote it and when —
+     * only the body is removed, and removed by the application rather than hidden by a client. A
+     * caseworker who cannot see that three restricted entries exist reads the file as complete.
+     */
+    Route::get('admin/cases/{case}/notes', [CaseNoteController::class, 'index'])->name('v1.admin.cases.notes.index');
+    Route::post('admin/cases/{case}/notes', [CaseNoteController::class, 'store'])->name('v1.admin.cases.notes.store');
+    Route::post('admin/cases/{case}/notes/{note}/withdrawal', [CaseNoteController::class, 'withdraw'])->name('v1.admin.cases.notes.withdraw');
+
+    /*
+     * ── safeguarding ──────────────────────────────────────────────────────────────────
+     *
+     * THERE IS DELIBERATELY NO LIST ENDPOINT. A queue of safeguarding concerns is a list of
+     * families under suspicion, and once it exists it will be filtered, sorted, exported and
+     * eventually joined to something. Every read here is scoped to one named resident somebody
+     * already had reason to open (ADR 0022 §4).
+     */
+    Route::get('admin/residents/{resident}/safeguarding', [SafeguardingController::class, 'forResident'])->name('v1.admin.residents.safeguarding');
+    Route::post('admin/safeguarding-concerns', [SafeguardingController::class, 'store'])->name('v1.admin.safeguarding.store');
+    Route::post('admin/safeguarding-concerns/{concern}/closure', [SafeguardingController::class, 'close'])->name('v1.admin.safeguarding.close');
 });

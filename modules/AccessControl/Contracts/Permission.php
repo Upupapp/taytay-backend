@@ -234,6 +234,39 @@ enum Permission: string
     /** Maintain the service provider directory. */
     case ProviderManage = 'provider.manage';
 
+    /** Read the field visit calendar and visit records. */
+    case VisitView = 'visit.view';
+
+    /** Schedule a visit, record what was found, cancel one. */
+    case VisitManage = 'visit.manage';
+
+    /**
+     * Read the **body** of a protected case note.
+     *
+     * Safety planning for a VAWC survivor, anything identifying a child in conflict with the law,
+     * a disclosure given in confidence, clinical detail. Without it a reader still sees that the
+     * note exists, who wrote it and when — see ADR 0022 §3 for why concealing its existence would
+     * be worse than concealing its content.
+     */
+    case CaseNoteViewProtected = 'case-note.view-protected';
+
+    /**
+     * Read safeguarding detail.
+     *
+     * The narrowest read permission in this system. A safeguarding concern names why a family is
+     * being watched, and the category alone — "child-protection" against a named household — is
+     * itself the disclosure.
+     */
+    case SafeguardingView = 'safeguarding.view';
+
+    /**
+     * Raise, review and close a safeguarding concern.
+     *
+     * Deciding that a family no longer needs watching is as consequential as deciding they do,
+     * and both belong to a protection officer rather than to whoever is on the case.
+     */
+    case SafeguardingManage = 'safeguarding.manage';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 

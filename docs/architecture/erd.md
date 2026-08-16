@@ -136,6 +136,12 @@ erDiagram
     REFERRALS ||--o{ REFERRAL_ATTACHMENTS : "released (opt-in, never automatic)"
     REFERRALS ||--o{ REFERRAL_NOTES : "annotated (append-only, split by audience)"
 
+    WELFARE_CASES ||--o{ FIELD_VISITS : "visited for (optional)"
+    FIELD_VISITS ||--o{ FIELD_VISIT_CHECKLIST_ITEMS : "prompts (never scores)"
+    FIELD_VISITS ||--o{ VISIT_OBSERVATIONS : "records (append-only, kind-classified)"
+    WELFARE_CASES ||--o{ CASE_NOTES : "running record (append-only, two sensitivities)"
+    WELFARE_CASES ||--o{ SAFEGUARDING_CONCERNS : "restricted (never in a list)"
+
     ASSISTANCE_REQUESTS ||--o{ REQUEST_REQUIREMENTS : "must satisfy"
     ASSISTANCE_REQUESTS ||--o{ REQUEST_TRANSITIONS : "lifecycle (append-only)"
     ASSISTANCE_REQUESTS ||--o{ CASE_NOTES : "annotated by"
@@ -175,9 +181,17 @@ erDiagram
 | `referrals.resident_id` | resident | ResidentProfile | **a referral always links to a client** — a disclosure about nobody in particular cannot be audited or answered to a subject-access request |
 | `referrals.provider_id` | provider | ServiceCatalog | Welfare asks the directory; the name and type are **snapshotted** so a renamed office does not rewrite where a referral actually went |
 | `referral_attachments.document_id` | document | Files | opt-in, one at a time, each with a reason |
+| `field_visits.resident_id` | resident | ResidentProfile | who was visited. Repointed on merge — a visit stranded on a deleted record loses the journeys a worker actually made |
+| `field_visits.household_id` | household | ResidentProfile | the household visited, where one is known |
+| `safeguarding_concerns.resident_id` | resident | ResidentProfile | **the most consequential repoint in the system**: a concern left on a soft-deleted duplicate silently stops applying to the person it is about |
 
-Twenty-four references, twenty-four places a convenient join would have silently welded two
+Twenty-seven references, twenty-seven places a convenient join would have silently welded two
 modules together. Each is an identifier plus a service call.
+
+**`field_visits` carries no coordinate, check-in, route or arrival ping**, and
+`NoLocationTrackingTest` fails the build if one appears. The address visited is copied from the
+household record at scheduling — a fact the registry already holds, not a position captured from
+a device (ADR 0022 §1).
 
 **Every table above carrying `resident_id` must be repointed by a merge**, and
 `ResidentMergeCoverageTest` fails the build if a module holding one has no mechanism to do it.

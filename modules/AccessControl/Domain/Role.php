@@ -101,6 +101,16 @@ enum Role: string
                  */
                 Permission::ReferralView,
                 Permission::ReferralManage,
+                /*
+                 * Field work IS front-line staff's job — they are the ones who go.
+                 *
+                 * `CaseNoteViewProtected` and the safeguarding pair are NOT theirs. A worker
+                 * covering a colleague's caseload can read the running record and see that
+                 * protected entries exist without reading them, which is what lets them ask the
+                 * right person rather than act on a file they think is complete (ADR 0022 §3).
+                 */
+                Permission::VisitView,
+                Permission::VisitManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -154,6 +164,19 @@ enum Role: string
                 Permission::ReferralSend,
                 Permission::ReferralDiscloseProtected,
                 Permission::ProviderManage,
+                Permission::VisitView,
+                Permission::VisitManage,
+                /*
+                 * The protection tier. Sits here for the same reason as
+                 * `VulnerabilityViewProtected` and `DocumentViewSensitive`: it belongs to a
+                 * dedicated protection officer, and that role does not exist yet (gap G-30).
+                 *
+                 * When it does, these three move there and the MSWDO head keeps none of them —
+                 * reading a survivor's safety plan is not an administrative convenience.
+                 */
+                Permission::CaseNoteViewProtected,
+                Permission::SafeguardingView,
+                Permission::SafeguardingManage,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *

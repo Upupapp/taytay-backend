@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\DB;
 use Modules\ResidentProfile\Contracts\ResidentMerged;
 use Modules\Welfare\Infrastructure\Eloquent\AssistanceDraft;
 use Modules\Welfare\Infrastructure\Eloquent\AssistanceIntake;
+use Modules\Welfare\Infrastructure\Eloquent\FieldVisit;
 use Modules\Welfare\Infrastructure\Eloquent\Referral;
+use Modules\Welfare\Infrastructure\Eloquent\SafeguardingConcern;
 use Modules\Welfare\Infrastructure\Eloquent\WelfareCase;
 
 /**
@@ -79,6 +81,26 @@ final class ReassignWelfareRecordsOnResidentMerge
              * file entirely.
              */
             Referral::query()
+                ->where('resident_id', $event->absorbedResidentUuid)
+                ->update(['resident_id' => $event->survivorResidentUuid]);
+
+            // Field visits, added in TAB 17. A visit stranded on a deleted record would vanish
+            // from the surviving client's file, and "how many times did we go?" would lose the
+            // journeys a worker actually made.
+            FieldVisit::query()
+                ->where('resident_id', $event->absorbedResidentUuid)
+                ->update(['resident_id' => $event->survivorResidentUuid]);
+
+            /*
+             * Safeguarding concerns, added in TAB 17 — and the most consequential row in this
+             * method.
+             *
+             * A concern left on a soft-deleted duplicate is a protection record that has silently
+             * stopped applying to the person it is about: nobody opening the survivor's file
+             * would see that one exists, and a worker sent to that address would get no advisory.
+             * The failure is total and completely silent.
+             */
+            SafeguardingConcern::query()
                 ->where('resident_id', $event->absorbedResidentUuid)
                 ->update(['resident_id' => $event->survivorResidentUuid]);
 

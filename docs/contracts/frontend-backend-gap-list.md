@@ -372,6 +372,22 @@ behind an explicit LGU-approved deterministic rule.
 *Resolution:* MSWDO reviews the templates and bumps their versions; the DPO sets the retention
 figures. Both live in one reviewable file each, precisely so approving them is cheap.
 
+Opened by TAB 17: **G-30** — **there is no protection-officer role.** Six permissions now sit with
+`lgu_admin` that should not: `vulnerability.view.protected`, `document.view.sensitive`,
+`case-note.view-protected`, `safeguarding.view`, `safeguarding.manage`, and
+`referral.disclose.protected`. Each was placed there with the same note, and the accumulation is
+now the finding: reading a survivor's safety plan is not an administrative convenience. When the
+role exists, all six move and the MSWDO head keeps none of them. Owner: LGU (to name the role),
+then this backend.
+
+Opened by TAB 17: **G-31** — **no staff field-sync protocol.** The console models an offline
+`VisitCapture` with an explicit `held-locally` / `sending` / `sent` / `send-failed` state and no
+background queue, because a worker who believes a visit was filed and returns to find it was not
+has been failed twice. That is a client concern and stays there; this backend offers ordinary
+idempotent endpoints. If field sync is added it needs its own controlled design and its own ADR —
+an offline protocol bolted onto endpoints designed for a browser is how duplicate visit records
+and lost observations arrive. Owner: deferred, by the master command's own instruction.
+
 Opened by TAB 16: **G-28** — `ProgramCatalog` does not audit its own writes. Publishing a
 programme is at least as consequential as editing a directory entry, which TAB 16 does audit.
 Not retrofitted here because it belongs with a review of what a programme change means, not with a

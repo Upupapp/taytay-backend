@@ -826,6 +826,64 @@ TAB 19's tasks and TAB 20's notifications will listen for.
 
 ---
 
+## 11m. Field visits, notes and safeguarding — built in TAB 17
+
+**No coordinate exists anywhere in this contract.** No check-in, no arrival ping, no route, no
+field to send one to. A visit records the address it was made to — which the household registry
+already holds — and what happened there. `NoLocationTrackingTest` fails the build if a
+position-shaped column or request key appears. Full reasoning: ADR 0022.
+
+### Staff — field visits
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Calendar / my queue | `GET /api/v1/admin/visits` | bearer | `visit.view` | client's barangay | `?status=&purpose=&assigned_to=&resident_id=&from=&to=&overdue_only=` | paginated visits | **thin by design** — no observations, no outcome, and no safeguarding marker of any kind | `implemented` |
+| Visit detail | `GET /api/v1/admin/visits/{visit}` | bearer | `visit.view` | client's barangay | — | checklist, observations, outcome, follow-up, `worker_safety_advisory` | the advisory is **one sentence, detail view only** — no category, no count, no history | `implemented` |
+| Schedule | `POST /api/v1/admin/visits` | bearer | `visit.manage` | client's barangay | `{resident_id,case_id?,purpose,assigned_to?,scheduled_for,scheduled_window?,checklist[]?}` | `201` visit | a past date is `422`; a case is optional but must belong to the same client; `scheduled_window` is free text ("morning") because that is how visits are really arranged | `implemented` |
+| Record an observation | `POST /api/v1/admin/visits/{visit}/observations` | bearer | `visit.manage` | client's barangay | `{kind,body,attributed_to?}` | `201` observation | **`kind` is the point**: `observed` / `client-said` / `third-party-said` / `worker-assessed`. Third-party **must** name who; the others **must not** | `implemented` |
+| Tick the checklist | `POST /api/v1/admin/visits/{visit}/checklist` | bearer | `visit.manage` | client's barangay | `{code,checked,note?}` | item | a prompt, never a score — nothing totals these and nothing derives a rating from them | `implemented` |
+| Conclude | `POST /api/v1/admin/visits/{visit}/conclusion` | bearer | `visit.manage` | client's barangay | `{status,outcome?,service_needs?,declined_reason?,next_action?,follow_up_on?}` | visit | every outcome is **terminal**; `completed` requires an outcome; `not-found` / `refused` / `cancelled` are held apart | `implemented` |
+
+**`not-found`, `refused` and `cancelled` are three different facts.** Collapsing them into
+"unsuccessful" is how a family that was out at work acquires a reputation for being uncooperative.
+
+**A next action with a date raises `VisitFollowUpDue`**, which TAB 19's tasks will listen for. The
+event carries the *action*, never the observations.
+
+### Staff — the running record
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Notes | `GET /api/v1/admin/cases/{case}/notes` | bearer | `request.view` | case barangay | — | notes + `withheld_count` + `has_safeguarding_concern` | a protected note's **existence, author, sensitivity and time are disclosed**; only `body` is null | `implemented` |
+| Add a note | `POST /api/v1/admin/cases/{case}/notes` | bearer | `request.view` (+`case-note.view-protected` for the protected tier) | case barangay | `{body,sensitivity?}` | `201` note | writing into the protected tier needs the same clearance as reading it — otherwise a note can be put beyond *review* rather than beyond disclosure | `implemented` |
+| Withdraw | `POST /api/v1/admin/cases/{case}/notes/{note}/withdrawal` | bearer | `request.view` | case barangay | `{reason}` | note | withdrawn, never deleted, and **only by its author** — a record of what one worker believed is not another's to retract | `implemented` |
+
+**Why existence is disclosed even when the body is not:** a caseworker who cannot see that three
+restricted entries exist reads the file as complete and acts as though nothing happened. Knowing a
+record is there, and that it is not theirs to read, is what makes it possible to ask the right
+person. The body is removed **by the application**, so a payload that never held the paragraph
+cannot leak it.
+
+### Staff — safeguarding
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| One resident's concerns | `GET /api/v1/admin/residents/{resident}/safeguarding` | bearer | `safeguarding.view` | resident's barangay | — | full concerns | the narrowest read in this system; the **category alone** — "child-protection" against a named family — is itself the disclosure | `implemented` |
+| Raise | `POST /api/v1/admin/safeguarding-concerns` | bearer | `safeguarding.manage` | resident's barangay | `{resident_id,case_id?,category,detail,worker_safety_advisory?}` | `201` concern | audited by identifier only — the trail never repeats the category or the detail | `implemented` |
+| Close | `POST /api/v1/admin/safeguarding-concerns/{concern}/closure` | bearer | `safeguarding.manage` | resident's barangay | `{reason}` | concern | reason **mandatory** — deciding a family no longer needs watching is as consequential as deciding they do | `implemented` |
+
+**There is deliberately no list endpoint.** A queue of safeguarding concerns is a list of families
+under suspicion, and once it exists it will be filtered, sorted, exported and eventually joined to
+something. Every read is scoped to one named resident somebody already had reason to open, which
+is what makes each read a decision rather than a browse.
+
+**Three tiers of exposure, on purpose:** nothing in any list; existence on a case detail; a
+one-sentence worker-safety advisory on a visit detail; the full record only under
+`safeguarding.view`. A worker sent to a house is entitled to know there is a risk to *them*
+without being told a family's protection history.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)
