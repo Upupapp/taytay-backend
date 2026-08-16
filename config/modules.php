@@ -27,6 +27,9 @@ return [
         'ResidentProfile',
         'Credential',
         'ServiceCatalog',
+        // Social welfare casework. Loaded after ResidentProfile because a case references a
+        // resident through that module's published services.
+        'Welfare',
     ],
 
 ];

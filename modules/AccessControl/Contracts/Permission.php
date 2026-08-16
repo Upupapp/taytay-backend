@@ -80,6 +80,56 @@ enum Permission: string
      */
     case HouseholdManage = 'household.manage';
 
+    /*
+     * ── social welfare casework (contract matrix §5) ──────────────────────────────────
+     *
+     * Deliberately fine-grained per lifecycle stage. The transition endpoint resolves the
+     * permission from its *target* state, so the state machine and the authorization table
+     * stay in one place — and separating endorse from approve is what makes separation of
+     * duties expressible at all (ADR 0016 §6).
+     */
+
+    /** Open the case queue and read case files. */
+    case RequestView = 'request.view';
+
+    /**
+     * See restricted cases — protective services.
+     *
+     * Knowing that a protection case exists for a named person is most of the disclosure, so
+     * this gates list, count and detail alike (ADR 0016 §5).
+     */
+    case RequestViewSensitive = 'request.view-sensitive';
+
+    /** Open a case, and submit or withdraw a draft. */
+    case RequestCreate = 'request.create';
+
+    /** Intake review: check what was brought in, or return it for missing documents. */
+    case RequestIntake = 'request.intake';
+
+    /** Social-worker assessment. */
+    case RequestAssess = 'request.assess';
+
+    /** Recommend a case for approval. Never sufficient to approve it. */
+    case RequestEndorse = 'request.endorse';
+
+    /** Approve a case, committing public money to it. */
+    case RequestApprove = 'request.approve';
+
+    /** Refuse a case. */
+    case RequestReject = 'request.reject';
+
+    /** Book an approved case for a release date. */
+    case RequestSchedule = 'request.schedule';
+
+    /** Confirm that assistance was handed over. Money-adjacent; TAB 18 builds the ledger. */
+    case RequestRelease = 'request.release';
+
+    /** Close or expire a case. */
+    case RequestClose = 'request.close';
+
+    /** Assign a case to a caseworker or team. */
+    case RequestAssign = 'request.assign';
+
     /** Read vulnerability factors and the decision-support snapshot built from them. */
     case VulnerabilityView = 'vulnerability.view';
 

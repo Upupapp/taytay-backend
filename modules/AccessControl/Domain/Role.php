@@ -60,6 +60,20 @@ enum Role: string
                 // an intake one.
                 Permission::VulnerabilityView,
                 Permission::VulnerabilityManage,
+                /*
+                 * Casework up to and including endorsement.
+                 *
+                 * Front-line staff take the intake, assess, and recommend. They do NOT hold
+                 * `RequestApprove`, `RequestRelease` or `RequestReject` — approving one's own
+                 * recommendation is the single-signature path every audit of a benefits
+                 * programme looks for first (ADR 0016 §6).
+                 */
+                Permission::RequestView,
+                Permission::RequestCreate,
+                Permission::RequestIntake,
+                Permission::RequestAssess,
+                Permission::RequestEndorse,
+                Permission::RequestAssign,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -78,6 +92,25 @@ enum Role: string
                 // See the note on the permission: this belongs to a dedicated protection
                 // officer, and sits here only because that role does not exist yet.
                 Permission::VulnerabilityViewProtected,
+                /*
+                 * The approving authority. Holds decision rights over casework, and
+                 * deliberately NOT `RequestEndorse` — the MSWDO head approves what the social
+                 * workers recommend; they do not write the recommendation and then sign it.
+                 *
+                 * `RequestRelease` is also absent: no single non-administrator role may both
+                 * approve a case and release its money (contract matrix §5). TAB 18 builds
+                 * the release workflow against a role that holds release and not approve.
+                 */
+                Permission::RequestView,
+                Permission::RequestViewSensitive,
+                Permission::RequestCreate,
+                Permission::RequestIntake,
+                Permission::RequestAssess,
+                Permission::RequestApprove,
+                Permission::RequestReject,
+                Permission::RequestSchedule,
+                Permission::RequestClose,
+                Permission::RequestAssign,
                 Permission::KycReview,
                 Permission::KycApprove,
                 Permission::CredentialManage,

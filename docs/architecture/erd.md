@@ -107,6 +107,10 @@ erDiagram
     PROGRAMS ||--o{ PROGRAM_ELIGIBILITY : "gated by"
     SERVICES ||--o{ SERVICE_CHANNELS : "offered on"
 
+    WELFARE_CASES ||--o{ WELFARE_CASE_TRANSITIONS : "lifecycle (append-only)"
+    WELFARE_CASES ||--o{ WELFARE_CASE_ASSIGNMENTS : "held by (effective-dated)"
+    WELFARE_CASES ||--o{ WELFARE_CASE_EVENTS : "timeline (append-only)"
+
     ASSISTANCE_REQUESTS ||--o{ REQUEST_REQUIREMENTS : "must satisfy"
     ASSISTANCE_REQUESTS ||--o{ REQUEST_TRANSITIONS : "lifecycle (append-only)"
     ASSISTANCE_REQUESTS ||--o{ CASE_NOTES : "annotated by"
@@ -131,11 +135,13 @@ erDiagram
 | `assistance_requests.program_id` | programme | ServiceCatalog | catalog is a separate owner |
 | `verification_attempts.credential_id` | credential | Credential | verification runs at the edge, sees no PII |
 | `notifications.recipient_subject_id` | account | Identity | Notification decides *whether*, not *who* |
+| `welfare_cases.resident_id` | resident | ResidentProfile | Welfare asks ResidentProfile's directory, never joins |
+| `welfare_cases.assigned_to` | account | Identity | the assignee may be deactivated; the case history must survive |
 | `account_resident_links.account_id` | account | Identity | the link is ResidentProfile's record of Identity's account; written with `accounts.resident_id` in one transaction |
 | `resident_correction_requests.requested_by` | account | Identity | the requester may be deactivated later; the request must survive |
 | `resident_status_events.actor_subject_id` | account | Identity | history outlives the staff member who made it |
 
-Twelve references, twelve places a convenient join would have silently welded two modules
+Fourteen references, fourteen places a convenient join would have silently welded two modules
 together. Each is an identifier plus a service call.
 
 ---
@@ -152,6 +158,7 @@ together. Each is an identifier plus a service call.
 | **Identity** | `accounts`, `auth_tokens`, `devices`, `mfa_factors` | `personal` | planned — TAB 05 |
 | **ResidentProfile** | `residents`, `resident_sectors`, `kyc_cases`, `resident_match_candidates`, `resident_status_events`, `resident_aliases`, `resident_duplicate_pairs`, `resident_merges`, `resident_correction_requests`, `resident_correction_fields`, `account_resident_links`, `households`, `families`, `household_memberships`, `family_memberships`, `resident_relationships`, `resident_vulnerability_factors`, `household_vulnerability_factors` | **`sensitive`** | **built** — TAB 06, TAB 08, TAB 09, TAB 10 |
 | **ServiceCatalog** | `services`, `service_channels`, `programs`, `program_requirements`, `program_eligibility` | `public` | planned (config-backed today) |
+| **Welfare** | `welfare_cases`, `welfare_case_transitions`, `welfare_case_assignments`, `welfare_case_events` | **`sensitive`** | **built** — TAB 11 |
 | **Credential** | `credentials`, `credential_artifacts`, `credential_transitions` | `personal` | planned |
 | **Verification** | `verification_attempts`, `verifier_devices` | `internal` | planned |
 | **ServiceDelivery** | `assistance_requests`, `request_requirements`, `request_transitions`, `case_notes`, `assessments`, `disbursements`, `disbursement_transitions`, `referrals` | **`sensitive`** | planned |

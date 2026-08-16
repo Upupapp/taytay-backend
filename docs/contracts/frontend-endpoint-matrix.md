@@ -489,6 +489,67 @@ Taytay policy that has not been supplied; see gap **G-20**.
 
 ---
 
+## 11g. Welfare case engine — built in TAB 11
+
+The lifecycle ADR 0007 specified, now real: **13 canonical states, one transition endpoint**,
+and a citizen projection computed server-side. TAB 01 §E's 14-term vocabulary is a paraphrase
+of the same lifecycle — ADR 0016 §1 carries the mapping, including why *Assigned* is an
+assignment and *Archived* is a flag rather than states.
+
+The staff paths carry `/admin` like every other staff surface here; §5 documents them
+unprefixed because that is what the Angular console calls today. Same deviation class as
+residents and households — gap **G-19**.
+
+### Citizen — tracking your own request
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| My requests | `GET /api/v1/me/cases` | bearer | — | own-record | `?page=&per_page=` | reference, projected `status`, `status_message`, timestamps | resolved from the token — no identifier in the contract to tamper with | `implemented` |
+| Request detail | `GET /api/v1/me/cases/{case}` | bearer | — | own-record | — | adds `available_actions[]` and the applicant timeline | **additive projection** — internal `reason`, staff identities, assignment, priority, `needs_home_visit`, `is_escalated` and barangay are absent by construction, not removed | `implemented` |
+| Withdraw | `POST /api/v1/me/cases/{case}/cancel` | bearer | — | own-record | `{reason}` | cancelled request | ownership **and** state re-checked server-side; `available_actions` is what a client renders, never what authorises | `implemented` |
+
+`assessment` and `endorsed` both project to `under-review`: which desk holds the file would
+let an applicant infer the handling social worker. Timeline entries appear only where the
+event was written with a `citizen_message` — a mis-flagged event falls back to nothing rather
+than to the operator summary.
+
+### Staff — the queue and the case file
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Case queue | `GET /api/v1/admin/cases` | bearer | `request.view` | role scope | `?status=&type=&open_only=&assigned_to=me&unassigned=&page=&per_page=` | paginated summaries | **protective cases excluded from rows and from the total** without `request.view-sensitive`; `assigned-cases` scope narrows to the caller's own | `implemented` |
+| Case file | `GET /api/v1/admin/cases/{case}` | bearer | `request.view` | role scope | — | operational fields + `available_transitions[]` | **audited read**; deliberately carries **no** vulnerability snapshot (ADR 0016 §4) | `implemented` |
+| Open a case | `POST /api/v1/admin/cases` | bearer | `request.create` | role scope | `{resident_id,type,household_id?,program_id?}` | `201` case | a `protective` type additionally requires `request.view-sensitive` — opening one is itself a protection decision | `implemented` |
+| Lifecycle transition | `POST /api/v1/admin/cases/{case}/transitions` | bearer | **resolved from the target state** | role scope | `{to,reason?,applicant_message?}` | case | legality checked **before** permission (`409` beats `403`), or the error maps the authorization table; `reason` mandatory for rejected/cancelled/returned/completed/expired | `implemented` |
+| Priority | `POST /api/v1/admin/cases/{case}/priority` | bearer | `request.assign` | role scope | `{priority,reason?}` | case | `urgent` requires a reason; **never derived from a vulnerability score** | `implemented` |
+| Assign | `POST /api/v1/admin/cases/{case}/assignment` | bearer | `request.assign` | role scope | `{assignee_subject_id,team?}` | case | idempotent; a closed case cannot be assigned; routing is assignment, never state | `implemented` |
+| Return to queue | `DELETE /api/v1/admin/cases/{case}/assignment` | bearer | `request.assign` | role scope | `{reason}` | case | an unassigned open case is the backlog, a first-class state | `implemented` |
+| Archive | `POST /api/v1/admin/cases/{case}/archive` | bearer | `request.close` | role scope | — | case | only a terminal case; a flag, not a status | `implemented` |
+| History | `GET /api/v1/admin/cases/{case}/history` | bearer | `request.view` | role scope | — | transitions + assignments + timeline | audited read; internal `reason` visible here and nowhere a citizen can reach | `implemented` |
+
+**Permission by target state** (the table ADR 0007 §2 required, now enforced):
+
+| Target | Permission |
+| --- | --- |
+| `submitted` | `request.create` |
+| `intake-review`, `returned` | `request.intake` |
+| `assessment` | `request.assess` |
+| `endorsed` | `request.endorse` |
+| `approved` | `request.approve` |
+| `rejected` | `request.reject` |
+| `scheduled` | `request.schedule` |
+| `released` | `request.release` |
+| `completed`, `expired` | `request.close` |
+| `cancelled` | none — ownership (applicant) or `request.close` (staff) |
+
+**Separation of duties, enforced per case and actor:** the person who endorsed a case may not
+approve it. `lgu_staff` holds intake/assess/endorse and not approve; `lgu_admin` holds
+approve/reject/schedule/close and not endorse. Neither holds `request.release` — TAB 18 must
+grant it to a role that does not approve, asserted by
+`WelfareCaseTest::no_role_holds_both_approval_and_release`.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)
