@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Modules\Content\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -22,6 +25,18 @@ final class ContentServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        //
+        /*
+         * Engagement rate limit, registered by the module that owns the endpoints.
+         *
+         * KEYED BY ACCOUNT, NOT BY IP. A household behind one connection is several legitimate
+         * residents, and a barangay hall's public wifi is dozens — an IP limit would silence a
+         * whole neighbourhood because one person was enthusiastic.
+         *
+         * Twenty writes a minute is generous for a person and useless for a script. A blunt
+         * instrument on purpose: the master command asks for a rate limit and explicitly defers
+         * AI moderation, so this is the abuse control that exists today (ADR 0029 §5).
+         */
+        RateLimiter::for('engagement', static fn (Request $request): Limit => Limit::perMinute(20)
+            ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
     }
 }

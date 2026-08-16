@@ -207,6 +207,7 @@ enum Role: string
                 Permission::SavedViewShare,
                 Permission::NewsfeedManage,
                 Permission::NewsfeedPublish,
+                Permission::NewsfeedModerate,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *

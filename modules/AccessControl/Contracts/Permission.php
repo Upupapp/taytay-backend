@@ -313,6 +313,16 @@ enum Permission: string
      */
     case NewsfeedPublish = 'newsfeed.publish';
 
+    /**
+     * Moderate resident comments, and reply as the LGU.
+     *
+     * The same permission does both on purpose: replying officially and removing a comment are the
+     * two ways the office speaks in a thread, and somebody trusted to do one is trusted to do the
+     * other. It is NOT implied by `newsfeed.publish` — writing an announcement and judging what
+     * residents may say under it are different responsibilities (ADR 0029 §4).
+     */
+    case NewsfeedModerate = 'newsfeed.moderate';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 

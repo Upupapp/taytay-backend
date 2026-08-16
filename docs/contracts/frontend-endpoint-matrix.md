@@ -1202,6 +1202,47 @@ providing to somebody entitled to it.
 
 ---
 
+## 11t. Newsfeed engagement and moderation — built in TAB 24
+
+**This is not a social network.** No follow graph, no profiles, no mentions. The LGU publishes;
+residents respond to the LGU. Full reasoning: ADR 0029.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| React | `POST /api/v1/newsfeed/{post}/reaction` | bearer | — | own | `{reaction?}` | aggregate counts + `my_reaction` | **no field names a reactor**; one reaction per person per post, upserted; rate limited | `implemented` |
+| Un-react | `DELETE /api/v1/newsfeed/{post}/reaction` | bearer | — | own | — | counts | scoped to the caller's own row | `implemented` |
+| Read a thread | `GET /api/v1/newsfeed/{post}/comments` | bearer | — | — | `?page=` | visible comments | hidden and deleted are **absent**, not filtered; **no moderation fields at all** | `implemented` |
+| Comment | `POST /api/v1/newsfeed/{post}/comments` | bearer | — | own | `{body,parent_id?}` | `201` comment | `is_official` is set by the **server** from permission; one level of reply; `409` when comments are closed | `implemented` |
+| Edit own | `PATCH /api/v1/newsfeed-comments/{comment}` | bearer | — | author only | `{body}` | comment | **15-minute window**; a hidden comment cannot be edited back into visibility | `implemented` |
+| Withdraw own | `DELETE /api/v1/newsfeed-comments/{comment}` | bearer | — | author only | — | `{deleted}` | a **state**, not a missing row | `implemented` |
+| Share | `POST /api/v1/newsfeed/{post}/share` | bearer | — | own | — | counts | **accepts no destination**; the row holds a post, an optional account and a timestamp | `implemented` |
+| Moderation queue | `GET /api/v1/admin/newsfeed-comments` | bearer | `newsfeed.moderate` | — | `?moderation_state=&search=` | all comments incl. removed | the moderator view; the only place a removed comment is readable | `implemented` |
+| Moderate | `POST /api/v1/admin/newsfeed-comments/{comment}/moderation` | bearer | `newsfeed.moderate` | — | `{moderation_state,reason?}` | comment | a reason is **mandatory** for anything but restoring | `implemented` |
+
+### Moderation state is a state, not a missing row
+
+`deleted` does not delete. *"What did it say, who wrote it, who removed it and why"* is the
+question asked when the author complains, and a hard delete makes every answer "we do not know".
+
+The citizen thread narrows on `visible` **at the query**, and the comment count that travels with a
+post agrees — a count including hidden comments would be a moderation log by arithmetic.
+
+### A share is a counter
+
+`newsfeed_shares` holds a post, an optional account and a timestamp, and
+`NoShareRecipientDataTest` uses an **allow-list** so a destination column with an innocent name
+still fails the build. *"Which platform do people share to?"* is a reasonable product question
+whose answer turns a municipal welfare system into a record of who talks to whom.
+
+### Abuse control
+
+**20 writes a minute, keyed by account not IP** — a household behind one connection is several
+legitimate residents, and a barangay hall's wifi is dozens. Reading is not throttled beyond the
+global limit. `review-needed` is a state nothing currently sets: the hook a future moderation
+provider writes into, so adding one is a listener rather than a migration (gap G-37).
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)
