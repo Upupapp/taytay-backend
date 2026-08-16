@@ -16,6 +16,7 @@ use Modules\Welfare\Http\Controllers\V1\MyCaseController;
 use Modules\Welfare\Http\Controllers\V1\MyReferralController;
 use Modules\Welfare\Http\Controllers\V1\MyRequirementController;
 use Modules\Welfare\Http\Controllers\V1\ReferralController;
+use Modules\Welfare\Http\Controllers\V1\ReleaseController;
 use Modules\Welfare\Http\Controllers\V1\SafeguardingController;
 
 /*
@@ -237,4 +238,30 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('admin/residents/{resident}/safeguarding', [SafeguardingController::class, 'forResident'])->name('v1.admin.residents.safeguarding');
     Route::post('admin/safeguarding-concerns', [SafeguardingController::class, 'store'])->name('v1.admin.safeguarding.store');
     Route::post('admin/safeguarding-concerns/{concern}/closure', [SafeguardingController::class, 'close'])->name('v1.admin.safeguarding.close');
+
+    /*
+     * ── release and distribution tracking ─────────────────────────────────────────────
+     *
+     * OPERATIONAL TRACKING, NOT A LEDGER. No journal entries, no posting, no reconciliation —
+     * `funding_source` is a label for grouping a report, never a chart-of-accounts reference
+     * (ADR 0023).
+     *
+     * THREE CONTROLS ON THE ONE OPERATION THAT MOVES MONEY, guarding three different failures:
+     * an `Idempotency-Key` on confirmation (a retry over a weak connection), a row lock and
+     * status re-check inside the service (two staff at two tables clicking at once), and a
+     * segregation check on the *person* (the approver may not also release).
+     */
+    Route::get('admin/releases', [ReleaseController::class, 'index'])->name('v1.admin.releases.index');
+    Route::get('admin/releases/{release}', [ReleaseController::class, 'show'])->name('v1.admin.releases.show');
+    Route::post('admin/cases/{case}/releases', [ReleaseController::class, 'store'])->name('v1.admin.cases.releases.store');
+
+    // The one operation that moves money. `request.release`, held by `disbursing_officer` and by
+    // nobody who can approve a case.
+    Route::post('admin/releases/{release}/confirmation', [ReleaseController::class, 'confirm'])->name('v1.admin.releases.confirm');
+    Route::post('admin/releases/{release}/status', [ReleaseController::class, 'transition'])->name('v1.admin.releases.status');
+
+    Route::post('admin/release-batches', [ReleaseController::class, 'storeBatch'])->name('v1.admin.release-batches.store');
+    Route::post('admin/release-batches/{batch}/releases', [ReleaseController::class, 'addToBatch'])->name('v1.admin.release-batches.add');
+    // Ordered by reference so two copies printed an hour apart match line for line.
+    Route::get('admin/release-batches/{batch}/manifest', [ReleaseController::class, 'manifest'])->name('v1.admin.release-batches.manifest');
 });

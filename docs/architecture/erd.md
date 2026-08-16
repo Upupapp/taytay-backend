@@ -142,6 +142,10 @@ erDiagram
     WELFARE_CASES ||--o{ CASE_NOTES : "running record (append-only, two sensitivities)"
     WELFARE_CASES ||--o{ SAFEGUARDING_CONCERNS : "restricted (never in a list)"
 
+    WELFARE_CASES ||--o{ RELEASES : "released against (approved only)"
+    RELEASE_BATCHES ||--o{ RELEASES : "distributed in"
+    RELEASES ||--o{ RELEASE_TRANSITIONS : "lifecycle (append-only)"
+
     ASSISTANCE_REQUESTS ||--o{ REQUEST_REQUIREMENTS : "must satisfy"
     ASSISTANCE_REQUESTS ||--o{ REQUEST_TRANSITIONS : "lifecycle (append-only)"
     ASSISTANCE_REQUESTS ||--o{ CASE_NOTES : "annotated by"
@@ -184,9 +188,17 @@ erDiagram
 | `field_visits.resident_id` | resident | ResidentProfile | who was visited. Repointed on merge — a visit stranded on a deleted record loses the journeys a worker actually made |
 | `field_visits.household_id` | household | ResidentProfile | the household visited, where one is known |
 | `safeguarding_concerns.resident_id` | resident | ResidentProfile | **the most consequential repoint in the system**: a concern left on a soft-deleted duplicate silently stops applying to the person it is about |
+| `releases.resident_id` | resident | ResidentProfile | who received it |
+| `releases.program_id` | programme | ServiceCatalog | Welfare asks the catalogue, never joins |
+| `releases.approved_by` / `released_by` | account | Identity | **snapshotted, and compared to each other**: the approver may not be the releaser, and a later change on the case must not rewrite who authorised a past payment |
 
-Twenty-seven references, twenty-seven places a convenient join would have silently welded two
-modules together. Each is an identifier plus a service call.
+Thirty references, thirty places a convenient join would have silently welded two modules
+together. Each is an identifier plus a service call.
+
+**`releases` is operational tracking, not a ledger.** No journal entry, no account code, no
+posting state, no reconciliation. `funding_source` is a label for grouping a report. Money is
+integer centavos with an explicit currency, and an in-kind release carries no amount at all
+(ADR 0023 §1).
 
 **`field_visits` carries no coordinate, check-in, route or arrival ping**, and
 `NoLocationTrackingTest` fails the build if one appears. The address visited is copied from the

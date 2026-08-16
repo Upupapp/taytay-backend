@@ -6,7 +6,9 @@ namespace Modules\Welfare\Application;
 
 use Illuminate\Support\Collection;
 use Modules\Welfare\Domain\CaseStatus;
+use Modules\Welfare\Domain\ReleaseStatus;
 use Modules\Welfare\Infrastructure\Eloquent\ProgramEnrollment;
+use Modules\Welfare\Infrastructure\Eloquent\Release;
 use Modules\Welfare\Infrastructure\Eloquent\WelfareCase;
 
 /**
@@ -140,11 +142,23 @@ final class AssistanceHistory
             'opened_at' => $case->opened_at?->toIso8601ZuluString(),
             'closed_at' => $case->closed_at?->toIso8601ZuluString(),
             /*
-             * Amounts arrive in TAB 18. Present and null rather than absent, so a client built
-             * against this shape does not have to change when the ledger lands — and so it is
-             * obvious to a reader that the money is deliberately not here yet.
+             * TAB 18 filled this in, and the shape TAB 14 published did not have to change —
+             * which was the point of leaving it present and null.
+             *
+             * SUMMED FROM RELEASES THAT ACTUALLY HAPPENED, not from what was approved. A case
+             * approved for ₱5,000 whose payout failed has received nothing, and reporting the
+             * approved figure here would tell a family they were given money they never saw.
+             *
+             * Integer centavos, summed as integers. In-kind releases contribute nothing: a relief
+             * pack has a notional value, and adding it would produce a peso total claiming cash
+             * was handed over when rice was.
              */
-            'released_amount_centavos' => null,
+            'released_amount_centavos' => (int) Release::query()
+                ->where('welfare_case_id', $case->id)
+                ->whereIn('status', [ReleaseStatus::Released->value, ReleaseStatus::Completed->value])
+                ->where('kind', 'cash')
+                ->sum('amount_centavos'),
+            'currency' => 'PHP',
         ];
     }
 

@@ -884,6 +884,64 @@ without being told a family's protection history.
 
 ---
 
+## 11n. Release and distribution tracking — built in TAB 18
+
+**Operational tracking, not a treasury ledger.** No journal entries, no account codes, no bank
+posting, no reconciliation state. `funding_source` is a label a social worker types so a report can
+be grouped by it — nothing joins on it and nothing may start treating it as a posting reference.
+Full reasoning: ADR 0023.
+
+**Money is integer centavos plus an explicit `currency`.** The master command asks for
+"fixed-precision decimal columns"; the constitution requires integer minor units. Both forbid
+floating point and both are exact, the constitution outranks the task instruction, and every other
+money field in this system and in the Angular client is already centavos — including
+`released_amount_centavos`, which TAB 14 published as null precisely so this TAB could fill it
+without a client change (ADR 0023 §1).
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Release queue | `GET /api/v1/admin/releases` | bearer | `request.view` | beneficiary's barangay | `?status=&kind=&release_mode=&resident_id=&program_id=&from=&to=` | paginated releases | — | `implemented` |
+| Release detail | `GET /api/v1/admin/releases/{release}` | bearer | `request.view` | beneficiary's barangay | — | release + every transition | movements are an append-only table, because money is where "what happened" must be reconstructable without inference | `implemented` |
+| Prepare | `POST /api/v1/admin/cases/{case}/releases` | bearer | `request.schedule` | case barangay | `{kind,amount_centavos?,in_kind_description?,release_mode,program_id?,funding_source?,scheduled_for?}` | `201` release | **only against an approved case** (`409`); cash needs an amount, in-kind must **not** have one; `sequence` assigned inside a lock | `implemented` |
+| **Confirm handover** | `POST /api/v1/admin/releases/{release}/confirmation` | bearer | **`request.release`** | beneficiary's barangay | `Idempotency-Key` + `{acknowledged_by_name?,acknowledged_relationship?,acknowledgement_method?}` | release | **the one operation that moves money** — see the three controls below | `implemented` |
+| Other outcomes | `POST /api/v1/admin/releases/{release}/status` | bearer | from the **target** state | beneficiary's barangay | `{status,reason?}` | release | `failed`/`deferred`/`cancelled` **require** a reason; a released record cannot be rewound (`409`) | `implemented` |
+| Open a distribution run | `POST /api/v1/admin/release-batches` | bearer | `request.schedule` | — | `{name,scheduled_for,location?}` | `201` batch | — | `implemented` |
+| Add to the run | `POST /api/v1/admin/release-batches/{batch}/releases` | bearer | `request.schedule` | beneficiary's barangay | `{release_id}` | release | only a `ready` release may be added | `implemented` |
+| Manifest | `GET /api/v1/admin/release-batches/{batch}/manifest` | bearer | `request.view` | — | — | lines + `total_count` + `total_cash_centavos` | **ordered by reference, not name** — two copies printed an hour apart then match line for line; in-kind contributes nothing to the total | `implemented` |
+
+### Three controls on the one operation that moves money
+
+| Control | Guards | Why the others do not cover it |
+| --- | --- | --- |
+| `Idempotency-Key` | a retry over a weak connection | one client, one intent, two requests — a lock does not help |
+| Row lock + status re-check in the transaction | two staff at two tables at one distribution | two clients, two keys, both see `ready`, both click |
+| **Approver ≠ releaser**, checked on the *person* | deliberate misuse | neither of the above cares who is acting |
+
+A payout table has a weak connection and a queue behind it. That is the normal operating
+condition, not an edge case.
+
+### Segregation of duties
+
+A new **`disbursing_officer`** role holds `request.release` and approves nothing. Until this TAB
+nobody held `request.release` at all — correct while there was nothing to release, and the reason
+`lgu_admin` still holds approval and not release. Granting release to `lgu_admin` would have
+collapsed the split this system has kept since TAB 11.
+
+The check is on the **person**, not only the permission: `releases.approved_by` is snapshotted at
+preparation and compared at confirmation, because one person holding two roles is the failure mode
+and it arrives the moment somebody covers a colleague's leave.
+
+### `Released` and `Completed` are different claims
+
+`Released` means the office handed it over; `Completed` means the handover is acknowledged.
+Between them sits the cheque given to a relative who has not confirmed and the transfer sent but
+not landed. Collapsing them would make "we paid them" and "they have it" the same claim.
+
+**No biometric is stored.** `acknowledgement_method` records *that* a signature or thumbmark was
+taken; the mark stays on the paper manifest.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

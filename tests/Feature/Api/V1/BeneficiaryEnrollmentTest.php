@@ -385,7 +385,7 @@ final class BeneficiaryEnrollmentTest extends KycTestCase
     }
 
     #[Test]
-    public function the_history_leaves_a_slot_for_the_release_ledger(): void
+    public function an_approved_case_with_no_release_reports_nothing_received(): void
     {
         Sanctum::actingAs($this->staff());
 
@@ -398,12 +398,17 @@ final class BeneficiaryEnrollmentTest extends KycTestCase
             ->assertOk()->json('data.granted.0');
 
         /*
-         * Present and null rather than absent, so a client built against this shape does not
-         * change when TAB 18's ledger lands — and so it is obvious to a reader that the money is
-         * deliberately not here yet.
+         * TAB 14 published this key as null so TAB 18 could fill it without a client change, and
+         * TAB 18 did. What it now asserts is the stronger property the placeholder was standing
+         * in for: **approval is not receipt.**
+         *
+         * A case approved for ₱5,000 with no release has received nothing, and the history says
+         * zero rather than the approved figure — reporting what was approved would tell a family
+         * they were given money they never saw (ADR 0023 §7).
          */
         $this->assertArrayHasKey('released_amount_centavos', $granted);
-        $this->assertNull($granted['released_amount_centavos']);
+        $this->assertSame(0, $granted['released_amount_centavos']);
+        $this->assertSame('PHP', $granted['currency']);
     }
 
     // ── the citizen view ──────────────────────────────────────────────────────────────

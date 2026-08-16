@@ -28,6 +28,20 @@ enum Role: string
     /** LGU administrator for the service catalog and staff-facing configuration. */
     case LguAdmin = 'lgu_admin';
 
+    /**
+     * Hands assistance over and records that it was received.
+     *
+     * THE OTHER HALF OF SEGREGATION OF DUTIES. Until TAB 18 nobody held `request.release` at all,
+     * deliberately — the contract matrix recorded that no single non-administrator role may both
+     * approve a case and release its money, and `lgu_admin` therefore holds approval and not
+     * release.
+     *
+     * That left the permission unheld, which was correct while there was nothing to release. This
+     * role is what makes it operable without collapsing the split: it releases and it approves
+     * nothing (ADR 0023 §3).
+     */
+    case DisbursingOfficer = 'disbursing_officer';
+
     /** Provisions staff and their scopes. Holds no operational permission over residents. */
     case SecurityOfficer = 'security_officer';
 
@@ -189,6 +203,27 @@ enum Role: string
                 Permission::CredentialManage,
                 // Sees who holds what. Provisioning is deliberately absent — see below.
                 Permission::StaffView,
+            ],
+
+            /*
+             * Releases assistance, and decides nothing about who gets it.
+             *
+             * Deliberately absent: `RequestApprove`, `RequestReject`, `RequestEndorse`,
+             * `RequestAssess`, `ResidentManage`, `EnrollmentManage`. A disbursing officer who
+             * could also approve, or put a name on a roll, would be a single signature between an
+             * empty case file and money leaving the building.
+             *
+             * `RequestView` and `EnrollmentView` are present because they must be: somebody
+             * handing over a payment has to be able to see what was approved and confirm the
+             * person in front of them is on the roll.
+             */
+            self::DisbursingOfficer => [
+                Permission::RequestView,
+                Permission::RequestRelease,
+                Permission::RequestSchedule,
+                Permission::EnrollmentView,
+                Permission::ProgramView,
+                Permission::ResidentView,
             ],
 
             // Separation of duties: the person who hands out authority is not the person

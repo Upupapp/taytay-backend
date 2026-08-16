@@ -372,6 +372,18 @@ behind an explicit LGU-approved deterministic rule.
 *Resolution:* MSWDO reviews the templates and bumps their versions; the DPO sets the retention
 figures. Both live in one reviewable file each, precisely so approving them is cheap.
 
+Settled by TAB 18: **G-15** (no idempotency on money or intake operations) — **fully closed**.
+TAB 12 settled the intake half; release confirmation is now the second `IdempotencyService` caller,
+which is what the money half was waiting for.
+
+Raised and resolved by TAB 18: **money representation.** The master command asks for
+"fixed-precision decimal columns"; CLAUDE.md Article 4 and conventions §6 require integer minor
+units. Implemented as **integer centavos plus an explicit `currency`**, per ADR 0023 §1: both are
+exact and both forbid floating point, the constitution outranks the task instruction, and every
+existing money field on both sides is already centavos — including `released_amount_centavos`,
+which TAB 14 published as null so this TAB could fill it without a client change. **No client
+change required**, which was the point.
+
 Opened by TAB 17: **G-30** — **there is no protection-officer role.** Six permissions now sit with
 `lgu_admin` that should not: `vulnerability.view.protected`, `document.view.sensitive`,
 `case-note.view-protected`, `safeguarding.view`, `safeguarding.manage`, and
