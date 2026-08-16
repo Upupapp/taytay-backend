@@ -550,6 +550,52 @@ grant it to a role that does not approve, asserted by
 
 ---
 
+## 11h. Assistance intake and assessment — built in TAB 12
+
+One submission path for every channel. A walk-in, a barangay referral, a web form and a retried
+mobile submission all reach the same service and produce the same case — the channel is
+recorded as provenance and changes no rule (ADR 0017 §1). A citizen client cannot assert its
+own source; the server derives it from the channel.
+
+**Submission is idempotent.** `idempotency_keys` had no caller until this TAB; it now backs
+both citizen submission and counter intake. Same key and body replays the stored response
+verbatim, status included; a different body is `409`; an in-flight duplicate is `409`.
+
+### Citizen — drafts and submission
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| My drafts | `GET /api/v1/me/assistance/drafts` | bearer | — | own-record | — | open drafts + `expires_at`, `is_editable` | ownership is in the query — another caller's draft resolves to `404`, never `403` | `implemented` |
+| Start / resume | `POST /api/v1/me/assistance/drafts` | bearer | — | own-record | intake fields | `201` draft | **idempotent by owner and channel** — a second tap resumes the same form; two open drafts are two half-finished stories about one need | `implemented` |
+| Save progress | `PATCH /api/v1/me/assistance/drafts/{draft}` | bearer | — | own-record | partial fields | draft | an **expired** draft is refused (`409`), never silently resurrected | `implemented` |
+| Discard | `DELETE /api/v1/me/assistance/drafts/{draft}` | bearer | — | own-record | — | `{status}` | a **real delete** — nobody acted on it and no decision rests on it; keeping it would retain data whose only justification was a request never made | `implemented` |
+| Submit | `POST /api/v1/me/assistance/drafts/{draft}/submit` | bearer | — | own-record | `Idempotency-Key` header | `201` case reference + projected status | requires a privacy-notice acknowledgement (`422` without); an already-submitted draft answers `200` with its case rather than an error | `implemented` |
+
+### Staff — counter intake and assessment
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Counter intake | `POST /api/v1/admin/assistance-intakes` | bearer | `request.create` | role scope | intake payload + `source` + `Idempotency-Key` | `201` intake + case | staff may assert `walk-in`, `barangay-referral` or `legacy-import`; never a citizen source | `implemented` |
+| Assessment templates | `GET /api/v1/admin/assessment-templates` | bearer | `request.assess` | — | — | templates with versions and questions | placeholders pending MSWDO approval — gap **G-21** | `implemented` |
+| Intake + assessment | `GET /api/v1/admin/cases/{case}/assessment` | bearer | `request.view` | role scope | — | intake detail + current assessment | the applicant's narrative is staff-facing and behind the audited case file | `implemented` |
+| Open assessment | `POST /api/v1/admin/cases/{case}/assessment` | bearer | `request.assess` | role scope | `{template_code}` | `201` assessment | **pins `template_version` at open**; idempotent — a second call returns the one in progress | `implemented` |
+| Record answers | `PATCH /api/v1/admin/cases/{case}/assessment` | bearer | `request.assess` | role scope | `{answers:{code:value}}` | assessment | choice answers validated against the pinned template; a **completed** assessment cannot be edited | `implemented` |
+| Sign findings | `POST /api/v1/admin/cases/{case}/assessment/complete` | bearer | `request.assess` | role scope | `{recommendation,reason?,findings?}` | assessment + `suggested_next_status` | **moves nothing** — see below; required answers must be present; `recommend-deny` requires a reason | `implemented` |
+| Prior cases | `GET /api/v1/admin/cases/{case}/prior-cases` | bearer | `request.assess` | role scope | — | identity, category, status, dates | **no narratives, no assessments, no amounts** — knowing somebody has come three times is a different question from reading what they said | `implemented` |
+
+**A recommendation is not a decision.** Completing an assessment returns a *suggested* next
+status and moves nothing. Acting on it goes through `POST .../transitions`, needs that target's
+permission, and leaves the approver bound by separation of duties — the endorser may not
+approve. `recommend-deny` deliberately suggests nothing at all: a refusal is a decision with
+its own permission and its own mandatory reason.
+
+The assessment templates carry **no weights, thresholds or totals**. A form that computed an
+eligibility number would be the automatic decision the master command permits only behind an
+explicit LGU-approved deterministic rule — none has been supplied. The vulnerability score
+(gap **G-20**) is likewise read by nothing here.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

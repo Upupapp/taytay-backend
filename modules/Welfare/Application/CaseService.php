@@ -162,6 +162,53 @@ final class CaseService
     }
 
     /**
+     * The applicant withdraws their own case.
+     *
+     * THE STATE CHECK LIVES HERE, NOT IN A CONTROLLER. Two reasons, both of which bit once
+     * already:
+     *
+     *  1. **Concurrency.** Checking `citizenMayCancel()` before calling `transition()` reads
+     *     the status outside the row lock. Between that read and the lock, staff can move the
+     *     case to `assessment` — and the applicant's withdrawal lands anyway. Re-checking
+     *     inside the same transaction, after the lock, closes the window.
+     *  2. **Bypass.** An invariant enforced in one controller is enforced for exactly the
+     *     callers that go through it. TAB 12 adds a second citizen write path; a rule sitting
+     *     in `MyCaseController` would not have applied to it, and nothing would have said so.
+     *
+     * `CaseStatus::Cancelled` deliberately has no required permission — it has two legitimate
+     * callers, an applicant withdrawing and staff closing a file. That is precisely why the
+     * applicant's limit cannot ride on the permission check: there is no permission check to
+     * ride on.
+     *
+     * Ownership is the caller's to establish; this method assumes it and enforces only what
+     * ownership does not cover.
+     */
+    public function cancelByApplicant(WelfareCase $case, ActorContext $actor, string $reason): WelfareCase
+    {
+        return DB::transaction(function () use ($case, $actor, $reason): WelfareCase {
+            /** @var WelfareCase $locked */
+            $locked = WelfareCase::query()->lockForUpdate()->findOrFail($case->id);
+
+            if (! $locked->status->citizenMayCancel()) {
+                throw new ApiException(
+                    ErrorCode::Forbidden,
+                    'This request can no longer be cancelled online. Please contact the social welfare office.',
+                );
+            }
+
+            return $this->transition(
+                $locked,
+                CaseStatus::Cancelled,
+                $actor,
+                // No staff permission applies; ownership and state have both been established.
+                static fn (string $permission): bool => true,
+                $reason,
+                'You cancelled this request.',
+            );
+        });
+    }
+
+    /**
      * Sets priority. Urgent requires a reason.
      */
     public function changePriority(

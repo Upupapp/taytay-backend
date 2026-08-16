@@ -110,6 +110,10 @@ erDiagram
     WELFARE_CASES ||--o{ WELFARE_CASE_TRANSITIONS : "lifecycle (append-only)"
     WELFARE_CASES ||--o{ WELFARE_CASE_ASSIGNMENTS : "held by (effective-dated)"
     WELFARE_CASES ||--o{ WELFARE_CASE_EVENTS : "timeline (append-only)"
+    WELFARE_CASES ||--|| ASSISTANCE_INTAKES : "opened by"
+    WELFARE_CASES ||--o{ ASSESSMENTS : "assessed by"
+    ASSESSMENTS ||--o{ ASSESSMENT_ANSWERS : records
+    ASSISTANCE_DRAFTS ||--o| ASSISTANCE_INTAKES : "becomes (on submit)"
 
     ASSISTANCE_REQUESTS ||--o{ REQUEST_REQUIREMENTS : "must satisfy"
     ASSISTANCE_REQUESTS ||--o{ REQUEST_TRANSITIONS : "lifecycle (append-only)"
@@ -158,7 +162,7 @@ together. Each is an identifier plus a service call.
 | **Identity** | `accounts`, `auth_tokens`, `devices`, `mfa_factors` | `personal` | planned — TAB 05 |
 | **ResidentProfile** | `residents`, `resident_sectors`, `kyc_cases`, `resident_match_candidates`, `resident_status_events`, `resident_aliases`, `resident_duplicate_pairs`, `resident_merges`, `resident_correction_requests`, `resident_correction_fields`, `account_resident_links`, `households`, `families`, `household_memberships`, `family_memberships`, `resident_relationships`, `resident_vulnerability_factors`, `household_vulnerability_factors` | **`sensitive`** | **built** — TAB 06, TAB 08, TAB 09, TAB 10 |
 | **ServiceCatalog** | `services`, `service_channels`, `programs`, `program_requirements`, `program_eligibility` | `public` | planned (config-backed today) |
-| **Welfare** | `welfare_cases`, `welfare_case_transitions`, `welfare_case_assignments`, `welfare_case_events` | **`sensitive`** | **built** — TAB 11 |
+| **Welfare** | `welfare_cases`, `welfare_case_transitions`, `welfare_case_assignments`, `welfare_case_events`, `assistance_drafts`, `assistance_intakes`, `assessments`, `assessment_answers` | **`sensitive`** | **built** — TAB 11, TAB 12 |
 | **Credential** | `credentials`, `credential_artifacts`, `credential_transitions` | `personal` | planned |
 | **Verification** | `verification_attempts`, `verifier_devices` | `internal` | planned |
 | **ServiceDelivery** | `assistance_requests`, `request_requirements`, `request_transitions`, `case_notes`, `assessments`, `disbursements`, `disbursement_transitions`, `referrals` | **`sensitive`** | planned |

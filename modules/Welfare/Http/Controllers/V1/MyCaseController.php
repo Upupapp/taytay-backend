@@ -10,13 +10,10 @@ use Modules\Identity\Application\AccountDirectory;
 use Modules\Shared\Application\ActorContext;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
-use Modules\Shared\Exceptions\ApiException;
-use Modules\Shared\Exceptions\ErrorCode;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
 use Modules\Shared\Http\ApiResponse;
 use Modules\Welfare\Application\CaseService;
 use Modules\Welfare\Application\CaseTimeline;
-use Modules\Welfare\Domain\CaseStatus;
 use Modules\Welfare\Infrastructure\Eloquent\CaseEvent;
 use Modules\Welfare\Infrastructure\Eloquent\WelfareCase;
 
@@ -112,33 +109,18 @@ final class MyCaseController
         ]);
 
         /*
-         * The state check is HERE, not delegated to the transition's permission closure.
+         * Ownership was established by the lookup above; the state limit belongs to the
+         * application service, which re-checks it inside the row lock.
          *
-         * `CaseStatus::Cancelled` has no required permission — it has two legitimate callers,
-         * an applicant withdrawing and staff closing a file — so the service skips the
-         * permission step for it entirely. A closure passed in expecting to be consulted
-         * therefore never runs, and the applicant's state limit silently evaporates.
+         * Doing it here would read the status outside the transaction: staff could move the
+         * case to `assessment` between the check and the write, and the withdrawal would land
+         * anyway. It would also bind the rule to this one controller, so the next citizen
+         * write path would silently not have it (ADR 0017 §5).
          *
-         * The applicant's authority comes from ownership plus the current state, and both are
-         * re-checked at execution time. `available_actions` in the projection is what a client
-         * renders; it is never what authorises the action (ADR 0007 §4).
+         * `available_actions` in the projection is what a client renders. It is never what
+         * authorises the action (ADR 0007 §4).
          */
-        if (! $model->status->citizenMayCancel()) {
-            throw new ApiException(
-                ErrorCode::Forbidden,
-                'This request can no longer be cancelled online. Please contact the social welfare office.',
-            );
-        }
-
-        $updated = $this->cases->transition(
-            $model,
-            CaseStatus::Cancelled,
-            $actor,
-            // Cancellation needs no staff permission; ownership and state were just checked.
-            static fn (string $permission): bool => true,
-            $validated['reason'],
-            'You cancelled this request.',
-        );
+        $updated = $this->cases->cancelByApplicant($model, $actor, $validated['reason']);
 
         return ApiResponse::item($this->detailProjection($updated));
     }

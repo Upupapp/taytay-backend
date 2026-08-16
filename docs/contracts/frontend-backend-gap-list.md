@@ -29,6 +29,7 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-18](#g-18) | No file-upload contract | medium | backend |
 | [G-19](#g-19) | Angular resident routes point at pre-TAB-08 paths | medium | Angular |
 | [G-20](#g-20) | Vulnerability weights are placeholders, not Taytay policy | high | LGU (MSWDO) |
+| [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
 
@@ -344,6 +345,39 @@ precisely so that approving them is a diff rather than a migration.
 `VulnerabilityProfileTest::a_high_score_changes_nothing_about_the_resident_record`. It becomes
 blocking the moment any TAB reads the score to decide something, and that TAB must resolve
 this first.
+
+### G-21
+**Assessment templates and retention periods are placeholders.** `high`
+
+Two provisional policies shipped in TAB 12, both declaring themselves as such:
+
+* `config/assessment.php` — the AICS and medical assessment forms. Plausible instruments, not
+  Taytay's. Each carries `status: placeholder-pending-lgu-approval`, and every assessment pins
+  the template version it was made against, so approving them is a diff and a version bump
+  rather than a migration.
+* `config/welfare.php` — draft retention (30 days) and returned-case expiry (60 days). These
+  are RA 10173 storage-limitation decisions and belong to the DPO, not to a developer picking
+  round numbers.
+
+Recorded rather than silently shipped, for the same reason as G-20: the master command forbids
+hardcoding LGU policy that has not been supplied, and the alternative — shipping no form and no
+expiry — would have been worse and *also* unstated policy.
+
+**Not blocking.** No eligibility follows from an assessment (the templates carry no weights,
+thresholds or totals, by design — ADR 0017 §4), and draft expiry only ever refuses a stale
+form rather than deciding anything about a person. It becomes blocking the moment an
+assessment answer is wired to an automatic outcome, which the master command permits only
+behind an explicit LGU-approved deterministic rule.
+
+*Resolution:* MSWDO reviews the templates and bumps their versions; the DPO sets the retention
+figures. Both live in one reviewable file each, precisely so approving them is cheap.
+
+Also settled by TAB 12: **G-15** (no idempotency on money or intake operations) — for intake.
+`idempotency_keys` had existed since TAB 04 with no caller; `Shared\Application\IdempotencyService`
+is now that caller, wired into citizen submission and counter intake. The money half stays
+open until TAB 18 wires release confirmation to the same service.
+
+---
 
 Also settled by TAB 10: **G-07** (sensitive-sector suppression is presentation-only) — for
 vulnerability factors, safeguarding suppression is now server-side and total: absent from the
