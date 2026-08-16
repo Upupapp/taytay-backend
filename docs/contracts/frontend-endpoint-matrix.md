@@ -999,6 +999,64 @@ carries a null subject rather than a fictitious account.
 
 ---
 
+## 11p. Notifications and multi-channel delivery — built in TAB 20
+
+**Firebase is transport, not authority** (Article 8.3). Laravel decides that a notification is
+warranted, who may receive it and what it may say. Full reasoning: ADR 0025.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| My notifications | `GET /api/v1/me/notifications` | bearer | — | own record | `?unread=1` | paginated notifications | resolved from the token; another person's id is **`404`**, never `403` | `implemented` |
+| Mark read | `POST /api/v1/me/notifications/{notification}/read` | bearer | — | own record | — | notification | idempotent — a second read does not move the timestamp | `implemented` |
+| Mark all read | `POST /api/v1/me/notifications/read-all` | bearer | — | own record | — | `{marked}` | — | `implemented` |
+| Preferences | `GET /api/v1/me/notification-preferences` | bearer | — | own record | — | preferences + `mandatory_notice` | the mandatory rule is **stated in the payload** so a client can explain the switch it is not offering | `implemented` |
+| Set a preference | `PUT /api/v1/me/notification-preferences` | bearer | — | own record | `{notification_type,channel,enabled}` | preferences | `database` is **not** a settable channel (`422`) | `implemented` |
+
+**Device registration lives in Identity, not here.** `me/devices` (§8) already registers a device
+with its fingerprint, trust stamp, revocation and `push_token`. A second registration surface was
+written for this TAB and removed: it silently shadowed Identity's routes, and two registries would
+have drifted the moment a device was revoked in one and kept receiving push from the other
+(Article 6). Notification reads active tokens through `DeviceService::activePushTokensFor()`.
+
+### The rendered text and the push payload are different things
+
+> *Your AICS assistance of ₱5,000 is ready for release at the barangay hall.*
+
+Correct in the app, behind authentication. On a lock screen it is visible to anyone holding the
+phone; on a shared handset, to the household; in transit, to the provider and its logs.
+
+So a push payload carries **`{type, notification_id, subject_type, subject_id}`** and nothing else.
+`FcmChannel` has no line that reads the body, it sends a **data-only** message (a `notification`
+message would require a provider-rendered title and body), and `notification_dispatches` has **no
+payload column**.
+
+### Channels
+
+`database` (always), `push` (FCM), `email` and `sms` (null until configured). An unconfigured
+channel records **`skipped`, never `sent`** — a dashboard showing "delivered" for a channel that
+does not exist tells an operator the family was told. A channel never throws for a provider-side
+failure: the assistance was approved whether or not the text lands.
+
+### Preferences
+
+Opt-**out** — an absent row means "on", so a notification type added next year reaches people
+rather than silently reaching nobody. **Mandatory notices ignore preferences**: a scheduled release
+date must reach somebody who switched notifications off months earlier. **The in-app record can
+never be switched off** — opting out of email means "stop emailing me", not "stop keeping a record
+of what you told me".
+
+### Not every transition is announced
+
+Six statuses are: `approved`, `rejected`, `scheduled`, `released`, `completed`, `returned`. A case
+moving between `assessment` and `endorsed` is paper moving between desks, and announcing it teaches
+people the notifications are noise. The event carries the **projected citizen sentence**, never the
+internal reason.
+
+**The FCM transport is not wired** (gap G-33) — credentials are environment configuration. Every
+acceptance criterion holds without it.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

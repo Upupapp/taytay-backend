@@ -23,7 +23,7 @@ Eloquent relationship across the boundary.
 | `Files` | stored objects on the private disk, the documents presented against them, their append-only version history, and single-use access grants | **who may see a document** — it cannot know; the owning module authorises and then calls in (ADR 0020 §1). Also: what a document *means* to a case, and any HTTP surface of its own | **implemented** (TAB 15) |
 | `Tasks` | work queues, the tasks in them, and the listeners that raise tasks from domain events | **what a task points at** — it holds a type and an identifier and never a title, a name or a narrative; and **case outcomes**, which a queue action must never change (ADR 0024 §2–3) | **implemented** (TAB 19) |
 | `ServiceDelivery` | service applications/transactions against catalog entries (dokumento, buwis, kalusugan, trabaho, national referrals), their state machines and attachments | the catalog itself (asks `ServiceCatalog`); welfare casework (asks `Welfare`) | planned |
-| `Notification` | outbound notification dispatch, delivery receipts, per-resident channel preferences | why a notification was triggered | planned |
+| `Notification` | outbound dispatch, delivery receipts, device push registrations, per-person channel preferences | **why** a notification was triggered — Welfare decides that a case moved, this module decides how to say it; and any push payload beyond routing information (ADR 0025 §2) | **implemented** (TAB 20) |
 | `Audit` | append-only audit trail of privileged actions, personal-data reads and lifecycle transitions | anything mutable | planned |
 
 `Identity` and `ResidentProfile` are deliberately **separate**. An account is a way to

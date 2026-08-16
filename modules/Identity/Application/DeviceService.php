@@ -81,4 +81,45 @@ final class DeviceService
 
         return true;
     }
+
+    /**
+     * The push tokens an account can currently be reached on.
+     *
+     * Published for Notification, which owns *how* somebody is told and deliberately keeps no
+     * device registry of its own — a second one would drift the moment a device was revoked here
+     * and kept receiving push from there (Article 6, ADR 0025 §5).
+     *
+     * Revoked devices are excluded at the query. A revoked device that still received
+     * notifications about a person's case would make revocation a gesture.
+     *
+     * @return list<string>
+     */
+    public function activePushTokensFor(string $accountUuid): array
+    {
+        return Device::query()
+            ->whereIn('account_id', Account::query()->select('id')->where('uuid', $accountUuid))
+            ->whereNull('revoked_at')
+            ->whereNotNull('push_token')
+            ->pluck('push_token')
+            ->map(static fn (mixed $token): string => (string) $token)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Clears a push token the provider has told us is dead.
+     *
+     * NOT a revocation. The phone is still a device the person logs in from and still carries its
+     * trust stamp; it simply cannot receive push any more — usually because the app was
+     * uninstalled or the token rotated. Revoking the device instead would sign somebody out of a
+     * handset they are holding.
+     */
+    public function clearDeadPushToken(string $accountUuid, string $reason): int
+    {
+        return Device::query()
+            ->whereIn('account_id', Account::query()->select('id')->where('uuid', $accountUuid))
+            ->whereNull('revoked_at')
+            ->whereNotNull('push_token')
+            ->update(['push_token' => null]);
+    }
 }

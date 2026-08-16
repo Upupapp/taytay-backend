@@ -6,10 +6,12 @@ namespace Modules\Welfare\Application;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Modules\Shared\Application\ActorContext;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
 use Modules\Shared\Exceptions\InvalidStateTransitionException;
+use Modules\Welfare\Contracts\CaseStatusChanged;
 use Modules\Welfare\Domain\CasePriority;
 use Modules\Welfare\Domain\CaseStatus;
 use Modules\Welfare\Domain\CaseType;
@@ -156,6 +158,26 @@ final class CaseService
                 "Case status changed to {$target->value}",
                 (string) $case->uuid,
             );
+
+            /*
+             * Announced so Notification can tell the applicant, without this module knowing that
+             * notifications exist — the same inversion `ResidentMerged` uses (ADR 0013 §6).
+             *
+             * It carries the PROJECTED sentence, never `reason`. The timeline above already makes
+             * that distinction; passing the internal justification here would let a listener put
+             * a caseworker's note in an email, and the wording that survives an appeal is not the
+             * wording written for a colleague.
+             */
+            Event::dispatch(new CaseStatusChanged(
+                caseUuid: (string) $case->uuid,
+                residentUuid: (string) $case->resident_id,
+                fromStatus: $from->value,
+                toStatus: $target->value,
+                citizenMessage: $applicantMessage ?? $target->citizenMessage(),
+                // A scheduled release is a service notice: somebody who switched notifications
+                // off must still be told when and where to collect their money.
+                isMandatoryNotice: in_array($target, [CaseStatus::Scheduled, CaseStatus::Released], true),
+            ));
 
             return $case->refresh();
         });

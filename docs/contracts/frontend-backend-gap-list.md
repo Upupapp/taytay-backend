@@ -384,6 +384,8 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 20: **G-33** — **the FCM transport is not wired.** The push adapter, its data-only payload shape, the bounded retry, the dead-token deactivation and the `skipped` behaviour are all built and tested; the OAuth exchange and HTTP post are not, because service-account credentials are environment configuration this repository must not assume. Turning push on is `FCM_PROJECT_ID` + `FCM_CREDENTIALS_PATH` and an implementation of one method. Every TAB 20 acceptance criterion holds without it. Owner: this backend + deployment.
+
 Opened by TAB 19: **G-32** — `tasks.team` is a label rather than a foreign key. Taytay's MSWDO has no formal team structure in this system, and inventing a table to hold a string would be one nobody maintains. If team structure is formalised, that is a new table and a migration from the label. Owner: LGU, then this backend.
 
 Opened by TAB 17: **G-30** — **there is no protection-officer role.** Six permissions now sit with

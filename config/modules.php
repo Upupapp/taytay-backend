@@ -43,6 +43,9 @@ return [
          * went overdue and does not know Tasks exists (ADR 0024 §3).
          */
         'Tasks',
+        // Outbound dispatch. Owns HOW somebody is told, never WHY — Welfare decides that a case
+        // was approved, and a provider outage here cannot reach welfare work (ADR 0025 §1).
+        'Notification',
     ],
 
 ];
