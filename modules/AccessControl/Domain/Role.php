@@ -80,6 +80,16 @@ enum Role: string
                 // Front-line staff read rolls to answer "am I enrolled?" at the counter. Putting
                 // a name on one is money-adjacent and is not theirs.
                 Permission::EnrollmentView,
+                /*
+                 * Receiving papers at the counter is the job, so recording a document is theirs.
+                 * `DocumentVerify` is NOT — the clerk who took the paper is not thereby the
+                 * person who judged it sufficient, and a verified requirement is what advances a
+                 * case toward money (ADR 0020 §7).
+                 *
+                 * `DocumentViewSensitive` and `DocumentShare` are also absent: safeguarding
+                 * images and outward copies are separate decisions with separate trails.
+                 */
+                Permission::DocumentManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -121,6 +131,18 @@ enum Role: string
                 Permission::ProgramManage,
                 Permission::EnrollmentView,
                 Permission::EnrollmentManage,
+                Permission::DocumentManage,
+                Permission::DocumentVerify,
+                // Sits here for the same reason as VulnerabilityViewProtected: it belongs to a
+                // dedicated protection officer, and that role does not exist yet.
+                Permission::DocumentViewSensitive,
+                /*
+                 * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
+                 *
+                 * The outward-sharing path is built and refused rather than built and quietly
+                 * granted, because the first holder of this permission should be a decision the
+                 * LGU makes on the record — not a line that arrived with a feature (gap G-26).
+                 */
                 Permission::KycReview,
                 Permission::KycApprove,
                 Permission::CredentialManage,

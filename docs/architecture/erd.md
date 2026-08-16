@@ -123,6 +123,13 @@ erDiagram
     PROGRAMS ||--o{ PROGRAM_ENROLLMENTS : "enrols onto (effective-dated)"
     WELFARE_CASES ||--o{ PROGRAM_ENROLLMENTS : "produced (where one did)"
 
+    WELFARE_CASES ||--o{ WELFARE_CASE_REQUIREMENTS : "must satisfy (copied at intake)"
+    WELFARE_CASE_REQUIREMENTS ||--o{ DOCUMENT_REQUESTS : "chased by"
+    WELFARE_CASE_REQUIREMENTS ||--o| DOCUMENTS : "filled by"
+    DOCUMENTS ||--o{ DOCUMENT_VERSIONS : "history (append-only)"
+    DOCUMENT_VERSIONS }o--o| STORED_FILES : "points at (null for encoded)"
+    STORED_FILES ||--o{ FILE_ACCESS_GRANTS : "opened by (single-use)"
+
     ASSISTANCE_REQUESTS ||--o{ REQUEST_REQUIREMENTS : "must satisfy"
     ASSISTANCE_REQUESTS ||--o{ REQUEST_TRANSITIONS : "lifecycle (append-only)"
     ASSISTANCE_REQUESTS ||--o{ CASE_NOTES : "annotated by"
@@ -155,8 +162,12 @@ erDiagram
 | `program_enrollments.resident_id` | resident | ResidentProfile | **the beneficiary is the canonical resident** — a `beneficiaries` table would be a second population for duplicate detection to reconcile (ADR 0019 §1) |
 | `program_enrollments.household_id` | household | ResidentProfile | set for household-scoped programmes; relief is per household, 4Ps is per family |
 | `program_enrollments.program_id` | programme | ServiceCatalog | Welfare asks the catalogue, never joins it |
+| `documents.owner_id` | the owning record | whichever module set `owner_type` | Files must not know about the modules above it; a real FK would force it to (ADR 0020 §1) |
+| `welfare_case_requirements.document_id` | document | Files | Welfare holds the pointer and asks `DocumentLibrary`; it never holds a Files model |
+| `stored_files.uploaded_by` | account | Identity | the uploader may be deactivated; the evidence of who supplied a document must outlive the account |
+| `file_access_grants.issued_to` | account | Identity | a grant is bound to a person, and outlives their session by design |
 
-Seventeen references, seventeen places a convenient join would have silently welded two modules
+Twenty-one references, twenty-one places a convenient join would have silently welded two modules
 together. Each is an identifier plus a service call.
 
 **Every table above carrying `resident_id` must be repointed by a merge**, and

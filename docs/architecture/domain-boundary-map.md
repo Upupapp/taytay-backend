@@ -20,6 +20,7 @@ Eloquent relationship across the boundary.
 | `Credential` | LGU ID lifecycle, card artifacts, QR credential material | who may approve (asks `AccessControl`) | **implemented, feature-flagged off** (TAB 06) |
 | `Verification` | verification attempts, scan events, verifier registry, offline-verification key distribution | credential state (asks `Credential`) | planned |
 | `Welfare` | social welfare cases: the canonical lifecycle, transitions, assignment, priority, the case timeline, assistance intake, drafts, assessment, **programme enrolment and assistance history** | who a person *is* (asks `ResidentProfile`), the programme catalogue (asks `ServiceCatalog`), eligibility decisions derived from a vulnerability score (ADR 0016 §4), money movement (TAB 18) | **implemented** (TAB 11; enrolment TAB 14) |
+| `Files` | stored objects on the private disk, the documents presented against them, their append-only version history, and single-use access grants | **who may see a document** — it cannot know; the owning module authorises and then calls in (ADR 0020 §1). Also: what a document *means* to a case, and any HTTP surface of its own | **implemented** (TAB 15) |
 | `ServiceDelivery` | service applications/transactions against catalog entries (dokumento, buwis, kalusugan, trabaho, national referrals), their state machines and attachments | the catalog itself (asks `ServiceCatalog`); welfare casework (asks `Welfare`) | planned |
 | `Notification` | outbound notification dispatch, delivery receipts, per-resident channel preferences | why a notification was triggered | planned |
 | `Audit` | append-only audit trail of privileged actions, personal-data reads and lifecycle transitions | anything mutable | planned |
@@ -89,6 +90,13 @@ credentials exist.
 
 Such listeners run **synchronously, inside the originating transaction**. Queued handling
 would let a merge commit while a credential still pointed at a soft-deleted resident.
+
+**A module with no routes is the other shape this takes.** `Files` publishes application services
+and nothing else, because it cannot answer *may this caller see this document* — only the module
+owning the record can. Everything crosses that boundary through `DocumentLibrary`, in UUIDs and
+published views, so a consumer holds no Eloquent model: it cannot reach a file's bytes and cannot
+rewrite a version's history even by mistake. Two guarantees that would otherwise be habits are
+properties of the code instead (ADR 0020 §1).
 
 **The inversion is not a style preference.** Where ResidentProfile *already* depends on a module
 it calls it outright — `AccountLinkService::reassign()` repoints `accounts.resident_id` directly,

@@ -22,6 +22,13 @@ return [
 
     'enabled' => [
         'Shared',
+        /*
+         * Stored objects and the documents presented against them. Loaded immediately after
+         * Shared because every module above may store a document, and because it publishes no
+         * routes of its own — the module that owns a record authorises access to that record's
+         * files (ADR 0020 §5).
+         */
+        'Files',
         'AccessControl',
         'Identity',
         'ResidentProfile',

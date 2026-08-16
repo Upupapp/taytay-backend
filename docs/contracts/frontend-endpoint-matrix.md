@@ -706,6 +706,74 @@ only then does a human enrol. Gap **G-20** stays non-consequential: there is no 
 
 ---
 
+## 11k. Files, documents and verification — built in TAB 15
+
+**The `Files` module publishes no routes.** It cannot answer *may this caller see this document* —
+only the module owning the record can, and here that is the case's barangay scope. So every file
+operation in the system enters through a controller that has already resolved a case. Full
+reasoning: ADR 0020.
+
+**A replacement is an append.** There is no `replaceDocument` and no `deleteDocument`, and there
+must not be: the superseded version is the evidence of what the office actually saw when it
+decided, and a request approved in March on a certificate replaced in June has to stay explicable
+in December. Guarded by `DocumentHistoryIsAppendOnlyTest`.
+
+### Staff — requirements and documents
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Requirement checklist | `GET /api/v1/admin/cases/{case}/requirements` | bearer | `request.view` | case barangay | — | slots, satisfaction, outstanding count, upload limits | `accepts` publishes the same limits the server enforces, so a client's copy cannot drift | `implemented` |
+| Attach a programme's template | `POST /api/v1/admin/cases/{case}/requirements` | bearer | `document.manage` | case barangay | `{program_id}` | `201` requirements | **copied, not referenced** — a case stays explicable against the list in force when it opened | `implemented` |
+| Record a document | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/documents` | bearer | `document.manage` | case barangay | multipart `{source,file?,document_number?,issued_on?,expires_on?,expiry_unknown?,replaces_because?}` | `201` version | type read from the file's **own bytes**; `415` on a mismatch, `413` over 10 MiB; a replacement **requires a reason** (`422`) | `implemented` |
+| Version history | `GET /api/v1/admin/cases/{case}/requirements/{requirement}/documents` | bearer | `request.view` | case barangay | — | every version ever presented | superseded versions included, with reason and their own file — that is the point | `implemented` |
+| Accept / refuse | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/verification` | bearer | `document.verify` | case barangay | `{status,note?}` | version | **not `document.manage`** — the clerk who took the paper is not the one who judged it; a rejection **must** say why (`422`); a superseded version is `409` | `implemented` |
+| Rule a conditional requirement | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/applicability` | bearer | `document.verify` | case barangay | `{applicability,reason}` | requirement | reason **mandatory in both directions** — ruling a document out is the step that can waive a safeguard | `implemented` |
+| Open a document | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/documents/{version}/access` | bearer | `request.view` (+`document.view.sensitive`, +`document.share`) | case barangay | `{for_sharing?}` | single-use handle + expiry | version must sit in **this** requirement's slot, else `404`; sharing additionally needs a permission **nobody holds yet** | `implemented` |
+| Download | `GET /api/v1/documents/{handle}` | bearer | — (the grant *is* the decision) | issued-to only | — | the bytes | single-use, 120s, bound to the account; `no-store`, `nosniff`, `DENY`, attachment | `implemented` |
+
+### Staff — asking the applicant for something
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Requests on a case | `GET /api/v1/admin/cases/{case}/document-requests` | bearer | `request.view` | case barangay | — | open first, then most recent | `is_applicant_overdue` — named for its subject, because a case task is late when *staff* are | `implemented` |
+| Ask for a document | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/document-requests` | bearer | `document.manage` | case barangay | `{channel,message,needed_by?}` | `201` request | `message` **mandatory** — a record that something was asked for without saying what looks like follow-up the office cannot show; a past `needed_by` is `422` | `implemented` |
+| No longer needed | `POST /api/v1/admin/cases/{case}/document-requests/{documentRequest}/withdraw` | bearer | `document.manage` | case barangay | `{reason}` | request | withdrawn, never deleted — an applicant who was chasing a document deserves the record that released them | `implemented` |
+
+**A document arriving closes the request that asked for it**, automatically. A clerk who has just
+recorded the certificate should not also have to tick off the request, and a request left open
+after it was answered is what stops an overdue queue being believed.
+
+### Citizen
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| What my case needs | `GET /api/v1/me/cases/{case}/requirements` | bearer | — | own case | — | slots, what the office asked for, upload limits | additively projected — no reviewer, no internal note, no scan status, no applicability reason | `implemented` |
+| Supply a document | `POST /api/v1/me/cases/{case}/requirements/{requirement}/documents` | bearer | — | own case | multipart `{file}` | `201` version | source forced to `uploaded` **from the route** — an applicant cannot claim a clerk saw the paper; lands `pending` | `implemented` |
+| Open what I supplied | `POST /api/v1/me/cases/{case}/requirements/{requirement}/documents/{version}/access` | bearer | — | own case | — | single-use handle | never `for_sharing` — an outward copy is the office's decision to make and record | `implemented` |
+
+Ownership is part of every lookup: resident from the token, case from that resident, requirement
+from that case. Another applicant's case id resolves to **`404`**, never `403`.
+
+### Four things this contract does deliberately
+
+* **The document number is masked before storage, not before display.** Only the last four
+  characters are ever written, and only where the source holds no file — where there is a file,
+  the image is the record. The full number is therefore absent from every backup, replica, dump
+  and query log, and no future endpoint can leak what was never kept. The console currently
+  receives a full `documentNumber` and masks it in the view (gap **G-24**); this backend does not
+  send one.
+* **`pending` is not `clean`.** An unscanned file is served to staff, who already carry the risk
+  of the upload they accepted, and refused for any outward share, which would pass that risk to
+  somebody else. A scanner is configuration, not code (gap **G-25**).
+* **A grant, not a signed URL.** A signature is valid wherever it is pasted, to whoever holds it,
+  and records nothing. Article 5.4 requires every read of another person's personal data to be
+  auditable, and object storage never tells the application a fetch happened.
+* **`no-expiry` and `unknown` are different facts.** A birth certificate never expires; a
+  certificate whose expiry nobody wrote down might have lapsed. Only the second is somebody's
+  unfinished work, and an unknown expiry never blocks an applicant for the office's omission.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

@@ -21,6 +21,15 @@ enum ErrorCode: string
     case InvalidStateTransition = 'INVALID_STATE_TRANSITION';
     case ValidationFailed = 'VALIDATION_FAILED';
     case RateLimited = 'RATE_LIMITED';
+
+    /*
+     * Upload failures, distinguished from generic validation because the client's recovery
+     * differs: too large means "take a photo instead", wrong type means "we cannot accept this
+     * file at all". Both clients already have fixed resident-facing copy for each.
+     */
+    case PayloadTooLarge = 'PAYLOAD_TOO_LARGE';
+    case UnsupportedMediaType = 'UNSUPPORTED_MEDIA_TYPE';
+
     case ServerError = 'SERVER_ERROR';
     case ServiceUnavailable = 'SERVICE_UNAVAILABLE';
 
@@ -35,6 +44,8 @@ enum ErrorCode: string
             self::Conflict, self::InvalidStateTransition => 409,
             self::ValidationFailed => 422,
             self::RateLimited => 429,
+            self::PayloadTooLarge => 413,
+            self::UnsupportedMediaType => 415,
             self::ServerError => 500,
             self::ServiceUnavailable => 503,
         };
@@ -55,6 +66,8 @@ enum ErrorCode: string
             self::InvalidStateTransition => 'The requested state transition is not permitted.',
             self::ValidationFailed => 'The given data was invalid.',
             self::RateLimited => 'Too many requests. Please try again later.',
+            self::PayloadTooLarge => 'That file is larger than this endpoint accepts.',
+            self::UnsupportedMediaType => 'That file type cannot be accepted.',
             self::ServerError => 'An unexpected error occurred.',
             self::ServiceUnavailable => 'The service is temporarily unavailable.',
         };
@@ -70,6 +83,8 @@ enum ErrorCode: string
             405 => self::MethodNotAllowed,
             409 => self::Conflict,
             422 => self::ValidationFailed,
+            413 => self::PayloadTooLarge,
+            415 => self::UnsupportedMediaType,
             429 => self::RateLimited,
             503 => self::ServiceUnavailable,
             default => $status >= 500 ? self::ServerError : self::BadRequest,

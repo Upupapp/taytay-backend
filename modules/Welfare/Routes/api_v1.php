@@ -6,9 +6,12 @@ use Illuminate\Support\Facades\Route;
 use Modules\Welfare\Http\Controllers\V1\AssessmentController;
 use Modules\Welfare\Http\Controllers\V1\CaseController;
 use Modules\Welfare\Http\Controllers\V1\CaseEligibilityController;
+use Modules\Welfare\Http\Controllers\V1\CaseRequirementController;
+use Modules\Welfare\Http\Controllers\V1\DocumentDownloadController;
 use Modules\Welfare\Http\Controllers\V1\EnrollmentController;
 use Modules\Welfare\Http\Controllers\V1\MyAssistanceController;
 use Modules\Welfare\Http\Controllers\V1\MyCaseController;
+use Modules\Welfare\Http\Controllers\V1\MyRequirementController;
 
 /*
  * Welfare routes. Mounted under /api/v1 by routes/api.php.
@@ -109,4 +112,47 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('admin/enrollments/{enrollment}/exit', [EnrollmentController::class, 'exit'])->name('v1.admin.enrollments.exit');
 
     Route::get('admin/residents/{resident}/assistance-history', [EnrollmentController::class, 'historyForResident'])->name('v1.admin.residents.assistance-history');
+
+    /*
+     * ── requirements, documents and the office's requests ─────────────────────────────
+     *
+     * The Files module publishes NO routes. It cannot answer "may this caller see this
+     * document" — only the module owning the record can, and here that means this case's
+     * barangay scope. So every file operation in the system enters through a controller that
+     * has already resolved a case (ADR 0020 §5).
+     *
+     * Recording a document and accepting one are separate permissions: the clerk who took the
+     * paper at the counter is not thereby the person who judged it sufficient.
+     */
+    Route::get('admin/cases/{case}/requirements', [CaseRequirementController::class, 'index'])->name('v1.admin.cases.requirements.index');
+    Route::post('admin/cases/{case}/requirements', [CaseRequirementController::class, 'attachTemplate'])->name('v1.admin.cases.requirements.attach');
+    Route::post('admin/cases/{case}/requirements/{requirement}/documents', [CaseRequirementController::class, 'recordDocument'])->name('v1.admin.cases.requirements.documents.store');
+    Route::get('admin/cases/{case}/requirements/{requirement}/documents', [CaseRequirementController::class, 'history'])->name('v1.admin.cases.requirements.documents.history');
+    Route::post('admin/cases/{case}/requirements/{requirement}/verification', [CaseRequirementController::class, 'verify'])->name('v1.admin.cases.requirements.verify');
+    Route::post('admin/cases/{case}/requirements/{requirement}/applicability', [CaseRequirementController::class, 'decideApplicability'])->name('v1.admin.cases.requirements.applicability');
+    Route::post('admin/cases/{case}/requirements/{requirement}/documents/{version}/access', [CaseRequirementController::class, 'openDocument'])->name('v1.admin.cases.requirements.documents.access');
+
+    Route::get('admin/cases/{case}/document-requests', [CaseRequirementController::class, 'listRequests'])->name('v1.admin.cases.document-requests.index');
+    Route::post('admin/cases/{case}/requirements/{requirement}/document-requests', [CaseRequirementController::class, 'requestDocument'])->name('v1.admin.cases.document-requests.store');
+    Route::post('admin/cases/{case}/document-requests/{documentRequest}/withdraw', [CaseRequirementController::class, 'withdrawRequest'])->name('v1.admin.cases.document-requests.withdraw');
+
+    /*
+     * ── the applicant supplying what their own case needs ─────────────────────────────
+     *
+     * Ownership is part of every lookup here: the resident comes from the token, the case from
+     * that resident, the requirement from that case. There is no identifier in the contract that
+     * widens what the caller can reach.
+     */
+    Route::get('me/cases/{case}/requirements', [MyRequirementController::class, 'index'])->name('v1.me.cases.requirements.index');
+    Route::post('me/cases/{case}/requirements/{requirement}/documents', [MyRequirementController::class, 'upload'])->name('v1.me.cases.requirements.documents.store');
+    Route::post('me/cases/{case}/requirements/{requirement}/documents/{version}/access', [MyRequirementController::class, 'open'])->name('v1.me.cases.requirements.documents.access');
+
+    /*
+     * THE ONE PLACE A DOCUMENT LEAVES THIS SYSTEM.
+     *
+     * There is no file id in this contract. The only thing that opens a document is a handle
+     * issued to this account moments ago for one version, already scope-checked by whichever
+     * controller issued it — which is what makes a guessed id worthless.
+     */
+    Route::get('documents/{handle}', DocumentDownloadController::class)->name('v1.documents.download');
 });

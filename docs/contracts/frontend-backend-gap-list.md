@@ -372,6 +372,34 @@ behind an explicit LGU-approved deterministic rule.
 *Resolution:* MSWDO reviews the templates and bumps their versions; the DPO sets the retention
 figures. Both live in one reviewable file each, precisely so approving them is cheap.
 
+Opened by TAB 15: **G-24** — the admin console receives a full `documentNumber` and masks it in the
+view with `maskDocumentNumber`. **This backend never sends one.** Only the last four characters are
+stored, and only where the document has no file; the API returns the display form (`••••3456`)
+already built. The client change is to render what it is given and delete the local masking of a
+value it no longer receives. Owner: Angular. *Not a regression* — the console's own reasoning was
+right, it was simply applied one layer too late (ADR 0020 §4).
+
+Opened by TAB 15: **G-25** — three placeholders awaiting an LGU decision, each in one reviewable
+file so approving it is a single small act:
+* **no malware scanner is configured** (`config/files.php`). Uploads settle at `skipped`, which is
+  deliberately not `clean`: served to staff, refused for any outward share. Turning one on is a
+  config change; the state machine, queue and download consequences are already wired.
+* **retention periods** are engineering estimates on `FileClassification`, not an approved
+  schedule.
+* **the 30-day expiry warning window** is the office's convention, carried over from the console
+  and still unconfirmed against a written issuance.
+
+Opened by TAB 15: **G-26** — `document.share` is held by **nobody**. The outward-sharing path is
+built, tested and refused, because every internal read leaves a trail this system controls and a
+copy that leaves does not. The first holder should be a decision the LGU makes on the record.
+Owner: LGU.
+
+Opened by TAB 15: **G-27** — `kyc_documents` predates the `Files` store and keeps its own table,
+scoped to a KYC case with its own review states. It should adopt `Files` by
+expand → migrate → contract so there is one document store and one version history. Not folded in
+during TAB 15 because migrating live document rows is its own change with its own risk. Owner:
+this backend.
+
 Also found and closed by TAB 14: **G-22** — a resident merge left welfare records pointing at the
 soft-deleted resident. Not a frontend gap; a backend defect, recorded here because its symptom is
 purely client-visible and would have been reported as one. The applicant's own `me/cases` and

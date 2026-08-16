@@ -164,6 +164,41 @@ enum Permission: string
      */
     case EnrollmentManage = 'enrollment.manage';
 
+    /**
+     * Record a document against a case requirement, and decide a conditional requirement.
+     *
+     * Held by front-line staff: receiving papers at the counter is the job. Note that recording
+     * a document is not accepting one — see `document.verify`.
+     */
+    case DocumentManage = 'document.manage';
+
+    /**
+     * Accept or refuse a presented document.
+     *
+     * Separate from recording it, because "we received this" and "this satisfies the requirement"
+     * are two different claims, and only the second one advances a case toward money. The clerk
+     * who took the paper is not thereby the person who judged it sufficient.
+     */
+    case DocumentVerify = 'document.verify';
+
+    /**
+     * Open a document classified as sensitive.
+     *
+     * RA 9262 / RA 9344 material, health records, biometrics. A case worker holding
+     * `request.view.sensitive` can read that such a document exists; opening the image is a
+     * further step and a further audit entry.
+     */
+    case DocumentViewSensitive = 'document.view.sensitive';
+
+    /**
+     * Issue a copy of a document for use outside the office.
+     *
+     * The narrowest permission here, and deliberately not implied by any other. Every internal
+     * read leaves a trail this system controls; a copy that leaves does not, so the act of
+     * creating one is separately authorised and separately recorded.
+     */
+    case DocumentShare = 'document.share';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 
