@@ -292,6 +292,15 @@ enum Permission: string
      */
     case ReportExportPersonLevel = 'report.export.person-level';
 
+    /**
+     * Publish a saved view to the whole office.
+     *
+     * Its own permission because a shared view is a small piece of the office's shared furniture
+     * rather than a personal preference — and one badly-named shared view ("Suspicious
+     * households") is a judgement broadcast to everybody who opens the list.
+     */
+    case SavedViewShare = 'saved-view.share';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 

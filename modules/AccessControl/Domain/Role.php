@@ -201,6 +201,7 @@ enum Role: string
                 Permission::TaskManage,
                 Permission::ReportView,
                 Permission::ReportExportPersonLevel,
+                Permission::SavedViewShare,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *

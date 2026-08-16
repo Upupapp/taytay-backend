@@ -1107,6 +1107,55 @@ eligibility reasoning. A manifest is a list of who is coming, not a summary of t
 
 ---
 
+## 11r. Search, filter grammar and saved views — built in TAB 22
+
+**There is no search index**, and that is the design. Every searcher runs a scoped query against
+the owning module's table, applying the same permission and barangay scope that module's detail
+endpoint applies — so search results and detail endpoints cannot disagree. Full reasoning:
+ADR 0027.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Global search | `GET /api/v1/admin/search` | bearer | `request.view` + per-entity | caller's barangays | `?q=` | typed result snippets | **never an object the caller could not open**; an unreadable entity is *absent*, not refused; a term under 2 characters returns nothing | `implemented` |
+| Saved views | `GET /api/v1/admin/saved-views` | bearer | `request.view` | own + shared | — | views + **the published grammar** | a client builds its filter UI from the server's list rather than a copy that drifts | `implemented` |
+| Save a view | `POST /api/v1/admin/saved-views` | bearer | `request.view` (+`saved-view.share`) | — | `{entity,name,filters?,columns?,sort?,is_shared?}` | `201` view | filters validated **on the way in**; sharing costs its own permission | `implemented` |
+| Delete | `DELETE /api/v1/admin/saved-views/{view}` | bearer | `request.view` | owner only | — | `{deleted}` | a shared view is somebody else's to remove | `implemented` |
+
+### What is never searched
+
+Case note bodies, safeguarding detail, referral reasons, visit observations. *"Show me cases whose
+notes mention 'shelter'"* is a disclosure performed by a search box — the protected tier defeated
+without ever reading a note. The filter grammar enforces it from the other side: `body` and
+`detail` are not filterable fields on any entity.
+
+Result snippets carry a safe title, a barangay and a status. No birth date, no address, no
+narrative — a snippet finds a record, it does not read one.
+
+### The filter grammar
+
+A filter is a `(field, operator, value)` triple where field and operator are **keys in a closed
+table**. A field name that is not a key cannot become a column reference, which is the whole
+injection defence. `in` is bounded at 100 values; a structured value on a scalar operator is
+refused rather than cast; sorting uses the same table, so `sort=id;DROP TABLE` is a `422`.
+
+**Validated when saved, not only when run** — a saved view is executed later by whoever loads it,
+and a filter checked only at execution time is a stored query waiting for a code path that forgets.
+
+### A saved view shares a question, never an answer
+
+Two people opening the same shared view see different rows, because each query is scoped to
+whoever runs it. A view carrying its author's scope would be a permission escalation dressed as a
+convenience. The payload says so in words.
+
+### There is no citizen search endpoint
+
+Not a filtered one — none. A citizen's own records are reachable through `me/*`, which resolves the
+resident from the token. A citizen search that "only returned their own records" would be a
+resident-enumeration endpoint one authorization bug away, and the bug would be invisible because
+the endpoint would still look like it was working. **The absence is the control.**
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

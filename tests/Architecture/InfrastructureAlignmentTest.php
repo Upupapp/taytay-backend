@@ -147,7 +147,16 @@ final class InfrastructureAlignmentTest extends TestCase
         $offenders = [];
 
         foreach (self::phpFilesIn(self::basePath('database/migrations')) as $file) {
-            $source = (string) file_get_contents($file->getPathname());
+            /*
+             * Comments stripped before scanning.
+             *
+             * A migration that EXPLAINS why it does not use `DB::statement` was reported as using
+             * one — the same flaw `DocumentHistoryIsAppendOnlyTest` had and fixed in TAB 15. A
+             * detector that cannot tell a statement of the rule from a breach of it gets silenced
+             * rather than fixed, and the silencing is usually done by deleting the sentence that
+             * explained the rule.
+             */
+            $source = self::withoutComments((string) file_get_contents($file->getPathname()));
 
             // Vendor-specific SQL would tie the schema to one engine and break the
             // "managed PostgreSQL is a deployment choice" property (ADR 0004).
@@ -218,5 +227,32 @@ final class InfrastructureAlignmentTest extends TestCase
     private static function basePath(string $path = ''): string
     {
         return dirname(__DIR__, 2).($path !== '' ? DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $path) : '');
+    }
+
+    /**
+     * PHP source with comments and docblocks removed.
+     *
+     * Tokenised rather than regex-stripped, because a `//` inside a string literal is not a
+     * comment and PHP's own tokeniser is the only thing that reliably knows the difference.
+     */
+    private static function withoutComments(string $source): string
+    {
+        $code = '';
+
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token)) {
+                if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+                    continue;
+                }
+
+                $code .= $token[1];
+
+                continue;
+            }
+
+            $code .= $token;
+        }
+
+        return $code;
     }
 }

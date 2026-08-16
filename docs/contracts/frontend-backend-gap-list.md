@@ -384,6 +384,24 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 22: **G-35** — **no search index exists**, deliberately. Search runs as a `LIKE`
+scan over a few thousand rows. A driver-guarded trigram migration was written and removed: it
+needed a raw `DB::statement`, which `InfrastructureAlignmentTest` has forbidden since TAB 01, and
+it is unmeasured optimisation on the same grounds ADR 0026 declined materialised views. An index
+has no behavioural effect, so when a measurement justifies one it is an operational change, not a
+migration:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX idx_residents_search ON residents
+  USING gin ((coalesce(first_name,'') || ' ' || coalesce(last_name,'')) gin_trgm_ops);
+CREATE INDEX idx_welfare_cases_search ON welfare_cases USING gin (case_number gin_trgm_ops);
+CREATE INDEX idx_households_search ON households USING gin (code gin_trgm_ops);
+```
+
+Trigram rather than `tsvector`: these are names and reference numbers, and a clerk typing "Dela
+Cru" needs a substring match a stemmer will not give them. Owner: this backend, when measured.
+
 Opened by TAB 21: **G-34** — the small-cell suppression threshold is **5**, the convention most
 statistical agencies use, and it is not a Taytay policy decision yet. It is a named constant
 (`MetricsService::MINIMUM_CELL`) rather than a literal so approving a different figure is a

@@ -51,6 +51,12 @@ return [
          * tables, and a read model that could write would be a second authority (ADR 0026 §1).
          */
         'Reporting',
+        /*
+         * Record discovery and saved filter presets. Owns no records and no index: every searcher
+         * runs a scoped query against the owning module's table, applying the same permission and
+         * scope that module's detail endpoint applies (ADR 0027 §1).
+         */
+        'Search',
     ],
 
 ];
