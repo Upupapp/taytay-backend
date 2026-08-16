@@ -125,6 +125,9 @@ enum Role: string
                  */
                 Permission::VisitView,
                 Permission::VisitManage,
+                // Work queues are how front-line staff know what they owe today.
+                Permission::TaskView,
+                Permission::TaskManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -191,6 +194,8 @@ enum Role: string
                 Permission::CaseNoteViewProtected,
                 Permission::SafeguardingView,
                 Permission::SafeguardingManage,
+                Permission::TaskView,
+                Permission::TaskManage,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *
@@ -224,6 +229,9 @@ enum Role: string
                 Permission::EnrollmentView,
                 Permission::ProgramView,
                 Permission::ResidentView,
+                // A disbursing officer works from a queue like everybody else.
+                Permission::TaskView,
+                Permission::TaskManage,
             ],
 
             // Separation of duties: the person who hands out authority is not the person

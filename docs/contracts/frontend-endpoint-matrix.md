@@ -942,6 +942,63 @@ taken; the mark stays on the paper manifest.
 
 ---
 
+## 11o. Tasks and work queues — built in TAB 19
+
+**A task is the answer to "what happens next", as a record rather than an inference.** A screen
+deriving the next step from a case's status can only say what the *process* expects; a task says
+what this office undertook to do, by when, and who owes it. Full reasoning: ADR 0024.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Queues | `GET /api/v1/tasks` | bearer | `task.view` | — | `?mine=1&overdue=1&due_today=1&upcoming=1&type=&priority=&status=&team=` | paginated tasks | `mine` resolves **from the token**, never a parameter — a queue filtered by an account id in the query string is one anybody can point at anybody | `implemented` |
+| Task detail | `GET /api/v1/tasks/{task}` | bearer | `task.view` | — | — | task | carries a type, an opaque identifier and an instruction — **nothing about its subject** | `implemented` |
+| Raise | `POST /api/v1/tasks` | bearer | `task.manage` | — | `{type,title,subject_type?,subject_id?,assigned_to?,team?,priority?,due_on?}` | `201` task | — | `implemented` |
+| Close | `POST /api/v1/tasks/{task}/closure` | bearer | `task.manage` | — | `{status,outcome}` | task | **records an outcome and nothing else**; `done` and `cancelled` both **require** it | `implemented` |
+| Reassign | `POST /api/v1/tasks/{task}/assignment` | bearer | `task.manage` | — | `{assigned_to?,team?}` | task | does not touch the subject | `implemented` |
+
+### Linked-entity access is still policy checked — by design, not by a check
+
+The master command puts it precisely: *team membership alone must not grant access to a linked
+sensitive entity.* Held two ways, and the first matters more:
+
+* **a task payload carries nothing worth reading** — no case title, no beneficiary name, no
+  narrative. Seeing a task discloses nothing about its subject, so there is no per-row permission
+  check to forget when somebody adds a field;
+* **the subject is opened through its own module's endpoint**, which does its own check. A task
+  holds a pointer, not a key.
+
+A barangay-scoped clerk can see a task pointing at a case in another barangay and still gets `404`
+opening it.
+
+### Completing a task changes nothing else
+
+Completing "close the case" does not close the case — it records that somebody says they did. The
+service structurally cannot do otherwise: it imports no case, referral or release, so there is no
+line to add one to. That is the acceptance criterion, and it is also the master command's
+instruction to avoid hidden automation that changes case outcomes.
+
+### The automation
+
+Two listeners, on events published by earlier TABs with no listener at all — a seam built before
+it is needed is a seam; built after, it is a refactor.
+
+| Event | Published | Raises |
+| --- | --- | --- |
+| `ReferralBecameOverdue` | TAB 16 | `referral-follow-up`, assigned to whoever made the referral |
+| `VisitFollowUpDue` | TAB 17 | `field-visit`, assigned to whose visit it was, titled with the **next action** and not the observations |
+
+**One open automatic task per subject**, via a derived `automation_key` unique index. The sweep
+runs nightly and a referral stays overdue until somebody chases it — without the key the queue
+grows a fresh copy every morning, and within a fortnight it is fourteen identical rows and nobody
+trusts it. The key is released on closure, so a problem that recurs raises a fresh task.
+
+`raised_by_event` is projected so a worker can tell *the system noticed this* from *a colleague
+asked me to do this*. They carry different weight, and hiding the difference trains people to
+ignore the automatic ones. An automatic task is attributed to **nobody** — `ActorContext::system()`
+carries a null subject rather than a fictitious account.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

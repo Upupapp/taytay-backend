@@ -267,6 +267,18 @@ enum Permission: string
      */
     case SafeguardingManage = 'safeguarding.manage';
 
+    /**
+     * Read work queues.
+     *
+     * Broad on purpose. A task carries a type, an opaque identifier and a short instruction, and
+     * nothing about the record behind it — so seeing a queue discloses nothing, and the subject is
+     * opened through its own module's endpoint, which does its own check (ADR 0024 §2).
+     */
+    case TaskView = 'task.view';
+
+    /** Raise, reassign and close a task. */
+    case TaskManage = 'task.manage';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 

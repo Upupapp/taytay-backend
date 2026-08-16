@@ -44,6 +44,24 @@ final readonly class ActorContext
     }
 
     /**
+     * Background work with no caller behind it — a listener, a scheduled sweep.
+     *
+     * DISTINCT FROM A GUEST, and not merely for tidiness. A guest is an unauthenticated *caller*
+     * who may yet be offered a public endpoint; a system actor is **no caller at all**. Conflating
+     * them means a rule later relaxed for anonymous browsing silently applies to background work,
+     * or a rule tightened against background work breaks a public page.
+     *
+     * It carries no permissions and `DataScope::none()`, so it is deny-by-default like every
+     * other actor: a listener that needs to read something scoped must be given a service that
+     * does the scoping, not a context that skips it. And `subjectId` is null, so a record it
+     * creates is honestly attributed to nobody rather than to a fictitious account.
+     */
+    public static function system(): self
+    {
+        return new self(null, [], [], ClientChannel::Unknown, DataScope::none());
+    }
+
+    /**
      * @param  list<string>  $roles
      * @param  list<string>  $permissions
      */

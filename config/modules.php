@@ -37,6 +37,12 @@ return [
         // Social welfare casework. Loaded after ResidentProfile because a case references a
         // resident through that module's published services.
         'Welfare',
+        /*
+         * Work queues and the automation that fills them. Loaded LAST because it listens to
+         * every module above and calls back into none of them — Welfare announces that a referral
+         * went overdue and does not know Tasks exists (ADR 0024 §3).
+         */
+        'Tasks',
     ],
 
 ];

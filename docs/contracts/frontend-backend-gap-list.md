@@ -384,6 +384,8 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 19: **G-32** — `tasks.team` is a label rather than a foreign key. Taytay's MSWDO has no formal team structure in this system, and inventing a table to hold a string would be one nobody maintains. If team structure is formalised, that is a new table and a migration from the label. Owner: LGU, then this backend.
+
 Opened by TAB 17: **G-30** — **there is no protection-officer role.** Six permissions now sit with
 `lgu_admin` that should not: `vulnerability.view.protected`, `document.view.sensitive`,
 `case-note.view-protected`, `safeguarding.view`, `safeguarding.manage`, and
