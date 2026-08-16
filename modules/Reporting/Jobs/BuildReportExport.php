@@ -101,6 +101,7 @@ final class BuildReportExport implements ShouldQueue
             ReportCatalog::BarangayReach => $this->barangayReach($barangayIds),
             ReportCatalog::ReferralOutcomes => $this->referralOutcomes(),
             ReportCatalog::ReleaseManifest => $this->releaseManifest($filters, $barangayIds),
+            ReportCatalog::EventRegistrants => $this->eventRegistrants($filters),
         };
     }
 
@@ -180,6 +181,59 @@ final class BuildReportExport implements ShouldQueue
                 'status' => (string) $row->status,
                 'total' => (int) $row->total,
             ])->all();
+    }
+
+    /**
+     * The door list for one event (ADR 0031 §6).
+     *
+     * MINIMAL FIELDS, and the omissions are the design. A reference, a name, a status and whether
+     * they turned up — everything a volunteer at a covered court needs, and nothing that turns a
+     * mislaid printout into a disclosure. No address, no contact number, no barangay, no
+     * household, no vulnerability factor, and no staff note: the note is written in the office's
+     * voice about the person, and it must not travel on a sheet of paper that ends up in a bag.
+     *
+     * Scoped to one event, and an export naming none returns nothing: a request that omitted the
+     * filter would otherwise produce every registrant of every event the LGU has ever run.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return list<array<string, mixed>>
+     */
+    private function eventRegistrants(array $filters): array
+    {
+        $eventId = $filters['event_id'] ?? null;
+
+        if (! is_string($eventId) || $eventId === '') {
+            return [];
+        }
+
+        $rows = DB::table('event_registrations')
+            ->join('events', 'events.id', '=', 'event_registrations.event_id')
+            // Joined by UUID because `resident_id` is a cross-module reference, not a foreign key
+            // (Article 2.2). A left join, so a registrant whose resident record was merged away
+            // still appears — the seat was real.
+            ->leftJoin('residents', 'residents.uuid', '=', 'event_registrations.resident_id')
+            ->where('events.uuid', $eventId)
+            ->select([
+                'event_registrations.reference',
+                'residents.first_name',
+                'residents.last_name',
+                'event_registrations.status',
+                'event_registrations.attendance',
+                'event_registrations.registered_at',
+            ])
+            // Seated first, then the queue in order — the order the list is read in at a door,
+            // and stable so two copies printed an hour apart match line for line.
+            ->orderByRaw("CASE event_registrations.status WHEN 'registered' THEN 0 WHEN 'waitlisted' THEN 1 ELSE 2 END")
+            ->orderBy('event_registrations.id')
+            ->get();
+
+        return $rows->map(static fn (object $row): array => [
+            'reference' => $row->reference,
+            'name' => trim(($row->first_name ?? '').' '.($row->last_name ?? '')),
+            'status' => $row->status,
+            'attendance' => $row->attendance,
+            'registered_at' => $row->registered_at,
+        ])->all();
     }
 
     /**

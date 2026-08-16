@@ -143,6 +143,12 @@ enum Role: string
                  * home from a covered court they travelled to (ADR 0030 §4).
                  */
                 Permission::EventManage,
+                /*
+                 * Front-line staff ARE the door. Checking somebody in is not an editorial act,
+                 * and making it cost a publishing permission would mean a publishing credential
+                 * gets shared at a covered court.
+                 */
+                Permission::EventMarkAttendance,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -219,6 +225,10 @@ enum Role: string
                 Permission::NewsfeedModerate,
                 Permission::EventManage,
                 Permission::EventPublish,
+                Permission::EventMarkAttendance,
+                // A copy of who signed up for a welfare event, leaving this system. Held with the
+                // other person-level export decisions, not with the door.
+                Permission::EventExportRegistrants,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *

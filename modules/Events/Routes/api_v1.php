@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Modules\Events\Http\Controllers\V1\EventController;
+use Modules\Events\Http\Controllers\V1\EventRegistrationController;
 
 /*
  * Official LGU events. Mounted under /api/v1 by routes/api.php.
@@ -43,4 +44,46 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::get('admin/events/{event}/registration-summary', [EventController::class, 'registrationSummary'])
         ->name('v1.admin.events.registration-summary');
+});
+
+/*
+ * ── registration, waitlist and attendance (TAB 26) ────────────────────────────────────
+ *
+ * REGISTRATION IS AUTHENTICATED even though reading an event is not. Reading a poster is public;
+ * taking one of a fixed number of seats is a claim on a scarce public resource, and an anonymous
+ * one is unaccountable, uncancellable and trivially repeatable.
+ *
+ * Every citizen read below is scoped AT THE QUERY to the resident resolved from the token. There
+ * is no citizen endpoint that takes a registration id and looks it up unscoped, which is how
+ * "a citizen cannot access another resident's registration by changing the ID" is held — the row
+ * is absent, so the answer is a 404 nobody had to remember to write (ADR 0031 §4).
+ *
+ * RATE LIMITED, per account. A register/withdraw loop is the cheapest way to churn a waitlist and
+ * make the promotion job announce a seat to a different person every few seconds.
+ */
+Route::middleware(['auth:sanctum', 'throttle:engagement'])->group(function (): void {
+    Route::post('events/{event}/registration', [EventRegistrationController::class, 'register'])
+        ->name('v1.events.register');
+    Route::delete('events/{event}/registration', [EventRegistrationController::class, 'withdraw'])
+        ->name('v1.events.withdraw');
+});
+
+Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('me/event-registrations', [EventRegistrationController::class, 'mine'])
+        ->name('v1.me.event-registrations.index');
+    Route::get('me/event-registrations/{registration}', [EventRegistrationController::class, 'mineShow'])
+        ->name('v1.me.event-registrations.show');
+
+    Route::get('admin/events/{event}/registrations', [EventRegistrationController::class, 'index'])
+        ->name('v1.admin.events.registrations.index');
+    // Declared before the `{registration}` routes so the literal segment is not swallowed.
+    Route::post('admin/events/{event}/registrations/promote', [EventRegistrationController::class, 'promote'])
+        ->name('v1.admin.events.registrations.promote');
+    Route::post('admin/events/{event}/registrations/{registration}/cancel', [EventRegistrationController::class, 'cancel'])
+        ->name('v1.admin.events.registrations.cancel');
+    Route::post('admin/events/{event}/registrations/{registration}/restore', [EventRegistrationController::class, 'restore'])
+        ->name('v1.admin.events.registrations.restore');
+    // Its own permission: the person at the door is often not the person who wrote the event.
+    Route::post('admin/events/{event}/registrations/{registration}/attendance', [EventRegistrationController::class, 'markAttendance'])
+        ->name('v1.admin.events.registrations.attendance');
 });

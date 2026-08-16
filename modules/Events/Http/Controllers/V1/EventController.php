@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
+use Modules\Events\Application\EventRegistrationService;
 use Modules\Events\Application\EventService;
 use Modules\Events\Domain\EventStatus;
 use Modules\Events\Infrastructure\Eloquent\Event;
@@ -30,6 +31,7 @@ final class EventController
 {
     public function __construct(
         private readonly EventService $events,
+        private readonly EventRegistrationService $registrations,
         private readonly AuthorizationService $authorization,
     ) {}
 
@@ -90,9 +92,17 @@ final class EventController
 
         $model = $this->eventOrFail($event);
 
-        return ApiResponse::item($this->adminProjection(
-            $this->events->update($model, $request->validate($this->rules(partial: true)), $actor),
-        ));
+        $updated = $this->events->update($model, $request->validate($this->rules(partial: true)), $actor);
+
+        /*
+         * RAISING THE CAPACITY IS THE OTHER WAY ROOM APPEARS, and it is the one that is easy to
+         * forget: a cancellation promotes the queue on its own, but an office that moves an event
+         * to a bigger hall and adds thirty seats would otherwise leave thirty people waiting for a
+         * seat that already exists. Idempotent and cheap when nothing changed (ADR 0031 §5).
+         */
+        $this->registrations->promoteFromWaitlist($updated);
+
+        return ApiResponse::item($this->adminProjection($updated->refresh()));
     }
 
     /**
@@ -137,24 +147,12 @@ final class EventController
     {
         $this->authorization->authorize($actor, Permission::EventManage);
 
-        $model = $this->eventOrFail($event);
-
-        return ApiResponse::item([
-            'registration_required' => (bool) $model->registration_required,
-            'capacity' => $model->capacity === null ? null : (int) $model->capacity,
-            'waitlist_enabled' => (bool) $model->waitlist_enabled,
-            'opens_at' => $model->registration_opens_at?->toIso8601ZuluString(),
-            'closes_at' => $model->registration_closes_at?->toIso8601ZuluString(),
-            // Computed, not read from a column.
-            'availability' => $this->events->availabilityFor($model)->value,
-            /*
-             * TAB 26 owns registrations and fills this in. Present and zero rather than absent, so
-             * a console built against this shape does not change when the count becomes real —
-             * the same placeholder discipline as `released_amount_centavos` in ADR 0019 §3.
-             */
-            'registered_count' => 0,
-            'waitlisted_count' => 0,
-        ]);
+        /*
+         * Every number here is COUNTED FROM COMMITTED ROWS, not read from a column. TAB 25 shipped
+         * this endpoint with zeroes as present placeholders precisely so that filling them in
+         * needed no shape change on any client (ADR 0031 §2).
+         */
+        return ApiResponse::item($this->registrations->summaryFor($this->eventOrFail($event)));
     }
 
     // ── readers ───────────────────────────────────────────────────────────────────────

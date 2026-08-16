@@ -336,6 +336,28 @@ enum Permission: string
      */
     case EventPublish = 'event.publish';
 
+    /**
+     * Record who turned up.
+     *
+     * Its own permission because it is done by whoever is standing at the door with the list —
+     * often a volunteer or a front-line clerk, not the person who authored the event. Requiring
+     * `event.publish` to check somebody in would mean sharing a publishing credential at a covered
+     * court, which is how one gets shared for good.
+     */
+    case EventMarkAttendance = 'event.mark-attendance';
+
+    /**
+     * Export the registrant list.
+     *
+     * A LIST OF NAMES OF PEOPLE WHO SIGNED UP FOR A WELFARE EVENT, which is a fact about their
+     * household's circumstances however public the event itself is. It is a person-level export
+     * under ADR 0026 §3 — 24-hour retention, its own audit action — and it costs a permission
+     * distinct from `report.export.person-level` because the two lists concern different offices
+     * and folding them together would mean anyone who could print a payout manifest could also
+     * print the feeding-programme roll (ADR 0031 §6).
+     */
+    case EventExportRegistrants = 'event.export-registrants';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 

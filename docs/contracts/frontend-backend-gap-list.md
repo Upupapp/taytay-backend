@@ -384,6 +384,30 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 26: **G-42** — **there are no per-event eligibility rules.** The master command says
+registration is for an *"authenticated verified/eligible citizen according to event rules"*, and the
+only event rules that exist are capacity and the registration window. "Seniors only", "one per
+household", "residents of this barangay only" are all plausible and none is expressible. Anybody
+with a linked resident record can register for anything published. Owner: LGU (to say which rules
+it actually wants), then this backend.
+
+Opened by TAB 26: **G-41** — **staff cannot register somebody at a counter.** An assisted
+registration is a real LGU workflow — an elderly resident who does not use the app is signed up by
+the clerk in front of them — and the schema already supports it (`account_subject_id` is separate
+from `resident_id`, so "who pressed the button" and "whose place it is" are already distinct). What
+is missing is the endpoint and the permission decision: an endpoint that lets staff create a
+registration for any resident is also an endpoint that can fill an event with names nobody chose,
+so it should be deliberate rather than convenient. Owner: LGU, then this backend.
+
+Opened by TAB 26: **G-40** — **the concurrency guarantee is asserted, not exercised.** Capacity
+safety rests on `SELECT ... FOR UPDATE` on the event row, and the test suite cannot prove it: it is
+single-process and SQLite compiles `lockForUpdate()` to an empty string. The suite proves the
+arithmetic (`capacity_is_never_exceeded_however_many_people_try`) and asserts the mechanism exists
+(`every_seat_decision_is_taken_behind_a_row_lock`); it does not run two registrations in parallel
+against PostgreSQL and confirm that exactly one wins the last seat. **That test should be written
+before the first capacity-limited event goes live**, and it needs a real Postgres and a concurrent
+runner — neither of which this repository's test harness has. Owner: this backend + deployment.
+
 Opened by TAB 25: **G-39** — **event reminders are not built.** Telling a registrant the day
 before, or telling everybody an event was cancelled, is the obvious next thing and it needs
 registrations (TAB 26) before there is anybody to tell. The cancellation reason is already stored

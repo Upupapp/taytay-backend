@@ -1296,6 +1296,95 @@ endpoints as a resident, asserts `403` on each, and re-reads the row to confirm 
 
 ---
 
+## 11v. Event registration, waitlist and attendance — built in TAB 26
+
+**The only place in this system where two citizens compete for the same scarce thing.** Everything
+here follows from one sentence: concurrent registrations cannot exceed capacity *according to
+committed backend state*. Full reasoning: ADR 0031.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Take a place | `POST /api/v1/events/{event}/registration` | bearer | — | own | `Idempotency-Key?` | `201` new place / `200` place already held | decided under a **row lock** against counted rows; `409` carries capacity state; a draft event is `404`; rate limited | `implemented` |
+| Withdraw | `DELETE /api/v1/events/{event}/registration` | bearer | — | own | — | the registration | **takes no id** — resolves the caller's own; refused once the event has started (`409`) | `implemented` |
+| My registrations | `GET /api/v1/me/event-registrations` | bearer | — | own | `?upcoming=&page=` | own registrations + event summary | scoped at the query to the resident behind the token | `implemented` |
+| One of mine | `GET /api/v1/me/event-registrations/{registration}` | bearer | — | own | — | the registration | somebody else's is **absent**, so `404` not `403`; by uuid **or reference** | `implemented` |
+| Registrant list | `GET /api/v1/admin/events/{event}/registrations` | bearer | `event.manage` | — | `?status=&attendance=&page=` | list + live counts in `meta` | carries the resident's **name only** — no address, contact or vulnerability factor | `implemented` |
+| Staff cancel | `POST /api/v1/admin/events/{event}/registrations/{registration}/cancel` | bearer | `event.manage` | — | `{reason}` | the registration | reason is **mandatory** and the registrant sees it; promotes the queue afterwards | `implemented` |
+| Restore | `POST /api/v1/admin/events/{event}/registrations/{registration}/restore` | bearer | `event.manage` | — | — | the registration | **does not displace** whoever took the seat — goes to the waitlist if full | `implemented` |
+| Work the waitlist | `POST /api/v1/admin/events/{event}/registrations/promote` | bearer | `event.manage` | — | — | promoted rows + counts | promotes **in order**, never a chosen person; idempotent | `implemented` |
+| Mark attendance | `POST /api/v1/admin/events/{event}/registrations/{registration}/attendance` | bearer | `event.mark-attendance` | — | `{attendance}` | the registration | a **waitlisted** person cannot be marked (`409`); audit records **both** the old and new value | `implemented` |
+| Registration summary | `GET /api/v1/admin/events/{event}/registration-summary` | bearer | `event.manage` | — | — | window, capacity, availability, **live counts** | TAB 25's zero placeholders are now real, with no client shape change | `implemented` |
+
+### The registrant export
+
+Requested through the existing export lifecycle — `POST /api/v1/admin/report-exports` with
+`report=event-registrants` and `filters.event_id` — so it inherits everything ADR 0026 §3 decided:
+queued and never inline, permission context snapshotted at request time, re-authorized at download.
+
+It is **person-level**, so 24-hour retention and its own audit action, and it costs
+`event.export-registrants` rather than `report.export.person-level` — a door list and a payout
+manifest are two different authorities held by two different offices. Minimal fields: reference,
+name, status, attendance. No address, no contact, no barangay, no staff note. An export naming no
+event returns nothing rather than every registrant the LGU has ever had.
+
+### There is no seat counter
+
+A counter and the rows it counts are two sources of one fact, and they drift. When they disagree
+**the counter wins**, because the counter is what the capacity check reads — and the court is
+oversold with nothing in the log. Seats are counted from committed rows inside the lock that
+decides the outcome. `there_is_no_registered_count_column_to_drift` fails the build if a counter
+appears.
+
+### Retry safety has two layers, and only one is optional
+
+`Idempotency-Key` replays the stored response for clients that opt in. A client that sends no key
+still cannot duplicate: the service returns the place already held (`200` rather than `201`), and
+`uniq_event_registrations_active` — a nullable `active_key` unique with `event_id`, NULLs distinct
+in both Postgres and SQLite — makes a second live row impossible at the database. The third layer
+is the one that survives a code path nobody thought of.
+
+Registration is keyed on the **resident**, not the account: a household sharing one phone is
+several people, and one account may act for several residents.
+
+### The citizen has no unscoped read
+
+Every citizen read narrows to the resident behind the token *at the query*, so another person's
+registration is **absent** rather than refused. Withdrawal takes no id at all. `403` would confirm
+the id names a real registration, which is most of what an enumeration attempt wants.
+
+The citizen projection carries no `staff_notes`, no cancelling officer and no account id — a
+separate method, not the staff one with fields removed.
+
+### Promotion is deterministic and idempotent
+
+Order is `id` ascending — not a stored position, which drifts from the order people joined the
+first time somebody in the middle cancels. Each promotion is a conditional
+`UPDATE ... WHERE status = 'waitlisted'` inside the event lock, so running it twice promotes nobody
+twice. It runs after every cancellation **and after a capacity increase**, which is the other way
+room appears and the easy one to forget.
+
+Announced as `EventRegistrationPromoted` and delivered by Notification — a push outage cannot roll
+back a promotion. A no-show deliberately does **not** free a seat: the event is already running,
+and promoting somebody at home is a message telling them to travel to something that started an
+hour ago.
+
+### Attendance defaults to `not-checked-in`, never `no-show`
+
+Before the door opens, "we have not marked this person" is the truth. A no-show record quietly
+shapes who gets a seat next time, so it is always an act somebody performed, and it is audited with
+**both** the old and the new value. A waitlisted person cannot be marked present: it would put the
+attendance list above capacity, and every later count would silently disagree with how many were
+let in.
+
+### What the suite does not prove
+
+The tests are single-process and SQLite compiles `lockForUpdate()` away, so the capacity test
+proves the arithmetic and not the race. The lock is asserted structurally instead
+(`every_seat_decision_is_taken_behind_a_row_lock`), and verification under real concurrency against
+PostgreSQL is **gap G-40**.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

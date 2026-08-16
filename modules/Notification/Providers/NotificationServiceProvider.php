@@ -6,8 +6,10 @@ namespace Modules\Notification\Providers;
 
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use Modules\Events\Contracts\EventRegistrationPromoted;
 use Modules\Notification\Application\ChannelRegistry;
 use Modules\Notification\Application\NotifyApplicantOnCaseTransition;
+use Modules\Notification\Application\NotifyRegistrantOnWaitlistPromotion;
 use Modules\Notification\Infrastructure\Channels\DatabaseChannel;
 use Modules\Notification\Infrastructure\Channels\FcmChannel;
 use Modules\Notification\Infrastructure\Channels\NullChannel;
@@ -46,5 +48,11 @@ final class NotificationServiceProvider extends ServiceProvider
          * and changes nothing else in the system.
          */
         Event::listen(CaseStatusChanged::class, NotifyApplicantOnCaseTransition::class);
+
+        /*
+         * Same inversion, same reason: Events announces that a seat opened and knows nothing
+         * about whether anybody is told. A push provider outage cannot roll back a promotion.
+         */
+        Event::listen(EventRegistrationPromoted::class, NotifyRegistrantOnWaitlistPromotion::class);
     }
 }
