@@ -1156,6 +1156,52 @@ the endpoint would still look like it was working. **The absence is the control.
 
 ---
 
+## 11s. Newsfeed publishing — built in TAB 23
+
+**The only records in this system meant to be read by people who are not their subject.** That
+inverts the usual risk: the danger is not disclosure but publishing early, or to the wrong
+audience. Full reasoning: ADR 0028.
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Published feed | `GET /api/v1/newsfeed` | bearer (or anonymous **only if enabled**) | — | reader's barangay | `?page=&per_page=` | published posts | a draft is **absent**, not filtered; anonymous is refused unless `NEWSFEED_PUBLIC` (gap G-36) | `implemented` |
+| Read a post | `GET /api/v1/newsfeed/{post}` | as above | — | reader's barangay | — | the post | the lookup runs **against the public query**, so a guessed draft id is `404` with no status check after it | `implemented` |
+| Staff detail | `GET /api/v1/admin/newsfeed/{post}` | bearer | `newsfeed.manage` | — | — | the post incl. status and schedule | the staff projection; a draft is readable here and nowhere else | `implemented` |
+| Staff list | `GET /api/v1/admin/newsfeed` | bearer | `newsfeed.manage` | — | `?status=&category=&audience=&search=` | all posts incl. drafts | — | `implemented` |
+| Draft | `POST /api/v1/admin/newsfeed` | bearer | `newsfeed.manage` | — | `{body,category,headline?,audience?,audience_barangay_id?,comments_enabled?}` | `201` post | a `barangay` audience needs a barangay (`422`) | `implemented` |
+| Edit | `PATCH /api/v1/admin/newsfeed/{post}` | bearer | `newsfeed.manage` | — | partial | post | a **published** post can still be corrected; an archived one cannot (`409`) | `implemented` |
+| Schedule / publish / archive | `POST /api/v1/admin/newsfeed/{post}/status` | bearer | **from the target state** | — | `{status,publish_at?}` | post | publishing and scheduling cost `newsfeed.publish`; a past `publish_at` is `422`; archived is terminal | `implemented` |
+| Pin | `POST /api/v1/admin/newsfeed/{post}/pin` | bearer | `newsfeed.publish` | — | `{is_pinned}` | post | pinned sorts first | `implemented` |
+| Attach media | `POST /api/v1/admin/newsfeed/{post}/media` | bearer | `newsfeed.manage` | — | `{file_id,alt_text?,is_decorative?,position?}` | post | **alt text required** unless explicitly decorative (`422`) | `implemented` |
+| Metrics | `GET /api/v1/admin/newsfeed-metrics` | bearer | `newsfeed.manage` | — | — | counts by status | — | `implemented` |
+
+### The public query is the boundary
+
+Three conditions applied **at the query**: published, `publish_at` arrived, audience matches. A
+`where uuid = ?` against that cannot return a draft, and no status check follows it — which is what
+makes it survive the next endpoint somebody adds. Status and schedule are checked **together**: a
+row whose status says published but whose time has not come is still embargoed.
+
+### A scheduled post publishes at most once
+
+A conditional `UPDATE ... WHERE status = 'scheduled' AND publish_at <= now`, which is atomic — two
+workers racing produce one update and one no-op, because the second one's `WHERE` no longer
+matches. Idempotent under replay, and a missed sweep is harmless.
+
+### Two projections, two queries
+
+The public projection is a **separate method**, not the staff one with fields removed. Absent by
+construction: status, author, audience, schedule, transitions. Subtractive projection leaks the
+first time somebody adds a field.
+
+### Alt text
+
+Required unless explicitly decorative, so "nobody wrote one" and "there is nothing to write" stay
+distinguishable. A municipal announcement a blind resident cannot read is a service the LGU is not
+providing to somebody entitled to it.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

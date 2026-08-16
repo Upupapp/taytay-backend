@@ -57,6 +57,11 @@ return [
          * scope that module's detail endpoint applies (ADR 0027 §1).
          */
         'Search',
+        /*
+         * Admin-authored public communication. The only module whose records are meant to be read
+         * by people who are not their subject, which inverts the usual risk (ADR 0028).
+         */
+        'Content',
     ],
 
 ];

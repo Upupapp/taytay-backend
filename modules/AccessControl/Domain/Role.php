@@ -131,6 +131,9 @@ enum Role: string
                 // Front-line staff read the dashboard for their own barangay. Person-level export
                 // is deliberately not theirs.
                 Permission::ReportView,
+                // Front-line staff draft announcements. Putting one on the municipal feed is not
+                // theirs: a published post cannot be unpublished from the people who read it.
+                Permission::NewsfeedManage,
                 // Staff review possible duplicates but do not decide who becomes verified.
                 Permission::KycReview,
             ],
@@ -202,6 +205,8 @@ enum Role: string
                 Permission::ReportView,
                 Permission::ReportExportPersonLevel,
                 Permission::SavedViewShare,
+                Permission::NewsfeedManage,
+                Permission::NewsfeedPublish,
                 /*
                  * Deliberately ABSENT: DocumentShare. Nobody holds it yet.
                  *

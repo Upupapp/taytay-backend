@@ -384,6 +384,13 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 23: **G-36** — **anonymous newsfeed access is OFF by default** (`NEWSFEED_PUBLIC`).
+The master command permits it "only if Taytay explicitly marks Newsfeed public", and defaulting the
+other way would have published a barangay's relief schedule to the open internet before anybody at
+the MSWDO was asked. Even when enabled, an anonymous reader sees municipality-wide posts only:
+audience targeting needs a reader whose barangay is known, and there is no way to ask an anonymous
+caller for one that is not also a way to enumerate barangays. Owner: LGU.
+
 Opened by TAB 22: **G-35** — **no search index exists**, deliberately. Search runs as a `LIKE`
 scan over a few thousand rows. A driver-guarded trigram migration was written and removed: it
 needed a raw `DB::statement`, which `InfrastructureAlignmentTest` has forbidden since TAB 01, and

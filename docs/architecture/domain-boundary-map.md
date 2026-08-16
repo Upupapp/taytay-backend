@@ -26,6 +26,7 @@ Eloquent relationship across the boundary.
 | `Notification` | outbound dispatch, delivery receipts, device push registrations, per-person channel preferences | **why** a notification was triggered — Welfare decides that a case moved, this module decides how to say it; and any push payload beyond routing information (ADR 0025 §2) | **implemented** (TAB 20) |
 | `Reporting` | dashboard aggregates, the closed report catalogue, and the export request/build/download lifecycle | **any fact** — every number is counted from another module's tables, and a read model that could write would be a second authority; also any per-caseworker grouping (ADR 0026 §1, §4) | **implemented** (TAB 21) |
 | `Search` | record discovery and saved filter presets | **any record and any index** — every searcher runs a scoped query against the owning module's table, because an index maintained alongside the authorization rules eventually disagrees with them, invisibly (ADR 0027 §1) | **implemented** (TAB 22) |
+| `Content` | admin-authored public communication: newsfeed posts, their lifecycle, schedule, audience and media alt text | resident engagement — reactions, comments and moderation are TAB 24 work; and any resident-authored content, which this module cannot accept (ADR 0028) | **implemented** (TAB 23) |
 | `Audit` | append-only audit trail of privileged actions, personal-data reads and lifecycle transitions | anything mutable | planned |
 
 `Identity` and `ResidentProfile` are deliberately **separate**. An account is a way to

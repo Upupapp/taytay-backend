@@ -301,6 +301,18 @@ enum Permission: string
      */
     case SavedViewShare = 'saved-view.share';
 
+    /** Author and edit newsfeed posts, and archive them. Editorial work. */
+    case NewsfeedManage = 'newsfeed.manage';
+
+    /**
+     * Put a post on the municipal feed — publish it, schedule it, or pin it.
+     *
+     * Separate from authoring because they are different acts. An announcement that has been seen
+     * cannot be unseen, and an office may want the second held by fewer people than the first —
+     * the same shape as endorse/approve on a case (ADR 0016 §6).
+     */
+    case NewsfeedPublish = 'newsfeed.publish';
+
     /** Read the programme catalogue, including drafts and retired programmes. */
     case ProgramView = 'program.view';
 
