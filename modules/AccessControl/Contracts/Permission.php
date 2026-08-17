@@ -324,6 +324,19 @@ enum Permission: string
     case NewsfeedModerate = 'newsfeed.moderate';
 
     /**
+     * Read readiness and metrics.
+     *
+     * NOT an audit permission and not an administrative one. It reveals whether the database is
+     * reachable, how deep the queues are and how many sign-ins failed in the last hour — which is
+     * what somebody diagnosing an outage needs and nothing about any resident.
+     *
+     * Its own permission because the audience is different: the person watching the queues at 2am
+     * is not necessarily the person who may approve a case, and neither should have to be the
+     * other in order to do their job.
+     */
+    case OperationsView = 'operations.view';
+
+    /**
      * Read the audit trail.
      *
      * HELD BY NOBODY BY DEFAULT, and that is not an oversight. The trail is assembled across every

@@ -384,6 +384,24 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 32: **G-52** — **RPO and RTO are unset, and the first restore has never been run.**
+The backup strategy, the encryption and key-custody rules and the restore procedure are written
+([backup-and-disaster-recovery.md](../runbooks/backup-and-disaster-recovery.md)); the two numbers
+that make them measurable are deliberately blank, because how much welfare data Taytay can afford
+to lose and how long the office can operate without this system are business decisions. **A backup
+that has never been restored is a hypothesis** — the procedure exists and nobody has executed it,
+so the observed RTO is unknown. Owner: LGU management to set the targets, then deployment to run
+the first exercise and record what actually happened.
+
+Opened by TAB 32: **G-51** — **nothing alerts.** `/admin/operations/metrics` exposes the numbers
+worth watching — queue depth per queue, failed jobs, notification failures, auth anomalies — and
+nothing polls them or wakes anybody. Alerting, paging and an on-call rota are deployment concerns
+with a real cost, and choosing a tool from here would be choosing one the LGU then has to pay for
+and staff. The specific signature worth alerting on is recorded in the runbook: **queue depth
+climbing while failed jobs stay flat** means work is arriving and nothing is consuming it, which is
+the failure that produces no error and no symptom except a resident who never got a message.
+Owner: LGU + deployment.
+
 Opened by TAB 30: **G-50** — **Firebase App Check is not adopted.** The master command permits it as
 defence in depth for Flutter and custom-backend traffic, and is explicit that it never substitutes
 for authenticated actor and object authorization. It is recorded rather than half-built, because

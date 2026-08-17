@@ -63,6 +63,17 @@ enum Role: string
      */
     case DataProtectionOfficer = 'data_protection_officer';
 
+    /**
+     * Keeps the system running, and reads nothing about anybody.
+     *
+     * Created for the same reason as `DisbursingOfficer` and `DataProtectionOfficer`: a permission
+     * that belongs to a distinct job should not be parked on the most senior existing role. The
+     * person watching queue depth at 2am is not the MSWDO head, and making them hold the head's
+     * permissions to do it would be handing out casework authority as a side effect of an on-call
+     * rota.
+     */
+    case OperationsEngineer = 'operations_engineer';
+
     /** Provisions staff and their scopes. Holds no operational permission over residents. */
     case SecurityOfficer = 'security_officer';
 
@@ -309,6 +320,18 @@ enum Role: string
             self::DataProtectionOfficer => [
                 Permission::AuditView,
                 Permission::PrivacyManage,
+            ],
+
+            /*
+             * Watches the system, and touches no record.
+             *
+             * `operations.view` and nothing else: readiness, queue depth and failure counts are
+             * what somebody diagnosing an outage at 2am needs, and none of it is about a resident.
+             * The person on call should not have to hold a caseworker's permissions in order to
+             * find out whether the queue is moving (ADR 0037 §3).
+             */
+            self::OperationsEngineer => [
+                Permission::OperationsView,
             ],
         };
     }

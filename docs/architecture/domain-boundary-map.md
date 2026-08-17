@@ -28,7 +28,7 @@ Eloquent relationship across the boundary.
 | `Search` | record discovery and saved filter presets | **any record and any index** — every searcher runs a scoped query against the owning module's table, because an index maintained alongside the authorization rules eventually disagrees with them, invisibly (ADR 0027 §1) | **implemented** (TAB 22) |
 | `Content` | admin-authored public communication: newsfeed posts, their lifecycle, schedule, audience and media alt text; resident reactions, comments, share counts and moderation | any relationship between residents — no follow graph, no profiles, no mentions; and any external share destination, which it must never record (ADR 0029 §3) | **implemented** (TAB 23; engagement TAB 24) |
 | `Events` | official LGU events: the event record, its state machine, the registration *configuration* (window, capacity, waitlist), the **derived** availability answer, and the **registrations, waitlist and attendance** held against an event | **a stored availability value or a seat counter** — both are computed from committed rows, because a second source of one fact drifts and the cached copy always wins the check that reads it (ADR 0030 §2, ADR 0031 §1); also who a person *is* (asks `ResidentProfile`), whether anybody is told about a promotion (it announces; `Notification` decides), and newsfeed posts | **implemented** (TAB 25, TAB 26) |
-| `Audit` | the append-only trail of privileged actions, personal-data reads and lifecycle transitions; privacy notices and acknowledgements; consent records; legal holds; and the retention policy | **anything mutable**, and **any value that was changed** — it records field NAMES, an actor identifier and a record identifier, never the contents of either, because a trail that duplicates the data it protects is a second, less-guarded copy of it (ADR 0034 §2) | **implemented** (TAB 29) |
+| `Audit` | the append-only trail of privileged actions, personal-data reads and lifecycle transitions; privacy notices and acknowledgements; consent records; legal holds; the retention policy; and the **readiness and metrics surfaces** — every surface for somebody who oversees the system rather than serving a resident, each held by a role with no operational permission at all | **anything mutable**, and **any value that was changed** — it records field NAMES, an actor identifier and a record identifier, never the contents of either, because a trail that duplicates the data it protects is a second, less-guarded copy of it (ADR 0034 §2) | **implemented** (TAB 29, TAB 32) |
 
 `Identity` and `ResidentProfile` are deliberately **separate**. An account is a way to
 authenticate; a resident is a person the LGU serves. They are not 1:1 — a resident may
@@ -40,7 +40,14 @@ force a rewrite later.
 the edge (kiosk/verifier device, possibly offline) against published key material without
 being granted read access to the credential holder's personal data.
 
-`Audit` is depended on by every module and depends on **nothing but `Shared`** — which is only
+`OperationsController` lives in `Audit` rather than `Shared`, and that was not the first instinct:
+it was written beside the health controller and `ModuleBoundaryTest` failed the build, because
+`Shared` may depend on nothing (Article 2.3) while any protected endpoint must ask `AccessControl`
+who is calling. `Audit` is the right home rather than a convenient one — it already owns the
+surfaces for people who oversee the system instead of serving residents. `GET /api/v1/health` stays
+in `Shared`, because it authorizes nothing (ADR 0037 §3).
+
+`Audit`'s WRITE path is depended on by every module and depends on **nothing but `Shared`** — which is only
 possible because modules depend on the *interface* `Modules\Shared\Contracts\AuditWriter` rather
 than on `Audit` itself. Consolidating the ten hand-rolled writers without that inversion produced
 `AccessControl → Audit → AccessControl`, since `Audit` has an HTTP surface that must ask who may

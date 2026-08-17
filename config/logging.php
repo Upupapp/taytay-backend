@@ -1,5 +1,6 @@
 <?php
 
+use Modules\Shared\Logging\StructuredLogging;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -58,14 +59,28 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        /*
+         | EVERY CHANNEL TAPS `StructuredLogging` (ADR 0037 §1–§2), which adds the correlation
+         | context and then redacts.
+         |
+         | On the channel rather than at the call site, because a rule applied where somebody
+         | remembers it holds until the day somebody writes `Log::error('...', $request->all())`
+         | while chasing a bug — a line that looks entirely reasonable and puts a resident's
+         | PhilSys number in a file that is read by whoever is debugging, shipped to whatever
+         | aggregator the LGU eventually buys, and kept longer than the record it describes.
+         |
+         | A log is the least-guarded copy of anything it contains (Article 5.5).
+         */
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'tap' => [StructuredLogging::class],
         ],
 
         'daily' => [
+            'tap' => [StructuredLogging::class],
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),

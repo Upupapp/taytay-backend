@@ -1605,6 +1605,55 @@ anything. Same shape as `DisbursingOfficer` in ADR 0023 §3.
 
 ---
 
+## 11z. Observability and operations — built in TAB 32
+
+**No client screen calls these.** They exist for whoever is diagnosing an outage. Full reasoning:
+[ADR 0037](../adr/0037-observability-health-and-recovery.md).
+
+| Screen / caller | Endpoint | Auth | Permission | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Liveness | `GET /api/v1/health` | **anonymous** | — | — | service, status, api version | **says nothing about dependencies** — "postgres: down" on the internet is free reconnaissance, "postgres: ok" tells an attacker what exists to attack | `implemented` |
+| Readiness | `GET /api/v1/admin/operations/readiness` | bearer | `operations.view` | — | per-dependency `{driver, status}`; `503` when not ready | **state, never configuration** — no host, no port, no bucket; a failed probe returns `failed` and **not** the exception, which carries a credential | `implemented` |
+| Metrics | `GET /api/v1/admin/operations/metrics` | bearer | `operations.view` | — | queue depth per queue, failed jobs, notification failures, auth anomalies, stuck exports | every value is a **count**; nothing names a resident — the person on call is not a caseworker | `implemented` |
+
+### Two health endpoints, and the split is the point
+
+A load balancer needs the public probe; a human diagnosing an outage needs the detail. Publishing
+dependency status publicly is reconnaissance either way it reads.
+
+`php artisan lguids:readiness` remains, because a deploy script and a developer after
+`docker compose up` both have a shell and neither has a token — and during an incident where
+authentication itself is broken, it is the only one that answers.
+
+### Metrics are counted, never accumulated
+
+Every number is counted live rather than read from a maintained counter — same reasoning as the
+event seat count (ADR 0031 §1). **A metrics endpoint whose numbers drift from reality is worse than
+none, because it is believed.**
+
+Queue depth is reported **per named queue**: a total of 400 is unremarkable if it is all `exports`,
+and means nobody has been told anything for an hour if it is all `notifications`. Auth anomalies
+come from the audit trail rather than a second counter that would drift.
+
+### The signature worth alerting on
+
+**Queue depth climbing while `jobs.failed_total` stays flat.** Work is arriving and nothing is
+consuming it — the failure that produces no error and no symptom except a resident who never got a
+message. Nothing polls these numbers yet (gap G-51).
+
+### Structured logs
+
+Every log record carries `environment`, `service`, `request_id`, `method`, the **route pattern**,
+the client channel and the actor's subject UUID — and nothing else about anybody. `request_id` is
+the same string in the response header, the audit entry and the log line, which is what makes a
+support call tractable.
+
+Redaction is a Monolog processor on every channel, not a rule at the call site, and it runs in two
+passes: by key name and by value shape. The second is the one that matters, because the dangerous
+log line is never the one somebody designed.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

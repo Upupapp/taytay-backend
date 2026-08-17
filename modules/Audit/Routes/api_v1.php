@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Modules\Audit\Http\Controllers\V1\AuditController;
 use Modules\Audit\Http\Controllers\V1\GovernanceController;
+use Modules\Audit\Http\Controllers\V1\OperationsController;
 
 /*
  * Audit and privacy governance. Mounted under /api/v1 by routes/api.php.
@@ -42,6 +43,21 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * record it describes — a search for `safeguarding.opened` names which residents have
      * protection cases without opening one — and READING IT IS ITSELF AUDITED (ADR 0034 §7).
      */
+    /*
+     * ── operations ────────────────────────────────────────────────────────────────
+     *
+     * PERMISSION-GATED, unlike `GET /api/v1/health`. A load balancer gets the public liveness
+     * probe; a human diagnosing an outage gets the detail.
+     *
+     * The split is the point: publishing "postgres: down" to the internet is free reconnaissance,
+     * and publishing "postgres: ok" tells an attacker which dependencies exist to attack
+     * (ADR 0037 §3).
+     */
+    Route::get('admin/operations/readiness', [OperationsController::class, 'readiness'])
+        ->name('v1.admin.operations.readiness');
+    Route::get('admin/operations/metrics', [OperationsController::class, 'metrics'])
+        ->name('v1.admin.operations.metrics');
+
     Route::get('admin/audit-entries', [AuditController::class, 'index'])->name('v1.admin.audit.index');
     // Declared before `{entry}` so the literal segments are not swallowed by the wildcard.
     Route::get('admin/audit-entries/vocabulary', [AuditController::class, 'vocabulary'])
