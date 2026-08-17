@@ -42,6 +42,27 @@ enum Role: string
      */
     case DisbursingOfficer = 'disbursing_officer';
 
+    /**
+     * Holds the office to account, and does none of its work.
+     *
+     * **THE AUDITEE MUST NOT BE THE AUDITOR.** `audit.view` is deliberately not on `lgu_admin`,
+     * and that is the whole reason this role exists rather than the permissions being parked on
+     * the most senior existing one (the way `VulnerabilityViewProtected` still is, gap G-30).
+     *
+     * The trail records the MSWDO head's own approvals, their own document reads and their own
+     * exports. A head who can read it can see whether anybody has noticed — and can see, from a
+     * search for `safeguarding.opened`, which residents have protection cases without opening a
+     * single file. Granting it to them would be the classic control failure: the person whose acts
+     * are recorded deciding who looks at the recording.
+     *
+     * The same shape as `DisbursingOfficer` in ADR 0023 §3 — a role created so that a deliberately
+     * unheld permission becomes operable without collapsing the split it protects.
+     *
+     * It holds NO operational permission: it cannot open a case, read a resident record, verify a
+     * document or approve anything. It can read the trail and govern privacy, and nothing else.
+     */
+    case DataProtectionOfficer = 'data_protection_officer';
+
     /** Provisions staff and their scopes. Holds no operational permission over residents. */
     case SecurityOfficer = 'security_officer';
 
@@ -275,6 +296,19 @@ enum Role: string
             self::SecurityOfficer => [
                 Permission::StaffView,
                 Permission::StaffManage,
+            ],
+
+            /*
+             * Reads the trail, governs privacy, and touches no case.
+             *
+             * Deliberately absent: everything else. Not one resident permission, not one case
+             * permission, not `StaffManage`. A DPO who could also open a welfare file would be
+             * auditing records they had themselves been reading, and the trail would no longer
+             * distinguish oversight from access.
+             */
+            self::DataProtectionOfficer => [
+                Permission::AuditView,
+                Permission::PrivacyManage,
             ],
         };
     }

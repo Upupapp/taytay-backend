@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Content\Application;
 
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Modules\Shared\Application\RequestContext;
+use Modules\Shared\Contracts\AuditWriter;
 
 /**
  * Writes newsfeed events to the append-only audit trail.
@@ -14,25 +12,28 @@ use Modules\Shared\Application\RequestContext;
  * Publishing is the act worth recording. "Who put this on the municipal feed, and when" is the
  * first question after an announcement turns out to be wrong — and unlike most of this system,
  * the answer is one the public may reasonably ask for.
+
+ * ── TAB 29 ────────────────────────────────────────────────────────────────────────────
+ *
+ * THE INSERT NOW HAPPENS IN ONE PLACE. This class kept its name and its vocabulary — callers
+ * still write `$this->audit->record(...)` in the words of their own module — but the row is
+ * built by the one implementation of `Modules\Shared\Contracts\AuditWriter`.
+ *
+ * Ten hand-rolled inserts had already begun to differ, and a missing audit field is invisible:
+ * a trail with a gap looks exactly like a trail of a quiet week (ADR 0034 §1).
  */
 final class ContentAudit
 {
-    public function __construct(private readonly RequestContext $requestContext) {}
+    public function __construct(private readonly AuditWriter $trail) {}
 
     public function record(?string $actorSubjectId, string $action, string $summary, string $entityId): void
     {
-        DB::table('audit_entries')->insert([
-            'uuid' => (string) Str::uuid7(),
-            'occurred_at' => now(),
-            'actor_subject_id' => $actorSubjectId,
-            'actor_label' => null,
-            'action' => $action,
-            'entity_type' => 'Content.NewsfeedPost',
-            'entity_id' => $entityId,
-            'summary' => Str::limit($summary, 255, ''),
-            'request_id' => $this->requestContext->requestId(),
-            'client_channel' => $this->requestContext->channel()->value,
-            'created_at' => now(),
-        ]);
+        $this->trail->record(
+            $actorSubjectId,
+            $action,
+            $summary,
+            'Content.NewsfeedPost',
+            $entityId,
+        );
     }
 }

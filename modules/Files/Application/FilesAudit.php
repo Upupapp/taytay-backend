@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Files\Application;
 
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Modules\Shared\Application\RequestContext;
+use Modules\Shared\Contracts\AuditWriter;
 
 /**
  * Writes file and document events to the append-only audit trail.
@@ -20,10 +18,19 @@ use Modules\Shared\Application\RequestContext;
  * Summaries name the act, never the content. The trail is read by operators investigating
  * something else entirely, so it must not become a second, less-guarded index of who holds which
  * documents.
+
+ * ── TAB 29 ────────────────────────────────────────────────────────────────────────────
+ *
+ * THE INSERT NOW HAPPENS IN ONE PLACE. This class kept its name and its vocabulary — callers
+ * still write `$this->audit->record(...)` in the words of their own module — but the row is
+ * built by the one implementation of `Modules\Shared\Contracts\AuditWriter`.
+ *
+ * Ten hand-rolled inserts had already begun to differ, and a missing audit field is invisible:
+ * a trail with a gap looks exactly like a trail of a quiet week (ADR 0034 §1).
  */
 final class FilesAudit
 {
-    public function __construct(private readonly RequestContext $requestContext) {}
+    public function __construct(private readonly AuditWriter $trail) {}
 
     public function recordFile(?string $actorSubjectId, string $action, string $summary, string $fileUuid): void
     {
@@ -59,18 +66,12 @@ final class FilesAudit
         string $entityType,
         string $entityId,
     ): void {
-        DB::table('audit_entries')->insert([
-            'uuid' => (string) Str::uuid7(),
-            'occurred_at' => now(),
-            'actor_subject_id' => $actorSubjectId,
-            'actor_label' => null,
-            'action' => $action,
-            'entity_type' => $entityType,
-            'entity_id' => $entityId,
-            'summary' => Str::limit($summary, 255, ''),
-            'request_id' => $this->requestContext->requestId(),
-            'client_channel' => $this->requestContext->channel()->value,
-            'created_at' => now(),
-        ]);
+        $this->trail->record(
+            $actorSubjectId,
+            $action,
+            $summary,
+            $entityType,
+            $entityId,
+        );
     }
 }

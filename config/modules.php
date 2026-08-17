@@ -23,6 +23,13 @@ return [
     'enabled' => [
         'Shared',
         /*
+         * The append-only trail and the privacy governance around it. Loaded immediately after
+         * Shared because every module above writes to it, and because it depends on nothing else:
+         * a trail that needed ResidentProfile in order to record a merge would close a cycle with
+         * the module whose merges it exists to record (ADR 0034 §1).
+         */
+        'Audit',
+        /*
          * Stored objects and the documents presented against them. Loaded immediately after
          * Shared because every module above may store a document, and because it publishes no
          * routes of its own — the module that owns a record authorises access to that record's

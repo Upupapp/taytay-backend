@@ -1534,6 +1534,77 @@ disk but the public ones publishes a base `url`.
 
 ---
 
+## 11y. Audit, privacy and data governance — built in TAB 29
+
+**The trail existed for ten TABs and had no reader.** Every entry was written and none could be
+retrieved without a database console. Full reasoning: ADR 0034. The technical inventory prepared
+for a Privacy Impact Assessment is [`docs/privacy/personal-data-inventory.md`](../privacy/personal-data-inventory.md).
+
+| Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Privacy notice | `GET /api/v1/privacy/notice` | **anonymous** | — | — | — | current version, whether the caller acknowledged it, **the legal bases**, the consent purposes | a notice requiring an account to read is one a person cannot consult before creating an account | `implemented` |
+| Acknowledge | `POST /api/v1/me/privacy/acknowledgement` | bearer | — | own | — | timestamp | records being **shown** the notice — not consent to anything | `implemented` |
+| My consents | `GET /api/v1/me/privacy/consents` | bearer | — | own | `?page=` | own consents incl. withdrawn | scoped at the query; **no identifier in the contract** | `implemented` |
+| Give consent | `POST /api/v1/me/privacy/consents` | bearer | — | own | `{purpose,evidence?}` | `201` consent | **`422` for any purpose whose legal basis is not consent** | `implemented` |
+| Withdraw | `DELETE /api/v1/me/privacy/consents/{purpose}` | bearer | — | own | `{reason?}` | the consent | a **timestamp**, never a deleted row; re-consenting later is allowed | `implemented` |
+| Audit search | `GET /api/v1/admin/audit-entries` | bearer | **`audit.view`** | — | `?action=&entity_type=&entity_id=&actor_subject_id=&request_id=&risk=&from=&to=` | entries | **the search is itself audited**; held only by `data_protection_officer` | `implemented` |
+| One entry | `GET /api/v1/admin/audit-entries/{entry}` | bearer | `audit.view` | — | — | the entry | — | `implemented` |
+| Trail for a record | `GET /api/v1/admin/audit-entries/for-entity` | bearer | `audit.view` | — | `?entity_type=&entity_id=` | entries, **oldest first** | the order somebody reconstructing events reads in | `implemented` |
+| Vocabulary | `GET /api/v1/admin/audit-entries/vocabulary` | bearer | `audit.view` | — | — | risk bands, the declared high-risk catalogue, whether network capture is on | so a console builds filters without hardcoding a list | `implemented` |
+| Publish a notice | `POST /api/v1/admin/privacy/notices` | bearer | `privacy.manage` | — | `{version,title,summary,document_url?,effective_from?}` | `201` notice | the previous version is **superseded, never edited** | `implemented` |
+| Retention schedule | `GET /api/v1/admin/privacy/retention` | bearer | `privacy.manage` | — | — | categories, legal bases, `approved` flag, and a notice saying none of it is law | answered by the running system, not a document | `implemented` |
+| Legal holds | `GET /api/v1/admin/privacy/legal-holds` | bearer | `privacy.manage` | — | `?active=&page=` | holds | — | `implemented` |
+| Place a hold | `POST /api/v1/admin/privacy/legal-holds` | bearer | `privacy.manage` | — | `{entity_type,entity_id?,subject_id?,reference,reason}` | `201` hold | a **reason is mandatory**; a subject-level hold covers every record about them | `implemented` |
+| Lift a hold | `POST /api/v1/admin/privacy/legal-holds/{hold}/lift` | bearer | `privacy.manage` | — | `{reason}` | the hold | lifting is what **allows a record to be destroyed** — reason mandatory, high-risk audited, never deleted | `implemented` |
+
+### One writer, and the interface lives in Shared
+
+Ten modules hand-rolled the same insert and had begun to differ. Consolidating produced the cycle
+`AccessControl → Audit → AccessControl` and `ModuleBoundaryTest` failed the build — correctly,
+since `Audit` has a surface of its own that must ask who may read it. The resolution is
+`Modules\Shared\Contracts\AuditWriter`: an interface in the module everyone may depend on, bound to
+the one implementation in `Audit`. **No null fallback** — if the binding is missing the application
+does not boot.
+
+`AuditIsAppendOnlyTest` fails the build if any file but `AuditTrail` inserts into `audit_entries`,
+or if anything anywhere calls `update`, `delete` or `truncate` on it.
+
+### The trail is not a second copy of the data
+
+`changed_fields` holds **column names**. An associative array is read for its **keys** — a
+`$changes` array is already keyed by field name, so passing one whole looks right and would write
+the values. Anything not matching a column-name pattern is **dropped, not stored**.
+
+`AuditAndPrivacyTest` exercises the system, scans every persisted summary for PhilSys numbers,
+emails, mobile numbers, birth dates and street addresses, and **tests the scanner against planted
+identifiers first**.
+
+Network identifiers are captured for `high` risk entries only, and only when
+`AUDIT_CAPTURE_NETWORK` is on — off by default, because capturing an IP on every routine read
+builds a movement log of the office's own staff.
+
+### Consent is the minority case
+
+Five purposes are `public-task` or `legal-obligation`; four are genuinely `consent`. The system
+**refuses** to record a consent for the first group, and the refusal is the point: consent implies a
+right to withdraw, and offering withdrawal for statutory processing is a promise the office cannot
+keep. The purposes are derived from the bases, never listed twice.
+
+### Retention: the machinery exists, the switch is off
+
+`RetentionPolicy::mayPurge()` refuses everything while `PRIVACY_RETENTION_APPROVED` is false —
+tested against a record twenty years past any plausible schedule. A legal hold outranks the schedule
+in one direction only: it can prevent a deletion and can never cause one.
+
+### The auditee is not the auditor
+
+`audit.view` is deliberately **not** on `lgu_admin`. The trail records the MSWDO head's own
+approvals, document reads and exports. `Role::DataProtectionOfficer` holds it — and holds **no
+operational permission at all**, so a DPO cannot open a case, read a resident record or approve
+anything. Same shape as `DisbursingOfficer` in ADR 0023 §3.
+
+---
+
 ## 12. Citizen clients
 
 Sources: `Taytay_Rizal_LGUIDS_Resident_Mobile_Flutter` (aligned to this contract already)

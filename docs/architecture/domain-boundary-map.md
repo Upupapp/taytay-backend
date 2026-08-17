@@ -28,7 +28,7 @@ Eloquent relationship across the boundary.
 | `Search` | record discovery and saved filter presets | **any record and any index** — every searcher runs a scoped query against the owning module's table, because an index maintained alongside the authorization rules eventually disagrees with them, invisibly (ADR 0027 §1) | **implemented** (TAB 22) |
 | `Content` | admin-authored public communication: newsfeed posts, their lifecycle, schedule, audience and media alt text; resident reactions, comments, share counts and moderation | any relationship between residents — no follow graph, no profiles, no mentions; and any external share destination, which it must never record (ADR 0029 §3) | **implemented** (TAB 23; engagement TAB 24) |
 | `Events` | official LGU events: the event record, its state machine, the registration *configuration* (window, capacity, waitlist), the **derived** availability answer, and the **registrations, waitlist and attendance** held against an event | **a stored availability value or a seat counter** — both are computed from committed rows, because a second source of one fact drifts and the cached copy always wins the check that reads it (ADR 0030 §2, ADR 0031 §1); also who a person *is* (asks `ResidentProfile`), whether anybody is told about a promotion (it announces; `Notification` decides), and newsfeed posts | **implemented** (TAB 25, TAB 26) |
-| `Audit` | append-only audit trail of privileged actions, personal-data reads and lifecycle transitions | anything mutable | planned |
+| `Audit` | the append-only trail of privileged actions, personal-data reads and lifecycle transitions; privacy notices and acknowledgements; consent records; legal holds; and the retention policy | **anything mutable**, and **any value that was changed** — it records field NAMES, an actor identifier and a record identifier, never the contents of either, because a trail that duplicates the data it protects is a second, less-guarded copy of it (ADR 0034 §2) | **implemented** (TAB 29) |
 
 `Identity` and `ResidentProfile` are deliberately **separate**. An account is a way to
 authenticate; a resident is a person the LGU serves. They are not 1:1 — a resident may
@@ -39,6 +39,13 @@ force a rewrite later.
 `Credential` and `Verification` are separate because verification must be able to run at
 the edge (kiosk/verifier device, possibly offline) against published key material without
 being granted read access to the credential holder's personal data.
+
+`Audit` is depended on by every module and depends on **nothing but `Shared`** — which is only
+possible because modules depend on the *interface* `Modules\Shared\Contracts\AuditWriter` rather
+than on `Audit` itself. Consolidating the ten hand-rolled writers without that inversion produced
+`AccessControl → Audit → AccessControl`, since `Audit` has an HTTP surface that must ask who may
+read the trail. `Shared` holds the interface only — no table, no query, no rule — so its charter is
+intact (ADR 0034 §1).
 
 `Content` and `Events` are deliberately **separate**, though both publish to the public. A
 newsfeed post's hardest problem is scheduling its own publication; an event's hardest problems are

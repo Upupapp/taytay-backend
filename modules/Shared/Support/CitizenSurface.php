@@ -120,6 +120,21 @@ final class CitizenSurface
             'v1.me.event-registrations.index',
             'v1.me.event-registrations.show',
 
+            /*
+             * ── privacy ──
+             *
+             * The notice is PUBLIC: one that required an account to read would be one a person
+             * could not consult before deciding whether to create an account (ADR 0034 §4).
+             *
+             * The consent routes are scoped at the query to the token's subject and take no
+             * identifier at all, so a resident manages only their own.
+             */
+            'v1.privacy.notice',
+            'v1.me.privacy.acknowledge',
+            'v1.me.privacy.consents.index',
+            'v1.me.privacy.consents.store',
+            'v1.me.privacy.consents.withdraw',
+
             // ── notifications ──
             'v1.me.notifications.index',
             'v1.me.notifications.read',

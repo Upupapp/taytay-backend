@@ -388,6 +388,8 @@ final class CitizenLeakScanTest extends KycTestCase
             '/api/v1/events',
             '/api/v1/events/'.$slug,
             '/api/v1/documents/'.$document,
+            '/api/v1/privacy/notice',
+            '/api/v1/me/privacy/consents',
             '/api/v1/me/event-registrations/'.$registration,
         ];
     }

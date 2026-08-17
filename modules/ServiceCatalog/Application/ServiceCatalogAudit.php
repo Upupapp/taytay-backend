@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\ServiceCatalog\Application;
 
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Modules\Shared\Application\RequestContext;
+use Modules\Shared\Contracts\AuditWriter;
 
 /**
  * Writes catalogue events to the append-only audit trail.
@@ -19,25 +17,28 @@ use Modules\Shared\Application\RequestContext;
  * `ProgramCatalog` predates this and does not yet audit its own writes — publishing a programme
  * is at least as consequential. Recorded as gap G-28 rather than fixed here, because retrofitting
  * it belongs with a review of what a programme change means, not with a referral TAB.
+
+ * ── TAB 29 ────────────────────────────────────────────────────────────────────────────
+ *
+ * THE INSERT NOW HAPPENS IN ONE PLACE. This class kept its name and its vocabulary — callers
+ * still write `$this->audit->record(...)` in the words of their own module — but the row is
+ * built by the one implementation of `Modules\Shared\Contracts\AuditWriter`.
+ *
+ * Ten hand-rolled inserts had already begun to differ, and a missing audit field is invisible:
+ * a trail with a gap looks exactly like a trail of a quiet week (ADR 0034 §1).
  */
 final class ServiceCatalogAudit
 {
-    public function __construct(private readonly RequestContext $requestContext) {}
+    public function __construct(private readonly AuditWriter $trail) {}
 
     public function record(?string $actorSubjectId, string $action, string $summary, string $entityId): void
     {
-        DB::table('audit_entries')->insert([
-            'uuid' => (string) Str::uuid7(),
-            'occurred_at' => now(),
-            'actor_subject_id' => $actorSubjectId,
-            'actor_label' => null,
-            'action' => $action,
-            'entity_type' => 'ServiceCatalog.Provider',
-            'entity_id' => $entityId,
-            'summary' => Str::limit($summary, 255, ''),
-            'request_id' => $this->requestContext->requestId(),
-            'client_channel' => $this->requestContext->channel()->value,
-            'created_at' => now(),
-        ]);
+        $this->trail->record(
+            $actorSubjectId,
+            $action,
+            $summary,
+            'ServiceCatalog.Provider',
+            $entityId,
+        );
     }
 }

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\AccessControl\Application;
 
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Modules\Shared\Application\ActorContext;
-use Modules\Shared\Application\RequestContext;
+use Modules\Shared\Contracts\AuditWriter;
 
 /**
  * Writes authority changes to the append-only audit trail.
@@ -22,26 +20,28 @@ use Modules\Shared\Application\RequestContext;
  *
  * Summaries name the authority, never the person. No names, no email addresses, no
  * contact details in the trail (Article 5.5).
+
+ * ── TAB 29 ────────────────────────────────────────────────────────────────────────────
+ *
+ * THE INSERT NOW HAPPENS IN ONE PLACE. This class kept its name and its vocabulary — callers
+ * still write `$this->audit->record(...)` in the words of their own module — but the row is
+ * built by the one implementation of `Modules\Shared\Contracts\AuditWriter`.
+ *
+ * Ten hand-rolled inserts had already begun to differ, and a missing audit field is invisible:
+ * a trail with a gap looks exactly like a trail of a quiet week (ADR 0034 §1).
  */
 final class AccessControlAudit
 {
-    public function __construct(private readonly RequestContext $requestContext) {}
+    public function __construct(private readonly AuditWriter $trail) {}
 
     public function record(ActorContext $actor, string $action, string $summary, string $subjectId): void
     {
-        DB::table('audit_entries')->insert([
-            'uuid' => (string) Str::uuid7(),
-            'occurred_at' => now(),
-            'actor_subject_id' => $actor->subjectId,
-            'actor_label' => null,
-            'action' => $action,
-            'entity_type' => 'AccessControl.Subject',
-            // The subject whose authority changed, not the actor who changed it.
-            'entity_id' => $subjectId,
-            'summary' => Str::limit($summary.' [by scope: '.$actor->scope->type.']', 255, ''),
-            'request_id' => $this->requestContext->requestId(),
-            'client_channel' => $this->requestContext->channel()->value,
-            'created_at' => now(),
-        ]);
+        $this->trail->record(
+            $actor->subjectId,
+            $action,
+            $summary.' [by scope: '.$actor->scope->type.']',
+            'AccessControl.Subject',
+            $subjectId,
+        );
     }
 }

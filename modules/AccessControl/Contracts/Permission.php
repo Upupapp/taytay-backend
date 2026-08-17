@@ -323,6 +323,29 @@ enum Permission: string
      */
     case NewsfeedModerate = 'newsfeed.moderate';
 
+    /**
+     * Read the audit trail.
+     *
+     * HELD BY NOBODY BY DEFAULT, and that is not an oversight. The trail is assembled across every
+     * module and is more concentrated than any single record it describes: a search for
+     * `safeguarding.opened` names which residents have protection cases without opening one, and
+     * a search for `document.viewed` reconstructs a caseworker's whole week.
+     *
+     * It belongs to whoever the LGU appoints to hold the office to account — a DPO, an internal
+     * auditor — and that appointment should be a decision on the record rather than a line that
+     * arrived with a feature (gap G-46). Reading it is itself audited.
+     */
+    case AuditView = 'audit.view';
+
+    /**
+     * Publish privacy notices, read the retention schedule, and place or lift legal holds.
+     *
+     * The Data Protection Officer's permission. Lifting a hold is what allows a record to be
+     * destroyed, which is why it sits with the person accountable for that decision rather than
+     * with general administration.
+     */
+    case PrivacyManage = 'privacy.manage';
+
     /** Author and edit official LGU events, configure registration, and archive them. */
     case EventManage = 'event.manage';
 

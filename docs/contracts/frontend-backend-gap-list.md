@@ -384,6 +384,30 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 29: **G-48** — **no RA 10173 §16 request lifecycle.** The master command asks for
+correction and access request *hooks*, and the hooks exist: resident correction requests were built
+in TAB 09, and a subject-access request is an export the machinery in ADR 0026 §3 already supports.
+What does not exist is a lifecycle for a formal data-subject request — received, acknowledged within
+the statutory period, actioned or refused with reasons, and the whole thing evidenced. Erasure and
+blocking in particular have no path at all, and cannot have one until the retention schedule is
+approved (G-47). Owner: LGU DPO to define the process, then this backend.
+
+Opened by TAB 29: **G-47** — **nothing sweeps expired records.** `RetentionPolicy` answers "may this
+be purged"; no scheduled job calls it, because nothing may be purged until the DPO approves the
+schedule. Wiring a sweeper first would be building the thing whose safety depends on a decision
+nobody has made — and deletion is the one operation this system cannot undo. When the schedule is
+approved, the sweeper is a job that walks each category and calls `mayPurge()`, which already
+enforces the legal-hold check. Owner: LGU DPO first, then this backend.
+
+Opened by TAB 29: **G-46** — **nobody holds `audit.view` until the LGU appoints a DPO.** The
+`data_protection_officer` role exists and is the only holder of `audit.view` and `privacy.manage`;
+`lgu_admin` deliberately holds neither. Until somebody is assigned that role, **nobody in this
+system can read the audit trail at all**. That is intended rather than an oversight — the trail
+records the MSWDO head's own approvals, document reads and exports, so granting it to them would be
+the auditee reading their own audit (ADR 0034 §7). It is recorded here because it is a real
+operational prerequisite: the trail is being written now and will be unreadable until the
+appointment is made. Owner: LGU.
+
 Opened by TAB 28: **G-45** — **image derivation runs inline, not queued.** Publishing a post or an
 event re-encodes its images during the request. That is fast for two variants of one image and slow
 for a post with ten, and the master command asks for the transformations to be queued. It was left
