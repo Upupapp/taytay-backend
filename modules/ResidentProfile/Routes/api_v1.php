@@ -26,7 +26,14 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // Nothing here writes to the canonical resident registry.
     Route::post('me/kyc', [KycController::class, 'register'])->name('v1.me.kyc.register');
     Route::get('me/kyc', [KycController::class, 'showOwn'])->name('v1.me.kyc.show');
-    Route::post('me/kyc/submit', [KycController::class, 'submitOwn'])->name('v1.me.kyc.submit');
+    /*
+     * RATE LIMITED (ADR 0035 §2). Each submission puts a case in front of a human reviewer,
+     * so an unthrottled endpoint is a denial-of-service attack on the office's attention
+     * rather than on the server.
+     */
+    Route::post('me/kyc/submit', [KycController::class, 'submitOwn'])
+        ->middleware('throttle:kyc-submission')
+        ->name('v1.me.kyc.submit');
 
     // ── the resident's own canonical profile ──────────────────────────────────────────
     Route::get('me/profile', [MyProfileController::class, 'show'])->name('v1.me.profile.show');

@@ -384,6 +384,23 @@ existing money field on both sides is already centavos — including `released_a
 which TAB 14 published as null so this TAB could fill it without a client change. **No client
 change required**, which was the point.
 
+Opened by TAB 30: **G-50** — **Firebase App Check is not adopted.** The master command permits it as
+defence in depth for Flutter and custom-backend traffic, and is explicit that it never substitutes
+for authenticated actor and object authorization. It is recorded rather than half-built, because
+the two ways to ship it are both wrong without a decision: an attestation check that fails open is
+decoration, and one that fails closed needs a staged rollout plan — old app versions, emulators and
+rooted devices all fail attestation while belonging to real residents. Owner: LGU, then this
+backend.
+
+Opened by TAB 30: **G-49** — **every Eloquent model is `$guarded = ['id']`.** Mass assignment is
+prevented at the controller instead: `$request->validate()` returns only validated keys, so an
+unlisted field never arrives at the service, and the correction endpoint goes further and refuses
+unknown fields by name. That is a real control and it is now tested (`ApiSecurityTest`, OWASP API6).
+What it is not is defence in depth — a controller that ever passed unvalidated input through would
+breach it with nothing to stop it. Tightening 85 models to explicit `$fillable` lists is a large
+change with its own regression risk, and it should be done deliberately rather than as a footnote
+to a security pass. Owner: this backend.
+
 Opened by TAB 29: **G-48** — **no RA 10173 §16 request lifecycle.** The master command asks for
 correction and access request *hooks*, and the hooks exist: resident correction requests were built
 in TAB 09, and a subject-access request is an export the machinery in ADR 0026 §3 already supports.

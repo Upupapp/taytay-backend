@@ -20,7 +20,16 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('admin/dashboard', [ReportController::class, 'dashboard'])->name('v1.admin.dashboard');
 
     Route::get('admin/exports', [ReportController::class, 'listExports'])->name('v1.admin.exports.index');
-    Route::post('admin/exports', [ReportController::class, 'requestExport'])->name('v1.admin.exports.store');
+    /*
+     * THE TIGHTEST AUTHENTICATED LIMIT IN THE SYSTEM, and it is per HOUR.
+     *
+     * An export is a copy of the database leaving this application's control (ADR 0026 §3).
+     * Ten an hour is generous for somebody doing their job and useless to somebody
+     * exfiltrating a caseload.
+     */
+    Route::post('admin/exports', [ReportController::class, 'requestExport'])
+        ->middleware('throttle:export')
+        ->name('v1.admin.exports.store');
 
     /*
      * Re-authorized at download, not trusted from the request: an export queued on Friday and

@@ -234,7 +234,10 @@ final class AuthenticationTest extends TestCase
     {
         Account::factory()->create(['mobile_number' => '+639170000008']);
 
-        $limit = (int) config('identity.rate_limits.code_request');
+        // The one table. Reading `identity.rate_limits` here is what let the limiter and this
+        // test disagree in TAB 30 — the endpoint looked unlimited because they read different
+        // numbers (ADR 0035 §2).
+        $limit = (int) config('security.rate_limits.code_request');
 
         for ($attempt = 0; $attempt < $limit; $attempt++) {
             $this->postJson('/api/v1/auth/otp', ['mobile_number' => '+639170000008'])->assertStatus(202);

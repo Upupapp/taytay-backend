@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\Content\Providers;
 
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -36,7 +33,5 @@ final class ContentServiceProvider extends ServiceProvider
          * instrument on purpose: the master command asks for a rate limit and explicitly defers
          * AI moderation, so this is the abuse control that exists today (ADR 0029 §5).
          */
-        RateLimiter::for('engagement', static fn (Request $request): Limit => Limit::perMinute(20)
-            ->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())));
     }
 }

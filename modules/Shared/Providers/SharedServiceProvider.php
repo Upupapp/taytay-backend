@@ -8,6 +8,7 @@ use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Support\ServiceProvider;
 use Modules\Shared\Application\RequestContext;
 use Modules\Shared\Console\ReadinessCommand;
+use Modules\Shared\Http\RateLimits;
 
 /**
  * Shared is the only module every other module may depend on, and it may depend on
@@ -48,6 +49,15 @@ final class SharedServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /*
+         * EVERY RATE LIMITER, IN ONE PLACE (ADR 0035 §2).
+         *
+         * They used to be defined next to whichever module needed one first, which is why nobody
+         * reviewing "are we rate limited?" could answer it — and why KYC submission, search and
+         * exports, all three named by the master command, had no limit at all.
+         */
+        RateLimits::register();
+
         if ($this->app->runningInConsole()) {
             $this->commands([ReadinessCommand::class]);
         }

@@ -67,7 +67,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
  * RATE LIMITED, per account. A register/withdraw loop is the cheapest way to churn a waitlist and
  * make the promotion job announce a seat to a different person every few seconds.
  */
-Route::middleware(['auth:sanctum', 'throttle:engagement'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'throttle:event-registration'])->group(function (): void {
     Route::post('events/{event}/registration', [EventRegistrationController::class, 'register'])
         ->name('v1.events.register');
     Route::delete('events/{event}/registration', [EventRegistrationController::class, 'withdraw'])

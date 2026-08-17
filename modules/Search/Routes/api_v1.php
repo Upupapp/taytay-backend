@@ -16,7 +16,15 @@ use Modules\Search\Http\Controllers\V1\SearchController;
  */
 
 Route::middleware('auth:sanctum')->group(function (): void {
-    Route::get('admin/search', [SearchController::class, 'search'])->name('v1.admin.search');
+    /*
+     * RATE LIMITED. Search is the endpoint an enumeration attempt reaches for: it is built to
+     * answer partial questions about many records at once. Every searcher is already scoped
+     * and authorized, so this limits the RATE of legitimate-looking questions rather than the
+     * answers (ADR 0035 §2).
+     */
+    Route::get('admin/search', [SearchController::class, 'search'])
+        ->middleware('throttle:search')
+        ->name('v1.admin.search');
 
     Route::get('admin/saved-views', [SearchController::class, 'index'])->name('v1.admin.saved-views.index');
     Route::post('admin/saved-views', [SearchController::class, 'store'])->name('v1.admin.saved-views.store');

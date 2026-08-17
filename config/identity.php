@@ -77,12 +77,17 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'rate_limits' => [
-        'sign_in' => 10,
-        'code_request' => 3,
-        'code_verify' => 10,
-        'password_reset_request' => 3,
-    ],
+    /*
+     | MOVED TO `config/security.php` IN TAB 30, and deliberately not left here as a copy.
+     |
+     | Two files holding the same number is how the limiter and the test that checks it end up
+     | disagreeing — which is exactly what happened when this table stayed behind: the limiter
+     | read one value and a feature test read the other, and the endpoint looked unlimited.
+     |
+     | Rate limits for every surface, authentication included, now live in one reviewable table
+     | (ADR 0035 §2).
+     */
+    // (no keys — see above)
 
     /*
     |--------------------------------------------------------------------------

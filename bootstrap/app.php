@@ -8,6 +8,7 @@ use Modules\Shared\Http\Middleware\ApplyCacheDirectives;
 use Modules\Shared\Http\Middleware\AssignRequestId;
 use Modules\Shared\Http\Middleware\ForceJsonResponse;
 use Modules\Shared\Http\Middleware\ResolveClientChannel;
+use Modules\Shared\Http\Middleware\SecurityHeaders;
 
 /*
  * API-only application (CLAUDE.md Article 0).
@@ -48,6 +49,12 @@ return Application::configure(basePath: dirname(__DIR__))
              * (ADR 0032 §4).
              */
             ApplyCacheDirectives::class,
+            /*
+             * Prepended too, so the headers reach every response including an authentication
+             * failure and a rate-limit rejection. Before this, two endpoints set them by hand and
+             * 259 did not (ADR 0035 §3).
+             */
+            SecurityHeaders::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
