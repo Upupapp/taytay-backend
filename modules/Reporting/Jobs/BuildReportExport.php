@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Modules\Reporting\Domain\ReportCatalog;
 use Modules\Reporting\Infrastructure\Eloquent\ReportExport;
+use Modules\Shared\Application\WorkloadQueue;
 
 /**
  * Produces the file (ADR 0026 §3).
@@ -38,9 +39,38 @@ final class BuildReportExport implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    /** @see WorkloadQueue — why this workload does not share a queue with the others. */
+    private const QUEUE = WorkloadQueue::Exports;
+
+    /**
+     * Two attempts only. An export that fails twice is failing for a reason a third would
+     * not fix, and each attempt rebuilds the whole file — so a third is mostly load.
+     */
     public int $tries = 2;
 
-    public function __construct(private readonly string $exportUuid) {}
+    /**
+     * Exponential backoff, in seconds per attempt.
+     *
+     * Widening gaps rather than a fixed delay: whatever made the first attempt fail is usually
+     * still true a second later, and a tight retry loop turns one struggling dependency into a
+     * self-inflicted denial of service against it (ADR 0036 §2).
+     */
+    public array $backoff = [60, 300];
+
+    /**
+     * Beyond this the job is hung rather than slow, and holding a worker helps nobody.
+     *
+     * Mirrors `WorkloadQueue::timeoutSeconds()`, which cannot be called from a property
+     * initialiser; `QueueConventionsTest` fails the build if the two ever disagree.
+     */
+    public int $timeout = 900;
+
+    public function __construct(private readonly string $exportUuid)
+    {
+        // Routed here rather than at every dispatch site: a job that must be queued
+        // somewhere specific should not depend on each caller remembering where.
+        $this->onQueue(self::QUEUE->value);
+    }
 
     public function handle(): void
     {

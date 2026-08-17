@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Modules\Identity\Contracts\AccountType;
 use Modules\Identity\Contracts\VerificationPurpose;
 use Modules\Identity\Infrastructure\Eloquent\Account;
+use Modules\Shared\Application\CacheKey;
 use Modules\Shared\Application\ClientChannel;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
@@ -223,10 +224,17 @@ final class AuthenticationService
         return $challenge;
     }
 
+    /**
+     * Built through `CacheKey` like every other cache key in this system (ADR 0036 §4).
+     *
+     * Neither public nor actor-scoped: at the moment this is read **nobody is authenticated yet**,
+     * which is the point of a challenge. It is keyed by the presented token, hashed — so the store
+     * never holds the value a caller presents, and anyone who could read the cache still could not
+     * complete somebody else's second factor.
+     */
     private function challengeKey(string $challenge): string
     {
-        // Hashed so the cache store never holds the value a caller presents.
-        return 'identity:mfa-challenge:'.hash('sha256', $challenge);
+        return CacheKey::forOpaqueToken('identity.mfa-challenge', $challenge);
     }
 
     private function invalidCredentials(): ApiException

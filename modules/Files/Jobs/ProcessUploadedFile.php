@@ -12,6 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 use Modules\Files\Contracts\ScanStatus;
 use Modules\Files\Infrastructure\Eloquent\StoredFile;
+use Modules\Shared\Application\WorkloadQueue;
 
 /**
  * Post-upload work: malware scan, then metadata.
@@ -38,9 +39,38 @@ final class ProcessUploadedFile implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    /** @see WorkloadQueue — why this workload does not share a queue with the others. */
+    private const QUEUE = WorkloadQueue::Media;
+
+    /**
+     * Scanning and metadata are both retryable, and a file that cannot be processed settles
+     * at `pending` rather than `clean` — so exhausting the retries fails safe.
+     */
     public int $tries = 3;
 
-    public function __construct(private readonly string $fileUuid) {}
+    /**
+     * Exponential backoff, in seconds per attempt.
+     *
+     * Widening gaps rather than a fixed delay: whatever made the first attempt fail is usually
+     * still true a second later, and a tight retry loop turns one struggling dependency into a
+     * self-inflicted denial of service against it (ADR 0036 §2).
+     */
+    public array $backoff = [15, 60, 180];
+
+    /**
+     * Beyond this the job is hung rather than slow, and holding a worker helps nobody.
+     *
+     * Mirrors `WorkloadQueue::timeoutSeconds()`, which cannot be called from a property
+     * initialiser; `QueueConventionsTest` fails the build if the two ever disagree.
+     */
+    public int $timeout = 300;
+
+    public function __construct(private readonly string $fileUuid)
+    {
+        // Routed here rather than at every dispatch site: a job that must be queued
+        // somewhere specific should not depend on each caller remembering where.
+        $this->onQueue(self::QUEUE->value);
+    }
 
     public function handle(): void
     {

@@ -11,6 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
+use Modules\Shared\Application\WorkloadQueue;
 use Modules\Welfare\Application\ReferralService;
 use Modules\Welfare\Contracts\ReferralBecameOverdue;
 use Modules\Welfare\Infrastructure\Eloquent\Referral;
@@ -40,12 +41,43 @@ final class SweepOverdueReferrals implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    /** @see WorkloadQueue — why this workload does not share a queue with the others. */
+    private const QUEUE = WorkloadQueue::ScheduledContent;
+
+    /**
+     * One attempt, for the same reason as the publish sweep: it is idempotent and re-run on
+     * a schedule, so the next run is the retry.
+     */
+    public int $tries = 1;
+
+    /**
+     * Exponential backoff, in seconds per attempt.
+     *
+     * Widening gaps rather than a fixed delay: whatever made the first attempt fail is usually
+     * still true a second later, and a tight retry loop turns one struggling dependency into a
+     * self-inflicted denial of service against it (ADR 0036 §2).
+     */
+    public array $backoff = [];
+
+    /**
+     * Beyond this the job is hung rather than slow, and holding a worker helps nobody.
+     *
+     * Mirrors `WorkloadQueue::timeoutSeconds()`, which cannot be called from a property
+     * initialiser; `QueueConventionsTest` fails the build if the two ever disagree.
+     */
+    public int $timeout = 120;
+
     /**
      * @param  string|null  $asOf  ISO date; passed for testability rather than read from the
      *                             clock inside, so a test does not have to travel through time
      *                             to describe what it means.
      */
-    public function __construct(private readonly ?string $asOf = null) {}
+    public function __construct(private readonly ?string $asOf = null)
+    {
+        // Routed here rather than at every dispatch site: a job that must be queued
+        // somewhere specific should not depend on each caller remembering where.
+        $this->onQueue(self::QUEUE->value);
+    }
 
     public function handle(ReferralService $referrals): int
     {

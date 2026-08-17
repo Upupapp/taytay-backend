@@ -12,6 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 use Modules\Content\Domain\PostStatus;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedPost;
+use Modules\Shared\Application\WorkloadQueue;
 
 /**
  * Publishes posts whose time has come (ADR 0028 §3).
@@ -38,7 +39,39 @@ final class PublishScheduledPosts implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public function __construct(private readonly ?string $asOf = null) {}
+    /** @see WorkloadQueue — why this workload does not share a queue with the others. */
+    private const QUEUE = WorkloadQueue::ScheduledContent;
+
+    /**
+     * ONE ATTEMPT, deliberately. The sweep is idempotent and runs every minute, so the next
+     * run IS the retry — and a retried sweep racing the next scheduled one is two sweeps
+     * where the design assumes one.
+     */
+    public int $tries = 1;
+
+    /**
+     * Exponential backoff, in seconds per attempt.
+     *
+     * Widening gaps rather than a fixed delay: whatever made the first attempt fail is usually
+     * still true a second later, and a tight retry loop turns one struggling dependency into a
+     * self-inflicted denial of service against it (ADR 0036 §2).
+     */
+    public array $backoff = [];
+
+    /**
+     * Beyond this the job is hung rather than slow, and holding a worker helps nobody.
+     *
+     * Mirrors `WorkloadQueue::timeoutSeconds()`, which cannot be called from a property
+     * initialiser; `QueueConventionsTest` fails the build if the two ever disagree.
+     */
+    public int $timeout = 120;
+
+    public function __construct(private readonly ?string $asOf = null)
+    {
+        // Routed here rather than at every dispatch site: a job that must be queued
+        // somewhere specific should not depend on each caller remembering where.
+        $this->onQueue(self::QUEUE->value);
+    }
 
     /**
      * @return int how many posts went live
