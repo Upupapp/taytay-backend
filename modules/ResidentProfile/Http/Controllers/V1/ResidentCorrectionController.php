@@ -6,6 +6,7 @@ namespace Modules\ResidentProfile\Http\Controllers\V1;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\ResidentProfile\Application\ResidentCorrectionService;
@@ -62,11 +63,18 @@ final class ResidentCorrectionController
         }
 
         $total = (clone $query)->count();
-        $rows = $query->forPage($pagination->page, $pagination->perPage)->get();
+
+        // TWO unconditional queries per row before this: the changed fields, and the resident.
+        $rows = $query->with('fields')->forPage($pagination->page, $pagination->perPage)->get();
+
+        $residents = Resident::query()
+            ->whereKey($rows->pluck('resident_id')->filter()->unique()->values()->all())
+            ->get()
+            ->keyBy('id');
 
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
-            fn (ResidentCorrectionRequest $row): array => $this->reviewerProjection($row),
+            fn (ResidentCorrectionRequest $row): array => $this->reviewerProjection($row, $residents),
         );
     }
 
@@ -118,12 +126,16 @@ final class ResidentCorrectionController
     }
 
     /**
+     * @param  Collection<int, Resident>|null  $residents  keyed by primary key, resolved for the
+     *                                                     whole page, or null for a single row
      * @return array<string, mixed>
      */
-    private function reviewerProjection(ResidentCorrectionRequest $request): array
+    private function reviewerProjection(ResidentCorrectionRequest $request, ?object $residents = null): array
     {
         /** @var Resident|null $resident */
-        $resident = Resident::query()->find($request->resident_id);
+        $resident = $residents === null
+            ? Resident::query()->find($request->resident_id)
+            : $residents->get($request->resident_id);
 
         return [
             'id' => $request->uuid,
@@ -140,7 +152,7 @@ final class ResidentCorrectionController
                 'barangay_id' => $resident->barangay_id,
                 'verification_tier' => $resident->verification_tier->value,
             ],
-            'changes' => $request->fields()->get()
+            'changes' => $request->fields
                 ->map(fn (ResidentCorrectionField $field): array => [
                     'field' => $field->field,
                     // Both shown so the reviewer can see the record may have moved since

@@ -85,6 +85,23 @@ value on a field the client already treats as open, a reworded `message`.
 
   No response changed: the same fields, the same values.
 
+* **Seven more list endpoints ran a query per row.** All now cost a fixed number whatever the page
+  holds. No response changed on any of them.
+
+  Measured before and after:
+
+  * `GET /api/v1/events` — **7 queries for one event, 22 for six**, three per event, for the cover
+    image's public renditions. This is the list a resident opens to see what is happening in the
+    barangay, and an event without a poster is the exception;
+  * `GET /api/v1/newsfeed/{post}/comments` — one query per **reply**, 6 → 11. The same fix repairs
+    `GET /api/v1/admin/newsfeed-comments`;
+  * `GET /api/v1/admin/kyc-cases` — 5 → 10, a `COUNT` per case for its undecided candidates;
+  * `GET /api/v1/admin/cases/{case}/document-requests` — 5 → 10, a lookup per request.
+
+  Fixed on the same pattern, covered by the suite but not measured at two row counts:
+  `GET /api/v1/admin/cases/{case}/eligibility-checks`, `GET /api/v1/me/profile/corrections`, and
+  `GET /api/v1/admin/resident-corrections` (which ran **two** queries per row).
+
 ---
 
 ## 2026-08-18 — first published contract (TAB 33)

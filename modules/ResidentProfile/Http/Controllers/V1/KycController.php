@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\ResidentProfile\Http\Controllers\V1;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\AccessControl\Application\AuthorizationService;
@@ -109,7 +110,16 @@ final class KycController
         }
 
         $total = (clone $query)->count();
-        $cases = $query->forPage($pagination->page, $pagination->perPage)->get();
+
+        /*
+         * The undecided-candidate count as a subquery on the page's own select, rather than a
+         * COUNT per row. That count runs whether or not a case has candidates, so this was one
+         * unconditional extra query per row — measured 5 for one case and 10 for six (ADR 0042 §9).
+         */
+        $cases = $query
+            ->withCount(['candidates as undecided_candidates' => fn (Builder $q) => $q->where('decision', 'undecided')])
+            ->forPage($pagination->page, $pagination->perPage)
+            ->get();
 
         return ApiResponse::page(
             new Page($cases->all(), $total, $pagination),
@@ -271,7 +281,12 @@ final class KycController
             'submitted_at' => $case->submitted_at?->toIso8601ZuluString(),
             'reviewed_at' => $case->reviewed_at?->toIso8601ZuluString(),
             'resident_id' => $case->resolved_resident_id,
-            'undecided_candidates' => $case->candidates()->where('decision', 'undecided')->count(),
+            /*
+             * From the list query's subquery when it ran. A single-case caller has no such
+             * attribute and asks directly — one query for one row, which is not an N+1.
+             */
+            'undecided_candidates' => $case->undecided_candidates
+                ?? $case->candidates()->where('decision', 'undecided')->count(),
         ];
     }
 

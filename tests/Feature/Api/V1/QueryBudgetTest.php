@@ -58,6 +58,8 @@ final class QueryBudgetTest extends KycTestCase
 
     private ?object $applicant = null;
 
+    private ?string $threadRoot = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -109,15 +111,53 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('citizen newsfeed with images', $small, $large);
     }
 
+    /**
+     * WITH COVER IMAGES, and that is the whole point.
+     *
+     * This test passed at 4 → 4 for two rounds while the endpoint actually cost **7 queries for
+     * one event and 22 for six**. The fixture published events with no cover, and
+     * `publicMediaUrls(null)` returns without querying — so the gate measured the empty path and
+     * reported the endpoint safe. A poster is the normal state of an LGU event.
+     */
     #[Test]
     public function the_public_events_list_does_not_grow_with_events(): void
     {
         Sanctum::actingAs($this->reviewer('lgu_admin'));
 
-        $small = $this->measure('/api/v1/events', fn () => $this->publishedEvent(), 1, asCitizen: true);
-        $large = $this->measure('/api/v1/events', fn () => $this->publishedEvent(), 8, asCitizen: true);
+        $small = $this->measure('/api/v1/events', fn () => $this->publishedEventWithCover(), 1, asCitizen: true);
+        $large = $this->measure('/api/v1/events', fn () => $this->publishedEventWithCover(), 8, asCitizen: true);
 
+        $this->assertSame(
+            8,
+            DB::table('events')->whereNotNull('cover_file_id')->count(),
+            'The fixture published events with no cover, so the cover lookup never ran.',
+        );
         $this->assertBudget('public events list', $small, $large);
+    }
+
+    /**
+     * WITH REPLIES. A top-level comment resolves no parent, so a thread of them measures nothing —
+     * the endpoint cost one query per REPLY, 6 → 11.
+     */
+    #[Test]
+    public function a_comment_thread_does_not_grow_with_replies(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $post = $this->publishPost();
+        $this->threadRoot = $this->addComment($post, null);
+
+        $url = "/api/v1/newsfeed/{$post}/comments";
+
+        $small = $this->measure($url, fn () => $this->addComment($post, $this->threadRoot), 1, asCitizen: true);
+        $large = $this->measure($url, fn () => $this->addComment($post, $this->threadRoot), 6, asCitizen: true);
+
+        $this->assertSame(
+            6,
+            DB::table('newsfeed_comments')->whereNotNull('parent_id')->count(),
+            'The fixture created no replies, so the parent lookup never ran.',
+        );
+        $this->assertBudget('comment thread', $small, $large);
     }
 
     /**
@@ -160,6 +200,37 @@ final class QueryBudgetTest extends KycTestCase
 
         $this->assertHasDocuments(6);
         $this->assertBudget('citizen requirements page', $small, $large);
+    }
+
+    /**
+     * The KYC review queue counted each case's undecided candidates with its own `COUNT`.
+     * Unconditional — the count runs whether or not a case has candidates — so it was 5 queries
+     * for one case and 10 for six. Now a subquery on the page's own select.
+     */
+    #[Test]
+    public function the_kyc_review_queue_does_not_grow_with_cases(): void
+    {
+        $small = $this->measure('/api/v1/admin/kyc-cases', fn () => $this->submittedCase(), 1, asReviewer: true);
+        $large = $this->measure('/api/v1/admin/kyc-cases', fn () => $this->submittedCase(), 6, asReviewer: true);
+
+        $this->assertBudget('kyc review queue', $small, $large);
+    }
+
+    /**
+     * Each document request resolved its requirement's uuid with its own query.
+     */
+    #[Test]
+    public function the_document_request_list_does_not_grow_with_requests(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+        $case = $this->caseWithRequirements();
+
+        $url = "/api/v1/admin/cases/{$case}/document-requests";
+
+        $small = $this->measure($url, fn () => $this->openDocumentRequest($case), 1);
+        $large = $this->measure($url, fn () => $this->openDocumentRequest($case), 6);
+
+        $this->assertBudget('document request list', $small, $large);
     }
 
     #[Test]
@@ -216,7 +287,12 @@ final class QueryBudgetTest extends KycTestCase
         int $rows,
         bool $asCitizen = false,
         bool $asApplicant = false,
+        bool $asReviewer = false,
     ): int {
+        if ($asReviewer) {
+            Sanctum::actingAs($this->reviewer('lgu_admin'));
+        }
+
         $admin = auth()->user();
 
         /*
@@ -275,6 +351,11 @@ final class QueryBudgetTest extends KycTestCase
             // Counted as rows WITH a document, because a requirement without one costs nothing.
             str_contains($url, '/requirements') => DB::table('welfare_case_requirements')
                 ->whereNotNull('document_id')->count(),
+            // Replies only — a top-level comment costs no parent lookup, so counting all comments
+            // would satisfy the loop without ever creating what is under test.
+            str_contains($url, '/comments') => DB::table('newsfeed_comments')->whereNotNull('parent_id')->count(),
+            str_contains($url, '/kyc-cases') => DB::table('kyc_cases')->count(),
+            str_contains($url, '/document-requests') => DB::table('document_requests')->count(),
             str_contains($url, '/registrations') => DB::table('event_registrations')->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
@@ -343,6 +424,61 @@ final class QueryBudgetTest extends KycTestCase
             'expiry_unknown' => true,
             'replaces_because' => null,
         ], ActorContext::system());
+    }
+
+    /**
+     * A published event with a real cover image, so the cover lookup actually runs.
+     */
+    private function publishedEventWithCover(): void
+    {
+        $file = app(FileStore::class)->store(
+            UploadedFile::fake()->createWithContent('poster.jpg', $this->realJpeg()),
+            FileClassification::PublicReference,
+            ActorContext::system(),
+        );
+
+        $this->publishedEvent([
+            'cover_file_id' => (string) $file->uuid,
+            'cover_alt_text' => 'Residents queueing outside the barangay hall.',
+        ]);
+    }
+
+    private function openDocumentRequest(string $case): void
+    {
+        $model = WelfareCase::query()->where('uuid', $case)->firstOrFail();
+
+        $slot = CaseRequirement::query()->create([
+            'welfare_case_id' => $model->id,
+            'requirement_code' => 'REQ_'.DB::table('welfare_case_requirements')->count(),
+            'label' => 'Barangay certificate',
+            'template_version' => '1',
+            'obligation' => RequirementObligation::Required,
+            'applicability' => RequirementApplicability::Applies,
+        ]);
+
+        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$slot->uuid}/document-requests", [
+            'channel' => 'in-person',
+            'message' => 'Please bring your barangay certificate.',
+        ])->assertCreated();
+    }
+
+    private function addComment(string $post, ?string $parent): string
+    {
+        $admin = auth()->user();
+
+        [$citizen] = $this->activeCitizenWithResident();
+        Sanctum::actingAs($citizen);
+
+        $id = $this->postJson("/api/v1/newsfeed/{$post}/comments", array_filter([
+            'body' => 'Is the office open on Tuesday?',
+            'parent_id' => $parent,
+        ]))->json('data.id');
+
+        if ($admin !== null) {
+            Sanctum::actingAs($admin);
+        }
+
+        return (string) $id;
     }
 
     private function registerOneCitizen(string $event): void

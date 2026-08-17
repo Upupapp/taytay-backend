@@ -150,7 +150,10 @@ final class MyProfileController
             ->orderByDesc('id');
 
         $total = (clone $query)->count();
-        $rows = $query->forPage($pagination->page, $pagination->perPage)->get();
+
+        // The changed fields for the page in one query. Read per row it was one each, and a
+        // correction request always has fields (ADR 0042 §9).
+        $rows = $query->with('fields')->forPage($pagination->page, $pagination->perPage)->get();
 
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
@@ -355,7 +358,7 @@ final class MyProfileController
             'review_note' => $request->review_note,
             'reviewed_at' => $request->reviewed_at?->toIso8601ZuluString(),
             'created_at' => $request->created_at?->toIso8601ZuluString(),
-            'changes' => $request->fields()->get()
+            'changes' => $request->fields
                 ->map(fn (ResidentCorrectionField $field): array => [
                     'field' => $field->field,
                     'current_value' => $field->current_value,

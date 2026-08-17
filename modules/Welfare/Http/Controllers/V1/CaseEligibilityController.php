@@ -59,8 +59,12 @@ final class CaseEligibilityController
 
         $model = $this->caseOrFail($actor, $case);
 
+        // Results for the whole history in one query. Read per row it was one each, and a check
+        // always has results, so there was no shape of data that avoided it (ADR 0042 §9).
+        $checks = $this->eligibility->historyFor($model)->load('results');
+
         return ApiResponse::item([
-            'checks' => $this->eligibility->historyFor($model)
+            'checks' => $checks
                 ->map(fn (CaseEligibilityCheck $check): array => $this->checkProjection($check))
                 ->all(),
         ]);
@@ -86,7 +90,7 @@ final class CaseEligibilityController
             'is_advisory' => true,
             'evaluated_by' => $check->evaluated_by,
             'evaluated_at' => $check->evaluated_at?->toIso8601ZuluString(),
-            'results' => $check->results()->get()
+            'results' => $check->results
                 ->map(fn (CaseEligibilityResult $result): array => [
                     'criterion_code' => $result->criterion_code,
                     'fact' => $result->fact,

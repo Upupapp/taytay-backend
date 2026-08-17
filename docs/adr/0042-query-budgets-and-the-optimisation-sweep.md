@@ -269,10 +269,70 @@ Three consecutive full-suite runs are now clean.
 
 ---
 
+## 9. Round three: the gate that was lying, and five more N+1s
+
+54 GET endpoints render a collection. Six were gated; building fixtures for the other 48 was
+disproportionate, so a **structural detector** narrowed the field first — used only for its
+positives, because its negatives prove nothing.
+
+### The detector had to earn its negatives, and initially could not
+
+Held to a positive control — the three pre-fix defects from §1, read out of git history — the
+first version **missed two of three**. It matched one shape, `->map(fn … => $this->proj(…))`,
+while the codebase renders lists in four:
+
+| shape | where |
+| --- | --- |
+| `->map(fn … => $this->proj($r))` | the one it matched |
+| `array_map(fn … => $this->proj($r), $rows)` | promotion lists |
+| `->map(fn … => [ … inline … ])` | media renditions |
+| **`ApiResponse::page($page, fn … => $this->proj($r))`** | **most list endpoints** |
+
+The fourth is the dominant one, because Article 4 mandates pagination — so the detector was blind
+to nearly every list in the system while appearing to work.
+
+It then failed the control for a second reason worth recording. The closure filter had been
+written through a shell heredoc that turned `\b` into a literal **backspace byte** (`\x08fn\s*\(`),
+so the regex silently never matched. The file *looked* correct when read back — the control byte is
+invisible. Only the positive control caught it. **A detector without a positive control is a
+detector you are guessing about**, and this one was wrong twice for two unrelated reasons.
+
+### What it found once it passed
+
+| Endpoint | before (1 → 6 rows) | after | per row |
+| --- | --- | --- | --- |
+| `GET /events` **with cover images** | 7 → **22** | 6 → 6 | 3 |
+| `GET /newsfeed/{post}/comments` **with replies** | 6 → **11** | 6 → 6 | 1 |
+| `GET /admin/kyc-cases` | 5 → **10** | 4 → 4 | 1 |
+| `GET /admin/cases/{case}/document-requests` | 5 → **10** | 5 → 5 | 1 |
+
+**`/events` was already in the permanent gate, passing 4 → 4, for two rounds.** Its fixture
+published events with no cover, and `publicMediaUrls(null)` returns without querying. The gate was
+measuring the empty path and reporting the endpoint safe — the same trap as §6, on an endpoint
+already believed to be covered. **A green gate is only as honest as its fixture.**
+
+The comments thread failed the same way: a query per row that has a *parent*, and the fixture
+created only top-level comments. Its fix also repairs `GET /admin/newsfeed-comments`, whose
+moderation projection delegates to the same reader projection.
+
+Three more were fixed on the same unconditional pattern — a relation read per row, which no shape
+of data avoids. **These were fixed by inspection and covered by the suite, not measured at two row
+counts**, which is a weaker standard than the four above and is recorded as such:
+
+* `GET /admin/cases/{case}/eligibility-checks` — `$check->results()->get()` per row;
+* `GET /me/profile/corrections` — `$request->fields()->get()` per row;
+* `GET /admin/resident-corrections` — **two** per row, the fields and the resident.
+
+The detector still flags seventeen methods. Most are now the deliberate
+`$map === null ? lookup : $map[$key] ?? default` shape, which it cannot distinguish from a real
+per-row lookup — the correct trade for a tool used only to choose what to measure next.
+
+---
+
 ## Consequences
 
-* Five endpoints now cost a fixed number of queries at any page size, and the build fails if that
-  regresses.
+* Nine endpoints now cost a fixed number of queries at any page size, each with a gate the build
+  fails on, and every gate mutation-tested by reverting its fix.
 * Three batch lookups exist alongside their single-row forms. A caller rendering a list must use
   the batch; the test is what enforces it.
 * `CaseRequirementService` separates the satisfaction *rule* from the *lookup*, so a list path and
@@ -284,3 +344,6 @@ Three consecutive full-suite runs are now clean.
     own probes were measuring empty data and reporting success;
   * **a check with no negative fixture may be inert, wrong, or both**, and the inert half hides
     the wrong half.
+* And from §9: **a passing gate is not evidence its endpoint is safe.** `/events` passed for two
+  rounds while costing three queries per row, because nothing asserted its fixture created the
+  data the endpoint charges for. Every gate here now asserts what its fixture produced.

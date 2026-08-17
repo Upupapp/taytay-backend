@@ -72,9 +72,11 @@ final class EngagementController
         $total = (clone $query)->count();
         $rows = $query->forPage($pagination->page, $pagination->perPage)->get();
 
+        $parents = $this->parentUuidsFor($rows);
+
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
-            fn (NewsfeedComment $comment): array => $this->readerProjection($comment),
+            fn (NewsfeedComment $comment): array => $this->readerProjection($comment, $parents),
         );
     }
 
@@ -166,9 +168,11 @@ final class EngagementController
         $total = (clone $query)->count();
         $rows = $query->forPage($pagination->page, $pagination->perPage)->get();
 
+        $parents = $this->parentUuidsFor($rows);
+
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
-            fn (NewsfeedComment $comment): array => $this->moderatorProjection($comment),
+            fn (NewsfeedComment $comment): array => $this->moderatorProjection($comment, $parents),
         );
     }
 
@@ -202,12 +206,15 @@ final class EngagementController
      *
      * @return array<string, mixed>
      */
-    private function readerProjection(NewsfeedComment $comment): array
+    /**
+     * @param  array<int, string>|null  $parents  parent uuid by primary key, resolved for the
+     *                                            whole page, or null when rendering one comment
+     */
+    private function readerProjection(NewsfeedComment $comment, ?array $parents = null): array
     {
         return [
             'id' => $comment->uuid,
-            'parent_id' => $comment->parent_id === null ? null : (string) NewsfeedComment::query()
-                ->whereKey($comment->parent_id)->value('uuid'),
+            'parent_id' => $this->parentUuid($comment, $parents),
             'body' => $comment->body,
             // Whether the office wrote it, which is the one thing a reader most needs to know.
             'is_official' => (bool) $comment->is_official,
@@ -221,14 +228,71 @@ final class EngagementController
     /**
      * @return array<string, mixed>
      */
-    private function moderatorProjection(NewsfeedComment $comment): array
+    /**
+     * @param  array<int, string>|null  $parents
+     */
+    private function moderatorProjection(NewsfeedComment $comment, ?array $parents = null): array
     {
-        return $this->readerProjection($comment) + [
+        return $this->readerProjection($comment, $parents) + [
             'moderation_state' => $comment->moderation_state->value,
             'moderation_reason' => $comment->moderation_reason,
             'moderated_by' => $comment->moderated_by,
             'moderated_at' => $comment->moderated_at?->toIso8601ZuluString(),
         ];
+    }
+
+    /**
+     * A reply's parent, exposed as the uuid clients address comments by rather than the primary
+     * key they never see.
+     *
+     * `null` for `$parents` means no map was supplied — a single-comment caller. An absent key in
+     * a supplied map means the page asked and the parent is not on it, which is a real answer:
+     * the reply is shown without a resolvable parent rather than costing a query to say so.
+     *
+     * @param  array<int, string>|null  $parents
+     */
+    private function parentUuid(NewsfeedComment $comment, ?array $parents): ?string
+    {
+        if ($comment->parent_id === null) {
+            return null;
+        }
+
+        if ($parents === null) {
+            return (string) NewsfeedComment::query()->whereKey($comment->parent_id)->value('uuid');
+        }
+
+        return $parents[$comment->parent_id] ?? null;
+    }
+
+    /**
+     * Every parent referenced by a page of comments, in one query.
+     *
+     * Asked per row this cost one query per REPLY — invisible to a measurement whose fixture
+     * creates only top-level comments, because those take the null branch above. Measured 6
+     * queries for one reply and 11 for six (ADR 0042 §9).
+     *
+     * @param  iterable<NewsfeedComment>  $comments
+     * @return array<int, string>
+     */
+    private function parentUuidsFor(iterable $comments): array
+    {
+        $ids = [];
+
+        foreach ($comments as $comment) {
+            if ($comment->parent_id !== null) {
+                $ids[] = $comment->parent_id;
+            }
+        }
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return NewsfeedComment::query()
+            ->whereKey(array_values(array_unique($ids)))
+            ->pluck('uuid', 'id')
+            ->map(strval(...))
+            ->all();
     }
 
     /**

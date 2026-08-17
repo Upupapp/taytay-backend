@@ -190,9 +190,15 @@ final class EventController
         $total = (clone $query)->count();
         $rows = $query->forPage($pagination->page, $pagination->perPage)->get();
 
+        // Every cover's public renditions for the page, in two queries. Asking per event cost
+        // three each — measured 7 queries for one event and 22 for six (ADR 0042 §9).
+        $coverUrls = $this->library->publicMediaUrlsFor(
+            $rows->pluck('cover_file_id')->filter()->map(strval(...))->values()->all(),
+        );
+
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
-            fn (Event $event): array => $this->publicProjection($event),
+            fn (Event $event): array => $this->publicProjection($event, $coverUrls),
         );
     }
 
@@ -271,7 +277,11 @@ final class EventController
      *
      * @return array<string, mixed>
      */
-    private function publicProjection(Event $event): array
+    /**
+     * @param  array<string, array<string, string>>|null  $coverUrls  resolved for the whole page,
+     *                                                                or null for a single event
+     */
+    private function publicProjection(Event $event, ?array $coverUrls = null): array
     {
         $availability = $this->events->availabilityFor($event);
 
@@ -288,7 +298,14 @@ final class EventController
              * Public URLs of the RE-ENCODED renditions, never of the uploaded original — which
              * stays on the private disk for its whole life. Empty until the event is published.
              */
-            'cover_urls' => $this->library->publicMediaUrls($event->cover_file_id),
+            /*
+             * `null` means no map was supplied — a single-event caller. An absent KEY in a
+             * supplied map means the page asked and this cover has no published renditions,
+             * which is a real answer and not a lookup to retry per row (ADR 0033 §3).
+             */
+            'cover_urls' => $coverUrls === null
+                ? $this->library->publicMediaUrls($event->cover_file_id)
+                : ($coverUrls[(string) $event->cover_file_id] ?? []),
             // Always emitted when there is a cover, so a client never has to decide what to do
             // with a missing one.
             'cover_alt_text' => $event->cover_alt_text,

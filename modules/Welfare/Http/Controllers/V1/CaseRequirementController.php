@@ -273,9 +273,19 @@ final class CaseRequirementController
         $this->authorization->authorize($actor, Permission::RequestView);
         $model = $this->caseOrFail($actor, $case);
 
+        $requests = $this->requests->forCase($model);
+
+        // The requirement uuid for every request on the page, in one query. Asked per row it was
+        // one unconditional query each — 5 for one request, 10 for six (ADR 0042 §9).
+        $requirementUuids = CaseRequirement::query()
+            ->whereKey($requests->pluck('welfare_case_requirement_id')->filter()->unique()->values()->all())
+            ->pluck('uuid', 'id')
+            ->map(strval(...))
+            ->all();
+
         return ApiResponse::item([
-            'requests' => $this->requests->forCase($model)
-                ->map(fn (DocumentRequest $r): array => $this->requestProjection($r))->all(),
+            'requests' => $requests
+                ->map(fn (DocumentRequest $r): array => $this->requestProjection($r, $requirementUuids))->all(),
         ]);
     }
 
@@ -393,12 +403,18 @@ final class CaseRequirementController
     /**
      * @return array<string, mixed>
      */
-    private function requestProjection(DocumentRequest $request): array
+    /**
+     * @param  array<int, string>|null  $requirementUuids  resolved for the whole page, or null
+     *                                                     when rendering a single request
+     */
+    private function requestProjection(DocumentRequest $request, ?array $requirementUuids = null): array
     {
         return [
             'id' => $request->uuid,
-            'requirement_id' => (string) CaseRequirement::query()
-                ->whereKey($request->welfare_case_requirement_id)->value('uuid'),
+            'requirement_id' => $requirementUuids === null
+                ? (string) CaseRequirement::query()
+                    ->whereKey($request->welfare_case_requirement_id)->value('uuid')
+                : ($requirementUuids[$request->welfare_case_requirement_id] ?? ''),
             'state' => $request->state,
             'channel' => $request->channel,
             'message' => $request->message,
