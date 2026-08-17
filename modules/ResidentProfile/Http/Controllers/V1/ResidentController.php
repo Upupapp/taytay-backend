@@ -11,6 +11,7 @@ use Modules\AccessControl\Contracts\Permission;
 use Modules\ResidentProfile\Application\AccountLinkService;
 use Modules\ResidentProfile\Application\ResidentProfileAudit;
 use Modules\ResidentProfile\Application\ResidentRegistry;
+use Modules\ResidentProfile\Contracts\CivilStatus;
 use Modules\ResidentProfile\Contracts\CorrectableField;
 use Modules\ResidentProfile\Contracts\VerificationTier;
 use Modules\ResidentProfile\Infrastructure\Eloquent\AccountResidentLink;
@@ -139,7 +140,7 @@ final class ResidentController
             'suffix' => ['nullable', 'string', 'max:16'],
             'sex' => ['required', 'string', 'in:female,male'],
             'birth_date' => ['required', 'date', 'before:today'],
-            'civil_status' => ['required', 'string', 'in:single,married,widowed,separated,annulled,cohabiting'],
+            'civil_status' => ['required', 'string', CivilStatus::rule()],
             'barangay_id' => ['required', 'integer', 'exists:barangays,id'],
             'street_address' => ['required', 'string', 'max:191'],
             'purok_or_sitio' => ['nullable', 'string', 'max:96'],
@@ -411,7 +412,7 @@ final class ResidentController
             CorrectableField::Suffix->value => ['sometimes', 'nullable', 'string', 'max:16'],
             CorrectableField::Sex->value => ['sometimes', 'string', 'in:female,male'],
             CorrectableField::BirthDate->value => ['sometimes', 'date', 'before:today'],
-            CorrectableField::CivilStatus->value => ['sometimes', 'string', 'in:single,married,widowed,separated,annulled,cohabiting'],
+            CorrectableField::CivilStatus->value => ['sometimes', 'string', CivilStatus::rule()],
             CorrectableField::BarangayId->value => ['sometimes', 'integer', 'exists:barangays,id'],
             CorrectableField::StreetAddress->value => ['sometimes', 'string', 'max:191'],
             CorrectableField::PurokOrSitio->value => ['sometimes', 'nullable', 'string', 'max:96'],

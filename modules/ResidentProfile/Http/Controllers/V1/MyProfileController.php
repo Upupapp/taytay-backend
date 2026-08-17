@@ -11,6 +11,7 @@ use Modules\ResidentProfile\Application\HouseholdMembershipService;
 use Modules\ResidentProfile\Application\HouseholdRegistry;
 use Modules\ResidentProfile\Application\RelationshipService;
 use Modules\ResidentProfile\Application\ResidentCorrectionService;
+use Modules\ResidentProfile\Contracts\CivilStatus;
 use Modules\ResidentProfile\Contracts\CorrectableField;
 use Modules\ResidentProfile\Contracts\RelationshipType;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Family;
@@ -114,7 +115,7 @@ final class MyProfileController
             'changes.suffix' => ['sometimes', 'nullable', 'string', 'max:16'],
             'changes.sex' => ['sometimes', 'string', 'in:female,male'],
             'changes.birth_date' => ['sometimes', 'date', 'before:today'],
-            'changes.civil_status' => ['sometimes', 'string', 'in:single,married,widowed,separated,annulled,cohabiting'],
+            'changes.civil_status' => ['sometimes', 'string', CivilStatus::rule()],
             'changes.barangay_id' => ['sometimes', 'integer', 'exists:barangays,id'],
             'changes.street_address' => ['sometimes', 'string', 'max:191'],
             'changes.purok_or_sitio' => ['sometimes', 'nullable', 'string', 'max:96'],

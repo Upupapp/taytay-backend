@@ -453,7 +453,7 @@ one-line change behind the same interface, since `MediaPublisher::publish()` is 
 and already called from outside the transition transaction. Owner: this backend, once posting
 volume is known.
 
-Opened by TAB 27: **G-44** — **there is no generated OpenAPI 3.1 document.** The stack baseline names
+**CLOSED by TAB 33.** `docs/api/openapi.json` is generated from the router, the PHP enums and the error-code catalogue, committed, and kept current by a build-failing check — so a response-shape change produces a spec diff in the same commit (ADR 0038). `docs/api/types.ts` carries the same enums for TypeScript clients, and `CHANGELOG_API.md` records the versioning and deprecation policy. Originally: Opened by TAB 27: **G-44** — **there is no generated OpenAPI 3.1 document.** The stack baseline names
 one and none is produced. The contract matrix is the current specification, and it is not merely
 prose: `ContractMatrixTest` checks it against the registered routes in **both** directions, so a
 row without a route and a route without a row both fail the build. What a generated document would
