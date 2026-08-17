@@ -47,6 +47,7 @@ final class DatabaseConventionsTest extends TestCase
         'filters' => 'report_exports: the filter set as it was asked for, kept verbatim as evidence; opaque, never filtered or joined on',
         'permission_context' => 'report_exports: what the requester was allowed to see at the moment they asked, snapshotted because permissions change; opaque, never authorized on',
         'columns' => 'saved_views: which columns a user chose to show; presentation only, never read to decide what may be disclosed',
+        'source_payload' => 'import_rows: a legacy row exactly as it arrived, INCLUDING the columns nobody mapped; evidence of what the file said, never filtered, joined or authorized on — and storing it typed would require knowing a legacy schema this system deliberately refuses to guess (ADR 0040 §4)',
     ];
 
     #[Test]
