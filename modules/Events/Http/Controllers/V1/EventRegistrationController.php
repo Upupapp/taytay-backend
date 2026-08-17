@@ -15,6 +15,7 @@ use Modules\Events\Infrastructure\Eloquent\Event;
 use Modules\Events\Infrastructure\Eloquent\EventRegistration;
 use Modules\Identity\Application\AccountDirectory;
 use Modules\ResidentProfile\Application\ResidentDirectory;
+use Modules\ResidentProfile\Contracts\ResidentSummary;
 use Modules\Shared\Application\ActorContext;
 use Modules\Shared\Application\IdempotencyService;
 use Modules\Shared\Application\Pagination\Page;
@@ -182,9 +183,19 @@ final class EventRegistrationController
         $total = (clone $query)->count();
         $rows = $query->forPage($pagination->page, $pagination->perPage)->get();
 
+        /*
+         * ONE LOOKUP FOR THE WHOLE PAGE, not one per row. `summaryFor()` inside the projection was
+         * an N+1: measured at 11 queries for one registrant and 18 for eight. At a feeding
+         * programme with two hundred registrants that is two hundred round trips to render one
+         * page — and it degrades exactly when the office is busiest.
+         */
+        $names = $this->residents->summariesFor(
+            $rows->pluck('resident_id')->map(strval(...))->all(),
+        );
+
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
-            fn (EventRegistration $registration): array => $this->staffProjection($registration),
+            fn (EventRegistration $registration): array => $this->staffProjection($registration, $names),
             $this->registrations->summaryFor($model),
         );
     }
@@ -308,11 +319,18 @@ final class EventRegistrationController
     /**
      * The list the office works from.
      *
+     * @param  array<string, ResidentSummary>  $names  resolved
+     *                                                 for the
+     *                                                 whole page
      * @return array<string, mixed>
      */
-    private function staffProjection(EventRegistration $registration): array
+    private function staffProjection(EventRegistration $registration, array $names = []): array
     {
-        $summary = $this->residents->summaryFor((string) $registration->resident_id);
+        $residentId = (string) $registration->resident_id;
+
+        // Falls back to a single lookup for the callers that render one row. The list path passes
+        // the whole page's names in, which is what keeps it flat.
+        $summary = $names[$residentId] ?? $this->residents->summaryFor($residentId);
 
         return [
             'id' => $registration->uuid,

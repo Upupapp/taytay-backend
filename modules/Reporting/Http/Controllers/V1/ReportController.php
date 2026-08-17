@@ -73,6 +73,14 @@ final class ReportController
 
     // ── exports ───────────────────────────────────────────────────────────────────────
 
+    /**
+     * How many of a requester's own exports the history returns.
+     *
+     * Generous: person-level exports live 24 hours and aggregate ones a week, so a hundred covers
+     * every export that still has a file behind it many times over.
+     */
+    private const EXPORT_HISTORY_LIMIT = 100;
+
     public function listExports(Request $request, ActorContext $actor): JsonResponse
     {
         $this->authorization->authorize($actor, Permission::ReportView);
@@ -83,6 +91,18 @@ final class ReportController
             'exports' => ReportExport::query()
                 ->where('requested_by', (string) $actor->subjectId)
                 ->orderByDesc('requested_at')
+                /*
+                 * BOUNDED. This was an unbounded `->get()` — the only one left in the API — and a
+                 * staff member's export history grows for as long as they work here (Article 4:
+                 * collections are always paginated, never an unbounded list).
+                 *
+                 * A LIMIT RATHER THAN PAGINATION, deliberately. Moving to the `page` envelope
+                 * would change this response's shape, which `CHANGELOG_API.md` classes as a
+                 * breaking change requiring `/api/v2` — a disproportionate answer to a list whose
+                 * rows expire in 24 hours to a week anyway (ADR 0026 §3). The most recent hundred
+                 * is every export that still has a file behind it, several times over.
+                 */
+                ->limit(self::EXPORT_HISTORY_LIMIT)
                 ->get()
                 ->map(fn (ReportExport $export): array => $this->projection($export))->all(),
         ]);

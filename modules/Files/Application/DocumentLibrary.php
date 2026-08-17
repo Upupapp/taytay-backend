@@ -134,6 +134,21 @@ final class DocumentLibrary
     }
 
     /**
+     * Public URLs for many images at once, keyed by file UUID.
+     *
+     * The batch form of {@see publicMediaUrls()}. A caller rendering a LIST must use this: calling
+     * the single-file version per row cost three queries a row on the citizen newsfeed, which
+     * `QueryBudgetTest` now fails the build over.
+     *
+     * @param  list<string>  $fileUuids
+     * @return array<string, array<string, string>>
+     */
+    public function publicMediaUrlsFor(array $fileUuids): array
+    {
+        return $this->media->publicUrlsFor($fileUuids);
+    }
+
+    /**
      * @param  list<string>  $fileUuids
      * @return list<StoredFile>
      */

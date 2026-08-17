@@ -50,7 +50,28 @@ value on a field the client already treats as open, a reworded `message`.
 
 ## Unreleased
 
-Nothing yet. The contract below is the state as of the first published document.
+### Changed — behavioural, not breaking
+
+* **`GET /api/v1/admin/exports` now returns at most 100 exports**, most recent first. It previously
+  returned every export the caller had ever requested, which grows for as long as somebody works
+  here — the only unbounded list left in the API (Article 4).
+
+  **The response shape is unchanged**: still `{ "data": { "exports": [...] } }`. Pagination would
+  have been the tidier fix and would have changed the envelope, which this changelog classes as
+  breaking — a disproportionate answer for a list whose rows expire in 24 hours to a week anyway.
+
+  A client showing "your recent exports" is unaffected. One that assumed it received the complete
+  history was already relying on rows that expire.
+
+### Fixed — performance, no contract change
+
+* Three list endpoints ran one or more extra queries **per row**. All now cost a fixed number of
+  queries whatever the page size, and `QueryBudgetTest` fails the build if that changes:
+  `GET /api/v1/admin/events/{event}/registrations`, and `GET /api/v1/newsfeed` (twice — once for
+  each post's media, once more for each post's public image URLs).
+
+  No response changed. A feed page of twenty-five posts with pictures previously cost roughly
+  seventy-five avoidable database round trips.
 
 ---
 

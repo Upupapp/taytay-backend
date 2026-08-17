@@ -66,8 +66,14 @@ final class CredentialService
          * (ADR 0010 §4). Partial verification is deliberately enough to *receive
          * assistance* — the LGU must not make help conditional on paperwork a person
          * cannot produce — but not enough to be handed an identity document.
+         *
+         * ASKED AS `mayHoldCredential()` RATHER THAN `isVerified()`. Both compare the same tier
+         * today, and that is exactly the problem with the generic one: it says what the tier IS,
+         * not what the tier PERMITS. If the LGU ever decides a partially-verified resident may
+         * hold a limited credential, the rule changes in one named place instead of in whichever
+         * tier comparisons somebody manages to find.
          */
-        if (! $resident->isVerified()) {
+        if (! $resident->verificationTier->mayHoldCredential()) {
             throw new ApiException(
                 ErrorCode::Conflict,
                 'A digital ID can only be issued to a fully verified resident record.',

@@ -36,6 +36,42 @@ final class ResidentDirectory
     }
 
     /**
+     * Summaries for many residents at once, keyed by UUID.
+     *
+     * **ADDED BECAUSE `summaryFor()` IN A LOOP IS AN N+1**, and the measurement said so: the staff
+     * registrant list ran 11 queries for one row and 18 for eight — one extra per registrant. At a
+     * feeding programme with two hundred registrants that is two hundred round trips to render one
+     * page, and it degrades exactly when the office is busiest.
+     *
+     * A caller with one identifier should still use `summaryFor()`. A caller with a list must use
+     * this, and `QueryBudgetTest` fails the build if the list endpoints start growing again.
+     *
+     * @param  list<string>  $residentUuids
+     * @return array<string, ResidentSummary>
+     */
+    public function summariesFor(array $residentUuids): array
+    {
+        $uuids = array_values(array_unique(array_filter($residentUuids)));
+
+        if ($uuids === []) {
+            return [];
+        }
+
+        $summaries = [];
+
+        foreach (Resident::query()->whereIn('uuid', $uuids)->get() as $resident) {
+            $summaries[(string) $resident->uuid] = new ResidentSummary(
+                id: $resident->uuid,
+                displayName: $resident->displayName(),
+                verificationTier: $resident->verification_tier,
+                barangayId: $resident->barangay_id === null ? null : (int) $resident->barangay_id,
+            );
+        }
+
+        return $summaries;
+    }
+
+    /**
      * The facts a programme's eligibility guidance is allowed to read (ADR 0018 §3).
      *
      * THIS MODULE DECIDES WHAT IT DISCLOSES. The alternative — letting ServiceCatalog or

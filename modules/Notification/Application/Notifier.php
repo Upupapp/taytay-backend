@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\Notification\Application;
 
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Modules\Notification\Infrastructure\Eloquent\Notification;
 use Modules\Notification\Infrastructure\Eloquent\NotificationPreference;
@@ -103,18 +102,6 @@ final class Notifier
          * informed deserves a list to be shown.
          */
         return in_array('database', $allowed, true) ? $allowed : array_merge(['database'], $allowed);
-    }
-
-    /**
-     * @return Collection<int, Notification>
-     */
-    public function forRecipient(string $subjectId): Collection
-    {
-        return Notification::query()
-            ->where('recipient_subject_id', $subjectId)
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->get();
     }
 
     public function markRead(Notification $notification): Notification

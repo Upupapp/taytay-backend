@@ -182,6 +182,53 @@ final class MediaPublisher
     }
 
     /**
+     * Public URLs for many files at once, keyed by file UUID then by variant.
+     *
+     * **ADDED BECAUSE `publicUrl()` IN A LOOP WAS THE WORST N+1 IN THE SYSTEM**, and the
+     * measurement is what found it: the citizen newsfeed ran 10 queries for one post with a
+     * picture and 25 for six — three extra per post, because each one looked up its stored file
+     * and then each variant separately.
+     *
+     * A feed page is twenty-five posts. That is seventy-five avoidable round trips on the endpoint
+     * every resident opens first, on the connection least able to afford them.
+     *
+     * TWO QUERIES, WHATEVER THE PAGE SIZE: the files, then their public variants.
+     *
+     * @param  list<string>  $fileUuids
+     * @return array<string, array<string, string>>
+     */
+    public function publicUrlsFor(array $fileUuids): array
+    {
+        $uuids = array_values(array_unique(array_filter($fileUuids)));
+
+        if ($uuids === []) {
+            return [];
+        }
+
+        $files = StoredFile::query()->whereIn('uuid', $uuids)->get(['id', 'uuid']);
+
+        if ($files->isEmpty()) {
+            return [];
+        }
+
+        $variants = MediaVariantRecord::query()
+            ->whereIn('stored_file_id', $files->pluck('id'))
+            ->where('visibility', MediaVisibility::Public->value)
+            ->get();
+
+        $urls = [];
+
+        foreach ($files as $file) {
+            foreach ($variants->where('stored_file_id', $file->id) as $variant) {
+                $urls[(string) $file->uuid][$variant->variant->value] =
+                    Storage::disk((string) $variant->disk)->url((string) $variant->storage_key);
+            }
+        }
+
+        return $urls;
+    }
+
+    /**
      * Whether this file may ever have a public rendition.
      *
      * THE REFUSAL LIVES HERE, NOT IN THE CALLER. A module that attached the wrong file to a post
