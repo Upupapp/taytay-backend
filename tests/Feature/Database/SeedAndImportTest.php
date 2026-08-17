@@ -48,6 +48,26 @@ final class SeedAndImportTest extends TestCase
         }
     }
 
+    /**
+     * A PhilSys-shaped run of digits.
+     */
+    private const GOVERNMENT_IDENTIFIER = '/\b\d{4}-\d{4}-\d{4}\b/';
+
+    /**
+     * Columns that are structurally random hex rather than anything a person could own.
+     *
+     * EXCLUDED DELIBERATELY, AND THIS IS THE POINT OF THE COMMENT. This check used to run over
+     * `json_encode()` of the whole row, which included the UUID primary key — and **3.4% of the
+     * UUID7s this system generates contain a `dddd-dddd-dddd` substring by pure chance** (measured
+     * over twenty thousand of them; `01a010cb-6340-7003-8211-…` contains `6340-7003-8211`).
+     *
+     * With thirteen seeded residents that is a **one-in-three failure rate**, for a reason with
+     * nothing to do with personal data. A security test that cries wolf is one somebody eventually
+     * weakens until it asserts nothing — so the fix is to scan the fields that could actually hold
+     * an identifier, and to prove below that the narrowed scan still reaches and still catches.
+     */
+    private const STRUCTURAL_IDENTIFIERS = ['uuid'];
+
     #[Test]
     public function no_government_identifier_is_seeded_at_all(): void
     {
@@ -62,9 +82,35 @@ final class SeedAndImportTest extends TestCase
             $this->assertNull($resident->philsys_last_four);
         }
 
-        // And nothing anywhere in the seeded rows looks like one.
-        $serialised = (string) json_encode(DB::table('residents')->get());
-        $this->assertSame(0, preg_match('/\b\d{4}-\d{4}-\d{4}\b/', $serialised));
+        $suspect = [];
+        $scanned = 0;
+
+        foreach (DB::table('residents')->get() as $resident) {
+            foreach ((array) $resident as $field => $value) {
+                if (! is_string($value) || in_array($field, self::STRUCTURAL_IDENTIFIERS, true)) {
+                    continue;
+                }
+
+                $scanned++;
+
+                if (preg_match(self::GOVERNMENT_IDENTIFIER, $value) === 1) {
+                    $suspect[] = "{$field} = {$value}";
+                }
+            }
+        }
+
+        // The scan must REACH something. Excluding a column is one edit away from excluding them
+        // all, and a scan over nothing passes silently.
+        $this->assertGreaterThan(20, $scanned, 'The scan examined almost no seeded values.');
+        $this->assertSame([], $suspect, 'A seeded value is shaped like a government identifier.');
+
+        // And it must still CATCH one. Without this, narrowing the scan above is indistinguishable
+        // from switching it off.
+        $this->assertSame(
+            1,
+            preg_match(self::GOVERNMENT_IDENTIFIER, 'PhilSys 1234-5678-9012 on file'),
+            'The identifier check no longer recognises a government identifier.',
+        );
     }
 
     // ── criterion 1: the demo data is coherent ───────────────────────────────────────

@@ -56,9 +56,15 @@ final class MyRequirementController
     {
         $model = $this->ownCaseOrFail($actor, $case);
 
+        $requirements = $this->requirements->forCase($model);
+
+        // Resolved once for the page. This one is opened on a phone, over mobile data, by the
+        // applicant checking whether the office has accepted their papers yet.
+        $versions = $this->requirements->currentVersionsFor($requirements);
+
         return ApiResponse::item([
-            'requirements' => $this->requirements->forCase($model)
-                ->map(fn (CaseRequirement $r): array => $this->projection($r))->all(),
+            'requirements' => $requirements
+                ->map(fn (CaseRequirement $r): array => $this->projection($r, $versions))->all(),
             'requests' => DocumentRequest::query()
                 ->where('welfare_case_id', $model->id)
                 ->where('state', 'open')
@@ -145,12 +151,18 @@ final class MyRequirementController
      * requirement was ruled out at all — an applicant told "you did not need that after all"
      * mid-case reads as the office changing its mind about them.
      *
+     * @param  array<string, DocumentVersionView>|null  $versions  resolved for the whole page, or
+     *                                                             null when rendering a single row
      * @return array<string, mixed>
      */
-    private function projection(CaseRequirement $requirement): array
+    private function projection(CaseRequirement $requirement, ?array $versions = null): array
     {
-        $version = $this->requirements->currentVersion($requirement);
-        $satisfied = $this->requirements->isSatisfied($requirement);
+        $version = $versions === null
+            ? $this->requirements->currentVersion($requirement)
+            : ($versions[(string) $requirement->uuid] ?? null);
+
+        // From the version already in hand — `isSatisfied()` would resolve the same document again.
+        $satisfied = $this->requirements->satisfiedBy($version);
 
         return [
             'id' => $requirement->uuid,

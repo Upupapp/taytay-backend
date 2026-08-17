@@ -148,11 +148,139 @@ exists to make.
 
 ---
 
+## 6. The second round, and the worst defect in the codebase
+
+Round one measured `/admin/cases`, `/admin/residents` and a handful of others **once each, on
+whatever rows happened to exist**. That proves nothing: an N+1 is a slope, and one point has no
+slope. Round two re-measured six endpoints at two row counts each.
+
+Five were genuinely flat. The sixth was this:
+
+| Endpoint | before (1 row → 6 rows) | after |
+| --- | --- | --- |
+| `GET /admin/cases/{case}/requirements` | 17 → 77 | **7 → 7** |
+| `GET /me/cases/{case}/requirements` | 12 → 27 | **7 → 7** |
+
+**Twelve queries per requirement.** The projection resolved the same document four times over:
+
+1. `currentVersion()` for the version itself;
+2. `isSatisfied()`, which called `currentVersion()` again;
+3. `isOutstanding()`, which called `isSatisfied()`, which called it a third time;
+4. `outstandingFor()`, which re-ran the whole list query and resolved every document a fourth
+   time — for a **count**.
+
+Each resolution cost three queries (the document, its live versions, the file). A case with twenty
+requirements cost roughly 240 round trips to render one page, on the screen a caseworker has open
+while the applicant stands at the counter.
+
+Fixed with `DocumentLibrary::currentVersionsFor()` — the batch form, three queries for the page —
+and by splitting the *rule* from the *lookup*: `satisfiedBy()` and `outstandingGiven()` take a
+version somebody already resolved, while `isSatisfied()`/`isOutstanding()` remain the same rule
+with the lookup attached. One definition, two entry points, so the list path cannot drift from
+the single-row path.
+
+### The fixture that nearly hid it
+
+**The first measurement of this endpoint said flat, and it was wrong.** The probe created
+requirements with no document attached — and every lookup in the projection returns `null` without
+querying when the document id is null. It measured the empty path, perfectly, and reported success.
+
+It was caught only because the probe also printed **how many rows it had actually created**. The
+same report caught a second dead fixture in the same run: a tasks measurement over an empty list,
+because the creation payload was silently rejected.
+
+Hence `assertHasDocuments()` in the permanent test: a query-budget test whose fixture produces
+nothing measures nothing and passes. **A measurement must assert its own reach.**
+
+The gate was mutation-tested — reverting the projection to the per-row lookups produced 13 → 43
+and 12 → 27, both naming the endpoint.
+
+---
+
+## 7. A security test that ran zero assertions
+
+Unrelated to performance, found by asking PHPUnit which tests report no assertions.
+
+`the_origin_allow_list_is_never_a_wildcard_with_credentials` was written as bare conditionals over
+the live config:
+
+```php
+if (config('cors.supports_credentials') === true) { ... }
+foreach ($patterns as $pattern) { ... }
+```
+
+In the test environment credentials are off and the pattern list is empty, so **every branch was
+false and the test ran zero assertions**. It passed regardless of what production shipped — a
+wildcard-with-credentials CORS policy, the exact thing it names, would not have failed it.
+
+Rewritten as a predicate (`corsDanger()`) pointed at both the shipped config *and* at three shapes
+it must refuse.
+
+**The negative fixtures immediately failed** — and the bug they found was in the rule itself. The
+Netlify check was `str_contains($pattern, 'netlify.app')`, but these are regular expressions, so a
+real one spells the host `netlify\.app`. The check would have missed every actual pattern.
+
+So the original test was broken twice: it never ran, **and it would not have caught what it was
+written to catch if it had**. Only the negative fixture could find the second fault, because the
+first one hid it.
+
+The neighbouring `the_origin_allow_list_denies_by_default` set `cors.allowed_origins` to `[]` and
+then asserted it was `[]` — a test of Laravel's config repository. It now evaluates
+`config/cors.php` with the environment variable absent, which is the question that matters.
+
+A sweep of all 896 tests found exactly one other zero-assertion case, and it is correct:
+`expectNotToPerformAssertions()` declaring that `authorize()` returns without throwing.
+
+---
+
+## 8. A privacy test that failed one run in three
+
+`no_government_identifier_is_seeded_at_all` scanned `json_encode()` of every seeded resident row
+for a PhilSys-shaped `\b\d{4}-\d{4}-\d{4}\b`. The serialised row includes the **UUID primary key**.
+
+**3.4% of the UUID7s this system generates contain that substring by chance** — measured over
+twenty thousand of them. `01a010cb-6340-7003-8211-317d1ee20e7f` contains `6340-7003-8211`: three
+consecutive all-numeric hex groups, which is unremarkable when a quarter of hex characters are
+digits.
+
+With thirteen seeded residents that is a **36% failure rate**. It failed twice during this sweep
+and was initially mistaken for a regression from the query work.
+
+This is worse than an ordinary flake because of what the test guards. A privacy check that fails
+for an unrelated reason one run in three is a check somebody eventually weakens or deletes — and
+what they delete is the only thing standing between a demo seeder and a plausible-looking
+government identifier in a database.
+
+Now scanned field by field with `uuid` excluded, plus two guards, both mutation-tested:
+
+* **the scan must reach something** — excluding one column is one edit away from excluding them
+  all, and a scan over nothing passes silently (mutation: reach 0 → *"examined almost no seeded
+  values"*);
+* **the pattern must still catch a real identifier** — otherwise narrowing the scan is
+  indistinguishable from switching it off (mutation: pattern neutered → *"no longer recognises a
+  government identifier"*).
+
+The first attempt at both mutations appeared to *pass*, which would have meant the guards were
+useless. They had not applied — a shell heredoc had mangled the backslashes in the regex being
+substituted. **A mutation that does not change the file is not a mutation test**, and confirming
+the edit landed is part of running one.
+
+Three consecutive full-suite runs are now clean.
+
+---
+
 ## Consequences
 
-* Three endpoints now cost a fixed number of queries at any page size, and the build fails if that
+* Five endpoints now cost a fixed number of queries at any page size, and the build fails if that
   regresses.
-* Two batch lookups exist alongside their single-row forms. A caller rendering a list must use the
-  batch; the test is what enforces it.
+* Three batch lookups exist alongside their single-row forms. A caller rendering a list must use
+  the batch; the test is what enforces it.
+* `CaseRequirementService` separates the satisfaction *rule* from the *lookup*, so a list path and
+  a single-row path can share one definition rather than two that drift.
 * No index changed. The next person to wonder about indexes can read §3 instead of repeating the
   scan.
+* Two conclusions worth more than any single fix, both from §6 and §7:
+  * **a measurement that does not report what it measured is not evidence.** Two of this sweep's
+    own probes were measuring empty data and reporting success;
+  * **a check with no negative fixture may be inert, wrong, or both**, and the inert half hides
+    the wrong half.

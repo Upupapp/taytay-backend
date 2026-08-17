@@ -73,6 +73,18 @@ value on a field the client already treats as open, a reworded `message`.
   No response changed. A feed page of twenty-five posts with pictures previously cost roughly
   seventy-five avoidable database round trips.
 
+* **The requirements pages cost twelve queries per requirement** — the worst of the set.
+  `GET /api/v1/admin/cases/{case}/requirements` measured **17 queries for one requirement and 77
+  for six**; `GET /api/v1/me/cases/{case}/requirements` measured 12 and 27. Both are now flat at
+  seven whatever the page holds.
+
+  The projection resolved each requirement's document four separate times, and each resolution
+  cost three queries. A case with twenty requirements cost roughly 240 round trips to render one
+  page — on the staff screen used while an applicant waits at the counter, and on the phone screen
+  where a resident checks whether their papers were accepted.
+
+  No response changed: the same fields, the same values.
+
 ---
 
 ## 2026-08-18 — first published contract (TAB 33)

@@ -208,14 +208,65 @@ final class CaseRequirementService
      */
     public function isSatisfied(CaseRequirement $requirement): bool
     {
-        return $this->currentVersion($requirement)?->satisfies() ?? false;
+        return $this->satisfiedBy($this->currentVersion($requirement));
     }
 
     public function isOutstanding(CaseRequirement $requirement): bool
     {
+        return $this->outstandingGiven($requirement, $this->currentVersion($requirement));
+    }
+
+    /**
+     * The current version of each requirement's document, keyed by REQUIREMENT id.
+     *
+     * The batch form, for a caller rendering a list. `currentVersion()` costs three queries and
+     * a requirements projection asked it four times per row — the version, then `isSatisfied()`
+     * re-asking, then `isOutstanding()` re-asking through `isSatisfied()`, then `outstandingFor()`
+     * doing the whole thing again for the count. Twelve queries per requirement, measured
+     * (ADR 0042 §6).
+     *
+     * An absent key means that requirement has no live document, which is the normal state of a
+     * slot nobody has filled — not a lookup to retry per row.
+     *
+     * @param  Collection<int, CaseRequirement>  $requirements
+     * @return array<string, DocumentVersionView>
+     */
+    public function currentVersionsFor(Collection $requirements): array
+    {
+        $byDocument = $this->library->currentVersionsFor(
+            $requirements->pluck('document_id')->filter()->map(strval(...))->values()->all(),
+        );
+
+        $byRequirement = [];
+
+        foreach ($requirements as $requirement) {
+            $version = $byDocument[(string) $requirement->document_id] ?? null;
+
+            if ($version !== null) {
+                $byRequirement[(string) $requirement->uuid] = $version;
+            }
+        }
+
+        return $byRequirement;
+    }
+
+    /**
+     * The satisfaction rule, applied to a version somebody has ALREADY resolved.
+     *
+     * This is where the rule lives; `isSatisfied()` is the same rule with the lookup attached.
+     * Two entry points, one definition — a list path that reimplemented "verified and unexpired"
+     * inline would drift from the single-row path the moment either changed.
+     */
+    public function satisfiedBy(?DocumentVersionView $version): bool
+    {
+        return $version?->satisfies() ?? false;
+    }
+
+    public function outstandingGiven(CaseRequirement $requirement, ?DocumentVersionView $version): bool
+    {
         return $requirement->obligation->isOutstanding(
             $requirement->applicability,
-            $this->isSatisfied($requirement),
+            $this->satisfiedBy($version),
         );
     }
 
@@ -226,8 +277,14 @@ final class CaseRequirementService
      */
     public function outstandingFor(WelfareCase $case): Collection
     {
-        return $this->forCase($case)
-            ->filter(fn (CaseRequirement $requirement): bool => $this->isOutstanding($requirement))
+        $requirements = $this->forCase($case);
+        $versions = $this->currentVersionsFor($requirements);
+
+        return $requirements
+            ->filter(fn (CaseRequirement $requirement): bool => $this->outstandingGiven(
+                $requirement,
+                $versions[(string) $requirement->uuid] ?? null,
+            ))
             ->values();
     }
 

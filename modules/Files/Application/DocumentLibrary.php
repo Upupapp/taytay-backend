@@ -221,6 +221,63 @@ final class DocumentLibrary
     }
 
     /**
+     * The current version of each of several documents, keyed by document id.
+     *
+     * THE BATCH FORM, FOR A CALLER RENDERING A LIST. Three queries whatever the page size —
+     * the single-row form above costs three *each* (the document, its live versions, the file),
+     * and a requirements page asked for it four times per row (ADR 0042 §6).
+     *
+     * An absent key is a real answer: that document has no live version. A caller must not fall
+     * back to `currentVersion()` for a missing key — that pays for the batch and then does the
+     * per-row work anyway, which measured worse than the N+1 it replaced (ADR 0033 §3).
+     *
+     * @param  list<string>  $documentUuids
+     * @return array<string, DocumentVersionView>
+     */
+    public function currentVersionsFor(array $documentUuids): array
+    {
+        $uuids = array_values(array_unique(array_filter($documentUuids)));
+
+        if ($uuids === []) {
+            return [];
+        }
+
+        $documents = Document::query()->whereIn('uuid', $uuids)->get();
+
+        if ($documents->isEmpty()) {
+            return [];
+        }
+
+        /*
+         * Every live version for the page at once, then the highest per document in PHP.
+         * Ordered ASCENDING so the last write into the map wins, which selects the same row
+         * `Document::currentVersion()` picks with its `orderByDesc('version')->first()`.
+         *
+         * `with('file')` matters: the presenter falls back to a query per version when the
+         * relation is not loaded, which would put the per-row cost straight back.
+         */
+        $versions = DocumentVersion::query()
+            ->whereIn('document_id', $documents->pluck('id')->all())
+            ->whereNull('superseded_at')
+            ->with('file')
+            ->orderBy('version')
+            ->get();
+
+        $documentUuidById = $documents->pluck('uuid', 'id');
+        $current = [];
+
+        foreach ($versions as $version) {
+            $uuid = $documentUuidById[$version->document_id] ?? null;
+
+            if ($uuid !== null) {
+                $current[(string) $uuid] = $this->presenter->version($version);
+            }
+        }
+
+        return $current;
+    }
+
+    /**
      * Every version ever presented, oldest first — including superseded ones.
      *
      * @return list<DocumentVersionView>

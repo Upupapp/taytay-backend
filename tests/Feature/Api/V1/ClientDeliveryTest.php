@@ -188,33 +188,118 @@ final class ClientDeliveryTest extends KycTestCase
          * The master command is explicit: production origins are explicit custom-domain entries,
          * never `*` with credentials and never a blanket `*.netlify.app`.
          */
-        $origins = (array) config('cors.allowed_origins', []);
-        $patterns = (array) config('cors.allowed_origins_patterns', []);
+        // The shipped configuration must be clean.
+        $this->assertNull(
+            $this->corsDanger(
+                (array) config('cors.allowed_origins', []),
+                (array) config('cors.allowed_origins_patterns', []),
+                config('cors.supports_credentials') === true,
+            ),
+            'The configured CORS origins are unsafe.',
+        );
 
-        if (config('cors.supports_credentials') === true) {
-            $this->assertNotContains('*', $origins, 'A wildcard origin with credentials enabled is a full CSRF surface.');
-            $this->assertSame([], $patterns, 'An origin PATTERN with credentials enabled is a wildcard wearing a hat.');
+        /*
+         * AND THE RULE MUST REFUSE EACH DANGEROUS SHAPE.
+         *
+         * These negative fixtures are the point of the test. Written as bare conditionals over
+         * the live config — `if (supports_credentials) { assert... }` — every branch was false in
+         * the test environment, so this ran ZERO assertions and passed no matter what production
+         * shipped. A check that cannot fail is not a check.
+         */
+        foreach ([
+            'a wildcard origin alongside credentials' => [['*'], [], true],
+            'an origin pattern alongside credentials' => [[], ['#^https://.+\.example\.com$#'], true],
+            'every Netlify deploy preview' => [[], ['#^https://.+\.netlify\.app$#'], false],
+        ] as $shape => [$origins, $patterns, $credentials]) {
+            $this->assertNotNull(
+                $this->corsDanger($origins, $patterns, $credentials),
+                "The CORS rule failed to reject {$shape}.",
+            );
+        }
+    }
+
+    /**
+     * The rule itself, as a predicate, so it can be pointed both at what ships and at what must
+     * be refused. Returns why the shape is dangerous, or null when it is safe.
+     *
+     * @param  array<int, mixed>  $origins
+     * @param  array<int, mixed>  $patterns
+     */
+    private function corsDanger(array $origins, array $patterns, bool $credentials): ?string
+    {
+        /*
+         * THE CLASSIC CORS MISTAKE, and it is one line in a config file away at all times. A
+         * wildcard origin with credentials enabled lets any page on the internet make
+         * authenticated requests on a signed-in resident's behalf.
+         */
+        if ($credentials && in_array('*', $origins, true)) {
+            return 'a wildcard origin with credentials enabled is a full CSRF surface';
+        }
+
+        if ($credentials && $patterns !== []) {
+            return 'an origin pattern with credentials enabled is a wildcard wearing a hat';
         }
 
         foreach ($patterns as $pattern) {
-            // A deploy preview is ephemeral and anybody can create one on a shared domain. It
-            // points at staging; it must never be allowed to speak to production.
-            $this->assertStringNotContainsString(
-                'netlify.app',
-                (string) $pattern,
-                'Allowing every *.netlify.app origin allows every Netlify user.',
-            );
+            /*
+             * A deploy preview is ephemeral and anybody can create one on a shared domain. It
+             * points at staging; it must never be allowed to speak to production.
+             *
+             * UNESCAPED FIRST. These are regular expressions, so a real one spells the host
+             * `netlify\.app` — a plain `str_contains($pattern, 'netlify.app')' matches the
+             * literal string and misses every actual pattern. That was the original check, and
+             * the negative fixture below is what exposed it.
+             */
+            $plain = str_replace('\\', '', (string) $pattern);
+
+            if (str_contains($plain, 'netlify.app')) {
+                return 'allowing every *.netlify.app origin allows every Netlify user';
+            }
         }
+
+        return null;
     }
 
     #[Test]
     public function the_origin_allow_list_denies_by_default(): void
     {
-        // With nothing configured, no cross-origin browser request is permitted — a misconfigured
-        // deployment fails closed rather than open.
-        config()->set('cors.allowed_origins', []);
+        /*
+         * Evaluated from the shipped config FILE with nothing in the environment.
+         *
+         * This previously set `cors.allowed_origins` to `[]` and then asserted it was `[]`,
+         * which proved that Laravel's config repository round-trips and nothing about this
+         * application. What matters is what `config/cors.php` produces when the operator has
+         * configured no origins: a misconfigured deployment must fail closed, not open.
+         */
+        $restore = [
+            '_ENV' => $_ENV['CORS_ALLOWED_ORIGINS'] ?? null,
+            '_SERVER' => $_SERVER['CORS_ALLOWED_ORIGINS'] ?? null,
+            'getenv' => getenv('CORS_ALLOWED_ORIGINS'),
+        ];
 
-        $this->assertSame([], (array) config('cors.allowed_origins'));
+        unset($_ENV['CORS_ALLOWED_ORIGINS'], $_SERVER['CORS_ALLOWED_ORIGINS']);
+        putenv('CORS_ALLOWED_ORIGINS');
+
+        try {
+            /** @var array<string, mixed> $shipped */
+            $shipped = require base_path('config/cors.php');
+        } finally {
+            if ($restore['_ENV'] !== null) {
+                $_ENV['CORS_ALLOWED_ORIGINS'] = $restore['_ENV'];
+            }
+
+            if ($restore['_SERVER'] !== null) {
+                $_SERVER['CORS_ALLOWED_ORIGINS'] = $restore['_SERVER'];
+            }
+
+            if ($restore['getenv'] !== false) {
+                putenv('CORS_ALLOWED_ORIGINS='.$restore['getenv']);
+            }
+        }
+
+        $this->assertSame([], $shipped['allowed_origins'], 'With no origins configured, none may be allowed.');
+        $this->assertSame([], $shipped['allowed_origins_patterns'], 'A default origin pattern is a default hole.');
+        $this->assertFalse($shipped['supports_credentials'], 'Cookie credentials stay off; auth here is bearer tokens (ADR 0005).');
     }
 
     // ── fixtures ──────────────────────────────────────────────────────────────────────

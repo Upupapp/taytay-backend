@@ -9,9 +9,16 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Modules\Files\Application\DocumentLibrary;
 use Modules\Files\Application\FileStore;
+use Modules\Files\Contracts\DocumentSource;
 use Modules\Files\Contracts\FileClassification;
 use Modules\Shared\Application\ActorContext;
+use Modules\Welfare\Application\CaseRequirementService;
+use Modules\Welfare\Domain\RequirementApplicability;
+use Modules\Welfare\Domain\RequirementObligation;
+use Modules\Welfare\Infrastructure\Eloquent\CaseRequirement;
+use Modules\Welfare\Infrastructure\Eloquent\WelfareCase;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
@@ -48,6 +55,8 @@ final class QueryBudgetTest extends KycTestCase
      * for one to hide.
      */
     private const ALLOWED_GROWTH = 0;
+
+    private ?object $applicant = null;
 
     protected function setUp(): void
     {
@@ -111,6 +120,48 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('public events list', $small, $large);
     }
 
+    /**
+     * THE WORST ONE, AND THE ONE A FIXTURE ALMOST HID: 17 queries for one requirement, 77 for six.
+     *
+     * Twelve per row, because the projection resolved the same document four times — once for the
+     * version, again through `isSatisfied()`, a third time through `isOutstanding()`, and a fourth
+     * when `outstandingFor()` re-ran the whole list for the count — and each resolution cost three
+     * queries.
+     *
+     * The first measurement of this endpoint said **flat**, because the fixture created
+     * requirements with no document and every one of those lookups returns null without querying
+     * when the document id is null. It measured the empty path. Hence `assertHasDocuments()`.
+     */
+    #[Test]
+    public function the_staff_requirements_page_does_not_grow_with_requirements(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+        $case = $this->caseWithRequirements();
+
+        $url = "/api/v1/admin/cases/{$case}/requirements";
+
+        $small = $this->measure($url, fn () => $this->recordOneDocument($case), 1);
+        $large = $this->measure($url, fn () => $this->recordOneDocument($case), 6);
+
+        $this->assertHasDocuments(6);
+        $this->assertBudget('staff requirements page', $small, $large);
+    }
+
+    #[Test]
+    public function a_citizens_own_requirements_page_does_not_grow_with_requirements(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+        $case = $this->caseWithRequirements();
+
+        $url = "/api/v1/me/cases/{$case}/requirements";
+
+        $small = $this->measure($url, fn () => $this->recordOneDocument($case), 1, asApplicant: true);
+        $large = $this->measure($url, fn () => $this->recordOneDocument($case), 6, asApplicant: true);
+
+        $this->assertHasDocuments(6);
+        $this->assertBudget('citizen requirements page', $small, $large);
+    }
+
     #[Test]
     public function a_citizens_own_case_list_does_not_grow_with_cases(): void
     {
@@ -143,19 +194,57 @@ final class QueryBudgetTest extends KycTestCase
     }
 
     /**
+     * A fixture that produced no documents would measure the empty path and pass while asserting
+     * nothing — which is exactly what the first run of the requirements test did.
+     */
+    private function assertHasDocuments(int $expected): void
+    {
+        $this->assertSame(
+            $expected,
+            DB::table('welfare_case_requirements')->whereNotNull('document_id')->count(),
+            'The fixture did not attach documents, so this measured requirements whose lookups all '
+            .'short-circuit on a null document id — the empty path, not the one production takes.',
+        );
+    }
+
+    /**
      * Grows the data to `$rows`, then counts the queries one request costs.
      */
-    private function measure(string $url, callable $addOne, int $rows, bool $asCitizen = false): int
-    {
+    private function measure(
+        string $url,
+        callable $addOne,
+        int $rows,
+        bool $asCitizen = false,
+        bool $asApplicant = false,
+    ): int {
         $admin = auth()->user();
 
+        /*
+         * Guarded, and the guard FAILS rather than breaking quietly. A fixture that stops
+         * producing rows — a changed validation rule, a renamed field — would otherwise spin this
+         * loop until the suite's timeout killed it with no indication of which test or why.
+         */
+        $attempts = 0;
+
         while ($this->rowsSoFar($url) < $rows) {
+            $this->assertLessThan(
+                $rows * 3 + 5,
+                ++$attempts,
+                "[{$url}] the fixture stopped producing rows before reaching {$rows}.",
+            );
+
             $addOne();
         }
 
         if ($asCitizen) {
             [$citizen] = $this->activeCitizenWithResident();
             Sanctum::actingAs($citizen);
+        }
+
+        // The applicant whose case this is — a different citizen would get a 404, and the
+        // assertion on the status below would catch it.
+        if ($asApplicant && $this->applicant !== null) {
+            Sanctum::actingAs($this->applicant);
         }
 
         DB::flushQueryLog();
@@ -182,6 +271,10 @@ final class QueryBudgetTest extends KycTestCase
     private function rowsSoFar(string $url): int
     {
         return match (true) {
+            // BEFORE the '/me/cases' arm, which the citizen requirements URL also contains.
+            // Counted as rows WITH a document, because a requirement without one costs nothing.
+            str_contains($url, '/requirements') => DB::table('welfare_case_requirements')
+                ->whereNotNull('document_id')->count(),
             str_contains($url, '/registrations') => DB::table('event_registrations')->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
@@ -191,6 +284,66 @@ final class QueryBudgetTest extends KycTestCase
     }
 
     // ── fixtures ──────────────────────────────────────────────────────────────────────
+
+    /**
+     * A submitted case, remembering the applicant so the citizen view can be read as its owner.
+     */
+    private function caseWithRequirements(): string
+    {
+        $admin = auth()->user();
+
+        [$citizen] = $this->activeCitizenWithResident();
+        $this->applicant = $citizen;
+        Sanctum::actingAs($citizen);
+
+        $draft = $this->postJson('/api/v1/me/assistance/drafts', [
+            'category' => 'food',
+            'narrative' => 'Requesting help.',
+            'consent_reference' => 'budget-requirements',
+        ])->json('data.id');
+
+        $this->postJson("/api/v1/me/assistance/drafts/{$draft}/submit");
+
+        if ($admin !== null) {
+            Sanctum::actingAs($admin);
+        }
+
+        return (string) DB::table('welfare_cases')->orderByDesc('id')->value('uuid');
+    }
+
+    /**
+     * One more requirement with a document recorded against it, through the service the staff
+     * upload endpoint calls.
+     */
+    private function recordOneDocument(string $case): void
+    {
+        $model = WelfareCase::query()->where('uuid', $case)->firstOrFail();
+
+        $slot = CaseRequirement::query()->create([
+            'welfare_case_id' => $model->id,
+            'requirement_code' => 'DOC_'.DB::table('welfare_case_requirements')->count(),
+            'label' => 'Barangay certificate',
+            'template_version' => '1',
+            'obligation' => RequirementObligation::Required,
+            'applicability' => RequirementApplicability::Applies,
+        ]);
+
+        $file = app(DocumentLibrary::class)->store(
+            UploadedFile::fake()->createWithContent('barangay-cert.jpg', $this->realJpeg()),
+            FileClassification::Personal,
+            ActorContext::system(),
+        );
+
+        app(CaseRequirementService::class)->recordDocument($slot, (string) $file->id, [
+            'source' => DocumentSource::Scanned,
+            'document_type' => 'barangay-certificate',
+            'document_number' => null,
+            'issued_on' => null,
+            'expires_on' => null,
+            'expiry_unknown' => true,
+            'replaces_because' => null,
+        ], ActorContext::system());
+    }
 
     private function registerOneCitizen(string $event): void
     {

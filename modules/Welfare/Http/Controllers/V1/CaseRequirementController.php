@@ -53,10 +53,23 @@ final class CaseRequirementController
         $this->authorization->authorize($actor, Permission::RequestView);
         $model = $this->caseOrFail($actor, $case);
 
+        $requirements = $this->requirements->forCase($model);
+
+        // Resolved ONCE for the page. Every lookup the projection needs comes from this map.
+        $versions = $this->requirements->currentVersionsFor($requirements);
+
         return ApiResponse::item([
-            'requirements' => $this->requirements->forCase($model)
-                ->map(fn (CaseRequirement $r): array => $this->projection($r))->all(),
-            'outstanding_count' => $this->requirements->outstandingFor($model)->count(),
+            'requirements' => $requirements
+                ->map(fn (CaseRequirement $r): array => $this->projection($r, $versions))->all(),
+            // Counted from the same resolved versions rather than by asking again. `outstandingFor()`
+            // re-runs the list query and re-resolves every document, which doubled an already
+            // per-row cost on the one page where a case's whole document set is rendered.
+            'outstanding_count' => $requirements->filter(
+                fn (CaseRequirement $r): bool => $this->requirements->outstandingGiven(
+                    $r,
+                    $versions[(string) $r->uuid] ?? null,
+                ),
+            )->count(),
             // Published so a client enforces the same limits this server does, rather than a
             // copy that drifts. Both clients check before uploading as a courtesy; this endpoint
             // is the boundary.
@@ -76,10 +89,12 @@ final class CaseRequirementController
             'program_id' => ['required', 'string', 'max:64'],
         ]);
 
+        $requirements = $this->requirements->attachTemplate($model, $validated['program_id'], $actor);
+        $versions = $this->requirements->currentVersionsFor($requirements);
+
         return ApiResponse::created([
-            'requirements' => $this->requirements
-                ->attachTemplate($model, $validated['program_id'], $actor)
-                ->map(fn (CaseRequirement $r): array => $this->projection($r))->all(),
+            'requirements' => $requirements
+                ->map(fn (CaseRequirement $r): array => $this->projection($r, $versions))->all(),
         ]);
     }
 
@@ -308,11 +323,21 @@ final class CaseRequirementController
     // ── projections ───────────────────────────────────────────────────────────────────
 
     /**
+     * @param  array<string, DocumentVersionView>|null  $versions  resolved for the whole page, or
+     *                                                             null when rendering a single row
      * @return array<string, mixed>
      */
-    private function projection(CaseRequirement $requirement): array
+    private function projection(CaseRequirement $requirement, ?array $versions = null): array
     {
-        $version = $this->requirements->currentVersion($requirement);
+        /*
+         * `null` means no map was supplied — a single-row caller, which may do its own lookup.
+         * An absent KEY inside a supplied map means the page was asked and this requirement has
+         * no live document. Falling back for that would pay for the batch and do the work anyway
+         * (ADR 0042 §1).
+         */
+        $version = $versions === null
+            ? $this->requirements->currentVersion($requirement)
+            : ($versions[(string) $requirement->uuid] ?? null);
 
         return [
             'id' => $requirement->uuid,
@@ -323,8 +348,10 @@ final class CaseRequirementController
             'citizen_instructions' => $requirement->citizen_instructions,
             'applicability' => $requirement->applicability->value,
             'applicability_reason' => $requirement->applicability_reason,
-            'is_satisfied' => $this->requirements->isSatisfied($requirement),
-            'is_outstanding' => $this->requirements->isOutstanding($requirement),
+            // Derived from the version already in hand. Asking `isSatisfied()`/`isOutstanding()`
+            // here would resolve it twice more for a value this line already holds.
+            'is_satisfied' => $this->requirements->satisfiedBy($version),
+            'is_outstanding' => $this->requirements->outstandingGiven($requirement, $version),
             'current_version' => $version === null ? null : $this->versionProjection($version),
         ];
     }
