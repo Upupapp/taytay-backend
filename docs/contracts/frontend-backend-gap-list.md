@@ -33,6 +33,8 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-22](#g-22) | `family_memberships` has no role column; four of six roles unknowable | medium | backend + LGU |
 | [G-23](#g-23) | Naming a household head does not enrol them as a member | medium | backend |
 | [G-24](#g-24) | One family per resident here; the console's model is plural | high | LGU (MSWDO) |
+| [G-25](#g-25) | The console's `WorkItem` wants a subject and preview the queue withholds | low | Angular |
+| [G-26](#g-26) | No published contract for pending duplicate pairs, so no alert for them | medium | backend |
 | [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
@@ -753,3 +755,31 @@ erasing how households in Taytay actually compose. This is the office's call, no
 shape of the question — and returns at most one member, which is what the invariant allows.
 Returning a single object would bake the unratified answer into the wire format, and unbaking it
 later is a breaking change.
+
+---
+
+### G-25
+**The console's `WorkItem` carries `subject` and `preview`; the queue sends neither.** `low`
+
+ADR 0024 §2: a task row carries a `subject_type` and an opaque `subject_id` and no summary of what
+is behind it. A queue is the one screen designed to be scanned quickly by somebody reviewing other
+people's work, and a preview line on every row discloses who each task is about to everybody who
+can see the queue.
+
+The console's own `DL-109` reaches the same conclusion about search snippets — *"matching on free
+text discloses it even with no snippet rendered"* — so this is likely to resolve in the API's
+favour. Left open rather than assumed: the console's fields are for the client to remove.
+
+---
+
+### G-26
+**`admin/work/alerts` cannot report duplicate residents awaiting review.** `medium`
+
+Two alerts are derivable inside the Tasks module: open work with nobody assigned, and open work
+past a date somebody set. A third belongs beside them — possible duplicate residents sitting
+unreviewed — and is **not built**, because Tasks may not read `ResidentProfile`'s tables
+(Article 2.1) and `ResidentProfile` publishes no contract for pending duplicate pairs.
+
+Adding one is a small change **in that module**. Reaching across from Tasks to avoid asking would
+be precisely the boundary violation `ModuleBoundaryTest` exists to catch, so the alert is absent
+and named rather than present and wrong.

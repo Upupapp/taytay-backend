@@ -31,6 +31,51 @@ final class FieldVisitTest extends KycTestCase
 {
     use RefreshDatabase;
 
+    // ── the worker's own round (TAB 07) ──────────────────────────────────────────────
+
+    #[Test]
+    public function scope_mine_returns_only_the_callers_own_visits(): void
+    {
+        $me = $this->staff();
+        Sanctum::actingAs($me);
+
+        $mine = $this->scheduleVisit();
+        $this->assignVisit($mine, (string) $me->uuid);
+
+        $theirs = $this->scheduleVisit();
+        $this->assignVisit($theirs, (string) $this->staff()->uuid);
+
+        $ids = collect($this->getJson('/api/v1/admin/visits?scope=mine')->assertOk()->json('data'))
+            ->pluck('id')
+            ->all();
+
+        $this->assertSame([$mine], $ids);
+    }
+
+    /**
+     * The attack the scope exists to be immune to.
+     *
+     * `?assigned_to=<uuid>` already existed and still works — it is a filter, and a caller holding
+     * `visit.view` may use it. `?scope=mine` is different in kind: it resolves server-side to the
+     * caller's own subject id, so there is no value a client can send that makes it mean somebody
+     * else's round. That is what makes it safe behind a menu item labelled "mine".
+     */
+    #[Test]
+    public function scope_mine_cannot_be_pointed_at_another_worker(): void
+    {
+        $me = $this->staff();
+        $colleague = $this->staff();
+
+        Sanctum::actingAs($me);
+
+        $theirs = $this->scheduleVisit();
+        $this->assignVisit($theirs, (string) $colleague->uuid);
+
+        $this->getJson("/api/v1/admin/visits?scope=mine&assigned_to={$colleague->uuid}")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
     // ── source classification on observations ─────────────────────────────────────────
 
     #[Test]
@@ -582,6 +627,11 @@ final class FieldVisitTest extends KycTestCase
             'scheduled_for' => now()->addDay()->toDateString(),
             'scheduled_window' => 'morning',
         ])->assertCreated()->json('data.id');
+    }
+
+    private function assignVisit(string $visit, string $subjectId): void
+    {
+        DB::table('field_visits')->where('uuid', $visit)->update(['assigned_to' => $subjectId]);
     }
 
     private function observe(string $visit, string $kind, string $body): void

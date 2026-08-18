@@ -54,6 +54,28 @@ final class FieldVisitController
             ? $this->visits->overdueQuery()
             : $this->visits->query();
 
+        /*
+         * `?scope=mine` — the worker's own round (TAB 07).
+         *
+         * The command is explicit that this is *"scope, not a new resource"*, and the reason shows
+         * in the query plan: `idx_visits_worker_queue` is already
+         * `(assigned_to, status, scheduled_for)`. A separate `admin/my-visits` route would have
+         * been a second controller, a second projection and a second set of authorization tests
+         * over the same index and the same rows.
+         *
+         * It resolves to the **caller's own** subject id, server-side. `?assigned_to=<uuid>`
+         * already exists and still does; the difference is that this one cannot be pointed at
+         * somebody else, which is what makes it safe to put behind a menu item labelled "mine".
+         *
+         * An actor with no subject id — a machine context — matches nothing rather than
+         * everything. `whereRaw('1 = 0')` is the same deny-by-default the barangay scope uses.
+         */
+        if ($request->query('scope') === 'mine') {
+            $actor->subjectId === null
+                ? $query->whereRaw('1 = 0')
+                : $query->where('assigned_to', $actor->subjectId);
+        }
+
         foreach (['status', 'purpose', 'assigned_to', 'resident_id'] as $filter) {
             $value = $request->query($filter);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Modules\Tasks\Http\Controllers\V1\TaskController;
+use Modules\Tasks\Http\Controllers\V1\WorkController;
 
 /*
  * Tasks routes. Mounted under /api/v1 by routes/api.php.
@@ -24,6 +25,20 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * `mine` resolves from the token and never from a parameter: a queue filtered by an account id
      * in the query string is a queue anybody can point at anybody.
      */
+    /*
+     * ── work queues (TAB 07) ──────────────────────────────────────────────────────────
+     *
+     * Derived views over the same `tasks` rows, read-only. Acting on an item goes to the
+     * task's own endpoints below, which already audit — a queue that could also mutate
+     * would be a second write path to one record.
+     *
+     * `team` is `staff.view` rather than `task.view` on purpose: reading a colleague's
+     * caseload is supervision, not a default that comes with having a queue of your own.
+     */
+    Route::get('admin/work/mine', [WorkController::class, 'mine'])->name('v1.admin.work.mine');
+    Route::get('admin/work/team', [WorkController::class, 'team'])->name('v1.admin.work.team');
+    Route::get('admin/work/alerts', [WorkController::class, 'alerts'])->name('v1.admin.work.alerts');
+
     Route::get('tasks', [TaskController::class, 'index'])->name('v1.tasks.index');
     Route::post('tasks', [TaskController::class, 'store'])->name('v1.tasks.store');
     Route::get('tasks/{task}', [TaskController::class, 'show'])->name('v1.tasks.show');
