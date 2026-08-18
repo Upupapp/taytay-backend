@@ -17,7 +17,8 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-06](#g-06) | `canCancel` / `isTerminal` implemented in the mobile client | high | backend + mobile |
 | [G-07](#g-07) | Sensitive-sector suppression is presentation-only | high | backend |
 | [G-08](#g-08) | No resident verification state in the admin model | high | backend |
-| [G-09](#g-09) | Backend permission catalog holds 2 of ~31 permissions | high | backend |
+| [G-09](#g-09) | ~~Catalog holds 2 of ~31~~ → **closed**; superseded by G-09a | — | — |
+| [G-09a](#g-09a) | Only 30 of the console's 70 permission keys exist here | high | backend + Angular + LGU |
 | [G-10](#g-10) | Two Flutter apps claim the citizen-mobile channel | high | product |
 | [G-11](#g-11) | Barangay PSGC codes are `null` | medium | backend |
 | [G-12](#g-12) | No persistence behind dashboard, notifications, audit | medium | backend |
@@ -166,15 +167,57 @@ mobile client already does this correctly.
 ---
 
 ### G-09
-**The backend permission catalog holds 2 of about 31 permissions.** `high`
+**CLOSED — 18 August 2026, TAB 06.** ~~The backend permission catalog holds 2 of about 31
+permissions.~~
 
-`Modules\AccessControl\Contracts\Permission` has `services.view-unpublished` and
-`services.manage`. The admin console references 31 across 7 roles.
+`Modules\AccessControl\Contracts\Permission` now declares **61**, each against the endpoint it
+guards, with role assignment persisted. The entry stood while it was true and is struck rather than
+deleted, because a gap list that quietly loses entries cannot be audited.
 
-Deliberately **not** added in TAB 02: permissions without the endpoints they guard, and
-without persisted role assignment (`config/access_control.php` is still provisional), is
-policy invented ahead of its use. The endpoint matrix records each permission against the
-operation it guards so the catalog can be added with its endpoints.
+Measuring it to close it found a larger problem, recorded as G-09a.
+
+---
+
+### G-09a
+**Only 30 of the admin console's 70 permission keys exist in this catalog.** `high`
+
+|  | count |
+| --- | --- |
+| keys the console defines | 70 |
+| keys this API publishes | 61 |
+| **agreed by both** | **30** |
+| console keys with no counterpart here | 40 |
+| keys here the console never asks for | 31 |
+
+The 30 that match are the assistance-request lifecycle, referrals, visits, reports, staff, events
+and newsfeed. The spine of the product agrees; what surrounds it does not.
+
+**The console fails closed.** `fromServerIdentity` keeps only the keys this API sends and invents
+none — deliberately. So a key we do not publish can never be held by anybody, and the console's
+guard on it refuses every user in every role. Measured against its router: **24 of 43 guarded
+routes are unreachable, including its landing page.**
+
+Two different problems needing two different fixes:
+
+* **Naming divergence over an act both sides implement.** The console splits `resident.create` and
+  `resident.update`; we grant `resident.manage`. Its `disbursement.*` family covers what
+  `request.release` does here. Whoever owns the vocabulary picks one spelling — this is not a
+  matter of taste once a guard depends on it.
+* **Concepts this API does not have.** `case.*` awaits ADR 0044, `beneficiary.*` is a projection
+  the console defined over the resident registry, and `dashboard.view` and `settings.manage` have
+  no server-side counterpart at all. Adding a permission with no endpoint behind it would be
+  inventing policy ahead of its use — the same reason G-09 was deliberately left open in TAB 02.
+
+Thirty-one keys run the other way: `kyc.*`, `credential.*` and `services.*` serve the citizen
+channels and the admin console rightly ignores them. `safeguarding.*`, `vulnerability.*`,
+`privacy.*` and `task.*` are a different matter — the console has screens for that work under other
+names.
+
+Nothing is broken today; the console runs on mock adapters. It breaks when it flips to this API,
+and it breaks as a blank console rather than an error.
+
+`check:permission-parity` in the console holds the count at 24 and fails in both directions until
+somebody decides.
 
 ---
 
