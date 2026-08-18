@@ -124,6 +124,74 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | What each category holds, and how it is classified
+    |--------------------------------------------------------------------------
+    |
+    | The SAME categories as the retention schedule above, deliberately. The office holds one set
+    | of record kinds; how long each is kept and how sensitive each is are two facts about the
+    | same thing, and splitting them into two lists is how they come to disagree about which
+    | categories exist.
+    |
+    | The vocabulary is RA 10173's, because that is the law that applies:
+    |
+    |   public              not personal information (§3(g)) — published by the municipality
+    |   internal            not personal information; office working material about nobody
+    |   personal            personal information (§3(g)) — identifies a living person
+    |   sensitive-personal  sensitive personal information (§3(l)) — health, offences, and the
+    |                       protection sectors; RA 9262 (VAWC) and RA 9344 (CICL) fall here
+    |
+    | These are a reading of the statute applied to categories this system actually distinguishes.
+    | They are reference data about nobody, and they are still the DPO's to confirm — the same
+    | approval that covers the periods above should cover these.
+    |
+    */
+    'classifications' => [
+        'account' => [
+            'classification' => 'personal',
+            'holds' => 'Staff and citizen accounts: name, email, mobile number, and the roles held.',
+        ],
+        'resident' => [
+            'classification' => 'personal',
+            'holds' => 'The canonical resident record: name, birth date, address, civil status and sectors.',
+        ],
+        'welfare_case' => [
+            'classification' => 'personal',
+            'holds' => 'Assistance casework: what was asked for, what was assessed and what was decided.',
+        ],
+        'release' => [
+            'classification' => 'personal',
+            'holds' => 'Payouts: who received what, when, and who acknowledged it.',
+        ],
+        'document' => [
+            'classification' => 'personal',
+            'holds' => 'Uploaded requirements. Individual files may be classified higher than the category.',
+        ],
+        'safeguarding' => [
+            /*
+             | THE ONE THAT MATTERS MOST, and the reason this list is published at all. RA 9262 and
+             | RA 9344 material sits here, and it is also the category with the SHORTEST retention
+             | above — the two point in opposite directions and the protective answer wins.
+             */
+            'classification' => 'sensitive-personal',
+            'holds' => 'Protection concerns and safety planning under RA 9262 and RA 9344, and health information.',
+        ],
+        'audit' => [
+            'classification' => 'personal',
+            'holds' => 'Who did what, when. Names an actor, and names the record acted on — never the values changed.',
+        ],
+        'notification' => [
+            'classification' => 'personal',
+            'holds' => 'Messages sent to a person through the app, and whether they were read.',
+        ],
+        'export' => [
+            'classification' => 'personal',
+            'holds' => 'Generated report files. A person-level export inherits the classification of what it names.',
+        ],
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Consent purposes
     |--------------------------------------------------------------------------
     |

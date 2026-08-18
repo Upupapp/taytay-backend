@@ -149,6 +149,21 @@ final class GovernanceController
     }
 
     /**
+     * What the office holds, classified (TAB 07).
+     *
+     * `privacy.manage`, the same as the retention schedule beside it. That looks strict for a list
+     * that names nobody, and it is the right level: the register says *which* categories of
+     * sensitive material this office keeps at all — that `safeguarding` exists as a category is a
+     * fact about the office, and it belongs with the person accountable for it.
+     */
+    public function classifications(Request $request, ActorContext $actor): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::PrivacyManage);
+
+        return ApiResponse::item($this->retention->classifications());
+    }
+
+    /**
      * The retention schedule, as the DPO reads it.
      */
     public function retentionSchedule(Request $request, ActorContext $actor): JsonResponse

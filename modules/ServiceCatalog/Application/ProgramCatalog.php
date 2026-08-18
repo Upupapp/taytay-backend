@@ -157,6 +157,41 @@ final class ProgramCatalog
      */
     public function currentRequirements(Program $program): Collection
     {
+        /*
+         * THE LATEST VERSION OF EACH REQUIREMENT, which is what this method has always claimed
+         * and did not do.
+         *
+         * `program_requirements` is unique on (program_id, code, template_version), so republishing
+         * a requirement writes a **second row** rather than updating the first — correctly, because
+         * a request approved in March under version 1 must stay explicable in December, and an
+         * overwrite destroys the evidence of what was actually asked for. See {@see DL-77} on the
+         * console side for the same rule about document versions.
+         *
+         * The bug was in the read: with no version filter, a programme detail listed both rows and
+         * showed the same requirement twice, one with the old wording. Found by TAB 07 while
+         * building the versioned read below.
+         */
+        return $this->requirementsFor($program)
+            ->groupBy('code')
+            ->map(static fn (Collection $versions): ProgramRequirement => $versions
+                ->sortBy(static fn (ProgramRequirement $r): int => (int) $r->template_version)
+                ->last())
+            ->sortBy([['display_order', 'asc'], ['id', 'asc']])
+            ->values();
+    }
+
+    /**
+     * Every requirement ever published for a programme, all versions.
+     *
+     * The read side of `POST admin/programs/{program}/requirements`, which had none (TAB 07). A
+     * write with no read is how a catalogue silently accumulates duplicates: an officer republishes
+     * a requirement, cannot see what the previous wording was, and the office loses the ability to
+     * say what it asked an applicant for last March.
+     *
+     * @return Collection<int, ProgramRequirement>
+     */
+    public function requirementsFor(Program $program): Collection
+    {
         return ProgramRequirement::query()
             ->where('program_id', $program->id)
             ->orderBy('display_order')

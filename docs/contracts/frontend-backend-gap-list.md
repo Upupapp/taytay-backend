@@ -36,6 +36,7 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-25](#g-25) | The console's `WorkItem` wants a subject and preview the queue withholds | low | Angular |
 | [G-26](#g-26) | No published contract for pending duplicate pairs, so no alert for them | medium | backend |
 | [G-27](#g-27) | The console defines 14 reports; 7 have a server-side implementation | medium | backend |
+| [G-28](#g-28) | ~~A requirement could be created once and never amended~~ → **fixed in TAB 07** | — | — |
 | [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
@@ -807,3 +808,23 @@ pretending to offer it.
 **One naming divergence worth catching now:** the console spells it `program-utilisation`, this API
 spells it `program-utilization`. Same report, two ids. Whoever owns the vocabulary picks one — it
 is not a matter of taste once a client routes on it.
+
+---
+
+### G-28
+**FIXED — 19 August 2026, TAB 07.** ~~A programme requirement could be created once and never
+amended.~~
+
+`storeRequirement` wrote `'template_version' => '1'` unconditionally. The table's unique key is
+(program_id, code, template_version), so the **second** publication of any requirement was refused
+by the database. An office that worded a requirement badly had no way to correct it, and the
+versioning the schema already supported was unreachable through the API.
+
+A second defect sat behind it: `currentRequirements()` had no version filter despite its name, so
+had a second version ever landed, the programme detail would have listed the requirement twice —
+once with the wording the office had already replaced.
+
+Both found while building the read side, which is the argument for building read sides. Publishing
+now **appends** a version rather than updating one, because a request approved in March under the
+old wording has to stay explicable in December — the same rule the console records as `DL-77` for
+document versions.

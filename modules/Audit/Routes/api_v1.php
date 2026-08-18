@@ -71,6 +71,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
      */
     Route::post('admin/privacy/notices', [GovernanceController::class, 'publishNotice'])
         ->name('v1.admin.privacy.notices.store');
+    // What the office holds, classified (TAB 07). Reference data about nobody, built from the
+    // same category list as the retention schedule below — one set of record kinds, two facts
+    // about each, and two separate lists are how they come to disagree.
+    Route::get('admin/privacy/classifications', [GovernanceController::class, 'classifications'])
+        ->name('v1.admin.privacy.classifications');
+
     Route::get('admin/privacy/retention', [GovernanceController::class, 'retentionSchedule'])
         ->name('v1.admin.privacy.retention');
     Route::get('admin/privacy/legal-holds', [GovernanceController::class, 'holds'])

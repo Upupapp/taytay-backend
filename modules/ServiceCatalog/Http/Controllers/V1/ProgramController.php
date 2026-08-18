@@ -6,8 +6,10 @@ namespace Modules\ServiceCatalog\Http\Controllers\V1;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
+use Modules\Reporting\Application\MetricsService;
 use Modules\ServiceCatalog\Application\ProgramCatalog;
 use Modules\ServiceCatalog\Domain\EligibilityFact;
 use Modules\ServiceCatalog\Domain\PublicationStatus;
@@ -39,6 +41,7 @@ use Modules\Shared\Http\ApiResponse;
 final class ProgramController
 {
     public function __construct(
+        private readonly MetricsService $metrics,
         private readonly ProgramCatalog $catalog,
         private readonly AuthorizationService $authorization,
     ) {}
@@ -136,6 +139,86 @@ final class ProgramController
     }
 
     /**
+     * Every requirement template a programme has published, newest version first (TAB 07).
+     *
+     * The read side of `storeRequirement` below, which had none. A write with no read is how a
+     * catalogue silently accumulates duplicates — an officer republishes a requirement, cannot see
+     * what the previous wording was, and the office loses the ability to say what it asked an
+     * applicant for last March.
+     *
+     * Grouped by version rather than flattened, because the superseded wording **is** the
+     * evidence: a request approved under version 1 has to stay explicable after version 2 is
+     * published, which is the same reason a replaced document keeps its old version.
+     *
+     * `program.manage` rather than `program.view`. The current requirements are already on the
+     * programme detail for anyone who may read the catalogue; the *history* of what the office
+     * used to demand is administration of the catalogue, not use of it.
+     */
+    public function requirementTemplates(Request $request, ActorContext $actor, string $program): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::ProgramManage);
+
+        $model = $this->programOrFail($program);
+
+        $current = $this->catalog->currentRequirements($model)
+            ->map(static fn (ProgramRequirement $r): string => $r->code.'@'.$r->template_version)
+            ->all();
+
+        $templates = $this->catalog->requirementsFor($model)
+            ->groupBy('template_version')
+            ->map(fn (Collection $requirements, string $version): array => [
+                'template_version' => (string) $version,
+                'requirements' => $requirements
+                    ->map(fn (ProgramRequirement $r): array => $this->requirementProjection($r) + [
+                        // Named per requirement, not per version: a version can be current for one
+                        // code and superseded for another, because each is republished separately.
+                        'is_current' => in_array($r->code.'@'.$r->template_version, $current, true),
+                    ])
+                    ->values()
+                    ->all(),
+            ])
+            ->sortKeysDesc()
+            ->values()
+            ->all();
+
+        return ApiResponse::page(Page::fromArray($templates, PaginationParams::fromRequest($request)));
+    }
+
+    /**
+     * What one programme has actually delivered (TAB 07).
+     *
+     * Answers *"is this programme reaching anybody"*, which is the question an office is asked
+     * about a programme it is still funding.
+     *
+     * Runs the **same metric** as the reporting module rather than counting again here. A second
+     * implementation of "how much has gone out" is a second answer, and the two disagree the first
+     * time one of them forgets that an in-kind release has no peso value. It therefore inherits
+     * small-cell suppression unchanged: a programme that reached fewer than the minimum is
+     * withheld, because "1 recipient" plus a programme name is an identification.
+     */
+    public function utilization(Request $request, ActorContext $actor, ?string $program = null): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::ProgramView);
+
+        $filters = [];
+
+        if ($program !== null) {
+            $filters['program_id'] = $this->programOrFail($program)->uuid;
+        }
+
+        return ApiResponse::item([
+            'program_id' => $filters['program_id'] ?? null,
+            'rows' => $this->metrics->programUtilization($actor, $filters),
+        ], meta: [
+            'suppression' => [
+                'minimum_cell' => MetricsService::MINIMUM_CELL,
+                'note' => 'Counts below the minimum are withheld so a small cell cannot identify a household.',
+                'method' => 'withheld',
+            ],
+        ]);
+    }
+
+    /**
      * Adds a requirement.
      */
     public function storeRequirement(Request $request, ActorContext $actor, string $program): JsonResponse
@@ -157,6 +240,22 @@ final class ProgramController
             'accepted_documents.*' => ['string', 'max:48'],
         ]);
 
+        /*
+         * REPUBLISHING APPENDS A VERSION. It used to write `'1'` unconditionally, which made the
+         * table's own unique key — (program_id, code, template_version) — refuse the second
+         * publication of any requirement. The effect was that a requirement could be created once
+         * and **never amended**: an office that worded one badly had no way to correct it, and the
+         * versioning the schema already supported was unreachable through the API.
+         *
+         * Found by TAB 07 while building the read side. Appending rather than updating is the
+         * point: a request approved in March under the old wording has to stay explicable in
+         * December, and an overwrite destroys the evidence of what was actually asked for.
+         */
+        $nextVersion = (int) (ProgramRequirement::query()
+            ->where('program_id', $model->id)
+            ->where('code', $validated['code'])
+            ->max('template_version') ?? 0) + 1;
+
         $requirement = ProgramRequirement::query()->create([
             'program_id' => $model->id,
             'code' => $validated['code'],
@@ -165,7 +264,7 @@ final class ProgramController
             'condition_note' => $validated['condition_note'] ?? null,
             'citizen_instructions' => $validated['citizen_instructions'],
             'display_order' => $validated['display_order'] ?? 0,
-            'template_version' => '1',
+            'template_version' => (string) $nextVersion,
         ]);
 
         foreach ($validated['accepted_documents'] ?? [] as $documentType) {

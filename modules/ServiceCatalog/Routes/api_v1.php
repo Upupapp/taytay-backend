@@ -55,9 +55,22 @@ Route::get('programs/{program}', [ProgramController::class, 'show'])
     ->name('v1.programs.show');
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    // Utilisation, across the catalogue and for one programme. Runs the reporting module's own
+    // metric rather than counting again here — a second implementation of "how much has gone
+    // out" is a second answer, and it inherits small-cell suppression unchanged.
+    Route::get('admin/programs/utilization', [ProgramController::class, 'utilization'])->name('v1.admin.programs.utilization.all');
+    Route::get('admin/programs/{program}/utilization', [ProgramController::class, 'utilization'])->name('v1.admin.programs.utilization');
+
     Route::post('admin/programs', [ProgramController::class, 'store'])->name('v1.admin.programs.store');
     Route::patch('admin/programs/{program}', [ProgramController::class, 'update'])->name('v1.admin.programs.update');
     Route::post('admin/programs/{program}/status', [ProgramController::class, 'changeStatus'])->name('v1.admin.programs.status');
+    /*
+     * The read side of the requirement templates (TAB 07). A write with no read is how a
+     * catalogue silently accumulates duplicates. `program.manage` rather than `program.view`:
+     * the current requirements are already on the programme detail, and the history of what
+     * the office used to demand is administration of the catalogue rather than use of it.
+     */
+    Route::get('admin/programs/{program}/requirement-templates', [ProgramController::class, 'requirementTemplates'])->name('v1.admin.programs.requirement-templates');
     Route::post('admin/programs/{program}/requirements', [ProgramController::class, 'storeRequirement'])->name('v1.admin.programs.requirements.store');
     Route::post('admin/programs/{program}/eligibility-criteria', [ProgramController::class, 'storeCriterion'])->name('v1.admin.programs.criteria.store');
     // Opens a new guidance version by copying the criteria forward. Editing them in place would

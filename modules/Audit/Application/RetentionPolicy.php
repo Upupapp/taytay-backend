@@ -95,6 +95,55 @@ final class RetentionPolicy
     }
 
     /**
+     * What the office holds, classified (TAB 07).
+     *
+     * **Reference data, about nobody.** It names categories of record and how each is classified
+     * under RA 10173; it contains no resident, no case and no number.
+     *
+     * Built from the **same category list as the retention schedule**, deliberately. The office
+     * holds one set of record kinds; how long each is kept and how sensitive each is are two facts
+     * about the same thing, and two separate lists are how they come to disagree about which
+     * categories exist — which is then discovered by somebody applying a retention rule to a
+     * category the classification list never heard of.
+     *
+     * A category with a period and no classification is **reported**, not skipped. A gap in a
+     * privacy register is the finding.
+     *
+     * @return array<string, mixed>
+     */
+    public function classifications(): array
+    {
+        /** @var array<string, int> $categories */
+        $categories = (array) config('privacy.retention.categories', []);
+        /** @var array<string, array<string, string>> $classified */
+        $classified = (array) config('privacy.classifications', []);
+
+        $rows = [];
+
+        foreach ($categories as $key => $days) {
+            $entry = $classified[$key] ?? null;
+
+            $rows[] = [
+                'key' => $key,
+                'classification' => $entry['classification'] ?? null,
+                'holds' => $entry['holds'] ?? null,
+                'retention_days' => $days,
+                // Named rather than left as a null somebody reads as "public".
+                'unclassified' => $entry === null,
+            ];
+        }
+
+        return [
+            'categories' => $rows,
+            'approved' => $this->isApproved(),
+            'notice' => 'These classifications are a reading of RA 10173 applied to the categories this '
+                .'system distinguishes. They are reference data about nobody, and they remain the Data '
+                .'Protection Officer\'s to confirm — the same approval that covers the retention periods '
+                .'covers these.',
+        ];
+    }
+
+    /**
      * The whole schedule, as a reviewer reads it.
      *
      * Surfaced through the API so the DPO can check what the system believes without reading a
