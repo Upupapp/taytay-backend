@@ -107,13 +107,21 @@ final class AuthenticationController
             'mobile_number' => ['required', 'string', 'max:32'],
         ]);
 
-        $code = $this->authentication->requestSignInCode($validated['mobile_number']);
-
-        // Delivery is the Notification module's job (ADR 0004: Laravel decides, FCM/SMS
-        // carries). Until that module exists the code is issued and recorded but not
-        // dispatched — see the TAB 05 report for this gap. It is deliberately NOT
-        // returned in the response and NOT logged.
-        unset($code);
+        /*
+         * The outcome is deliberately ignored, and the code never comes back here at all.
+         *
+         * It used to: this called a method that returned the code and then did `unset($code)` to
+         * throw it away. That worked, and put the guarantee in the wrong file — the mint was in
+         * `Identity/Application` and the discipline was in a controller, so nothing stopped a
+         * future reader from returning it, logging it, or asserting on it in a test.
+         * `requestSignInCode` now sends it and hands back only whether it left.
+         *
+         * And *that* is ignored on purpose. A response that differed when delivery was skipped
+         * would answer the question this endpoint exists to refuse: does this person hold an
+         * account here. The delivery outcome is in the audit trail, where an operator can see it
+         * and an attacker cannot.
+         */
+        $this->authentication->requestSignInCode($validated['mobile_number']);
 
         return ApiResponse::item(
             ['status' => 'accepted', 'message' => 'If that number is registered, a code has been sent to it.'],

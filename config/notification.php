@@ -29,6 +29,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Transactional delivery
+    |--------------------------------------------------------------------------
+    |
+    | How a one-time code reaches a person. Nothing on this path is persisted: the text is a
+    | credential, and a credential in a notifications table is a secret in an inbox.
+    |
+    | `null` is the default and the current truth — this platform has no SMS provider, so a
+    | sign-in code is issued, recorded and skipped, and that shows in the audit trail rather
+    | than in the API response, which must not become an account-existence oracle.
+    |
+    | `log` writes the code to the log so sign-in can be exercised end to end. It refuses to
+    | construct outside local and testing.
+    |
+    */
+
+    'transactional' => [
+        'sender' => env('TRANSACTIONAL_SENDER', 'null'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Channels attempted by default
     |--------------------------------------------------------------------------
     |

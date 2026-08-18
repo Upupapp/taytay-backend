@@ -12,6 +12,9 @@ use Modules\Identity\Contracts\AccountType;
 use Modules\Identity\Contracts\VerificationPurpose;
 use Modules\Identity\Infrastructure\Eloquent\Account;
 use Modules\Shared\Application\CacheKey;
+use Modules\Shared\Contracts\TransactionalDelivery;
+use Modules\Shared\Contracts\TransactionalMessage;
+use Modules\Shared\Contracts\TransactionalSender;
 use Modules\Shared\Application\ClientChannel;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
@@ -48,6 +51,14 @@ final class AuthenticationService
         private readonly OneTimeCodes $codes,
         private readonly MultiFactorService $mfa,
         private readonly IdentityAudit $audit,
+        /**
+         * The one way out of this module (L-18, F16).
+         *
+         * An interface from `Notification/Contracts`, never its `Infrastructure/` — Article 2.1.
+         * Identity does not know or care whether an SMS provider exists; it knows whether the
+         * code left.
+         */
+        private readonly TransactionalSender $sender,
     ) {}
 
     /**
@@ -165,7 +176,29 @@ final class AuthenticationService
      * an unregistered number turns this endpoint into a "is this person a resident here"
      * lookup, which for a VAWC survivor is a safety issue, not a privacy nicety.
      */
-    public function requestSignInCode(string $mobileNumber): ?string
+    /**
+     * Issues a sign-in code **and sends it**.
+     *
+     * ---
+     *
+     * **RETURNS THE OUTCOME, NEVER THE CODE.** This used to return the code itself and rely on
+     * `AuthenticationController` doing `unset($code)` — correct, and the wrong place for the
+     * guarantee. A secret that leaves the module it was minted in is a secret that eventually
+     * reaches a log, a response body or a test fixture, because the discipline that keeps it
+     * from doing so lives in a different file from the mint. Now it cannot: the code exists in
+     * one local variable, is handed to the sender, and goes out of scope.
+     *
+     * **F16 was here.** The code was issued, hashed, recorded and discarded, and nothing carried
+     * it to a person — so no resident could sign in to this platform at all, which made every
+     * other feature unreachable. The gap was a missing seam rather than a missing adapter; see
+     * [TransactionalSender].
+     *
+     * **The answer is the same for an unknown number.** A `skipped` result for a number this
+     * platform does not hold is indistinguishable from a `skipped` result for one it does, and
+     * the caller returns 202 either way. Anything else turns sign-in into a lookup for whether
+     * somebody holds an account here.
+     */
+    public function requestSignInCode(string $mobileNumber): TransactionalDelivery
     {
         /** @var Account|null $account */
         $account = Account::query()
@@ -176,10 +209,39 @@ final class AuthenticationService
         if ($account === null || ! $account->canAuthenticate()) {
             $this->audit->recordUnknownSubjectFailure('identity.code-request-ignored', 'Sign-in code requested for an unknown or inactive mobile number');
 
-            return null;
+            return TransactionalDelivery::skipped('No active citizen account holds that number.');
         }
 
-        return $this->codes->issue($account, VerificationPurpose::SignIn);
+        $code = $this->codes->issue($account, VerificationPurpose::SignIn);
+
+        $result = $this->sender->send(new TransactionalMessage(
+            recipient: $mobileNumber,
+            purpose: 'sign-in-code',
+            /*
+             * Names the municipality, states the expiry, and tells the reader what to do if they
+             * did not ask — the three things that make a code message hard to use for phishing.
+             * No link: a one-time code arriving with a tappable URL trains residents to tap
+             * links in texts claiming to be from their LGU.
+             */
+            text: sprintf(
+                'Your Taytay LGU sign-in code is %s. It expires in %d minutes. If you did not ask to sign in, ignore this message.',
+                $code,
+                (int) config('identity.one_time_code.ttl_minutes'),
+            ),
+        ));
+
+        /*
+         * Recorded whichever way it went. "A code was issued but not delivered" is precisely the
+         * state F16 described, and it survived an entire integration sequence because nothing
+         * wrote it down anywhere an operator would look.
+         */
+        $this->audit->record(
+            $account,
+            $result->wasSent() ? 'identity.code-sent' : 'identity.code-undelivered',
+            sprintf('Sign-in code delivery via %s: %s', $this->sender->name(), $result->status),
+        );
+
+        return $result;
     }
 
     /**

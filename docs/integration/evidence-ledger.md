@@ -787,7 +787,7 @@ button**, which is a policy question rather than a technical one.
 
 ---
 
-## L-18 (P0) — a sign-in code is issued, recorded, and never delivered
+## L-18 (P0, **CLOSED**) — a sign-in code is issued, recorded, and never delivered
 
 Found by the resident mobile app's integration sequence and confirmed here against
 this API running locally on sqlite. No resident can sign in to the platform.
@@ -835,9 +835,64 @@ now, return whether it left. `Identity` may not reach into `Notification`'s
 `Infrastructure/` (Article 2.1), so the channel dispatch has to be exposed
 deliberately rather than borrowed.
 
-**Not implemented here.** It is a new cross-module contract in a repository with
-its own live TAB sequence, and it belongs to that sequence rather than to a
-passing client integration. The design constraint above is the finding.
+### Closed — and the seam went somewhere the design above did not predict
+
+`Modules\Shared\Contracts\TransactionalSender`, with `TransactionalMessage` and
+`TransactionalDelivery` beside it. `AuthenticationService::requestSignInCode` sends through it
+and **no longer returns the code at all** — it used to, with the controller doing `unset($code)`,
+which worked and put the guarantee in the wrong file: the mint was in `Identity/Application` and
+the discipline was in a controller, so nothing stopped a future reader from returning it. The code
+now exists in one local variable and goes out of scope.
+
+**The contract is in `Shared`, not in `Notification`, and that was not a preference.** It was
+written in `Notification/Contracts` first, next to `NotificationChannel`, exactly as the analysis
+above assumed. `ModuleBoundaryTest` refused it: `Notification` already depends on `Identity`, so
+`Identity → Notification` closes a cycle — the test named **thirty-nine** of them in one run. The
+resolution is the one `Modules\Shared\Contracts\AuditWriter` already uses for the same shape of
+problem, and the one the boundary map prescribes: invert it. Shared holds the interface, which
+depends on nothing; `Notification/Infrastructure/Transactional` holds the adapters.
+
+Two adapters, and no third. `NullTransactionalSender` is the default and reports `skipped`, never
+`sent`. `LogTransactionalSender` writes the code to the log and **refuses to construct** unless the
+environment is local/testing/integration *and* `APP_DEBUG` is on — an allow-list alone is not
+enough, because environment names are chosen by whoever writes the `.env`, while anything serving a
+real resident has debug off. No provider adapter was written, because no provider has been chosen;
+see the caveat below.
+
+Measured, on this machine, with the API serving and `TRANSACTIONAL_SENDER=log`:
+
+```
+POST /api/v1/auth/otp {"mobile_number":"+639170000001"}  → 202
+log: "Your Taytay LGU sign-in code is 456296. It expires in 5 minutes.
+      If you did not ask to sign in, ignore this message."
+     recipient logged as *********0001 — masked, and the code is not
+POST /api/v1/auth/otp/verify {code: 456296}              → 201, Bearer token
+audit: identity.code-issued → identity.code-sent → identity.token-issued
+```
+
+`tests/Feature/Api/V1/SignInCodeDeliveryTest.php`, 9 tests. The load-bearing one exchanges the
+code **read out of the captured message** for a token, because "a message was sent" does not
+distinguish a working delivery from one carrying the wrong six digits. Proven red by restoring the
+defect verbatim — mint, `unset`, dispatch nothing — which fails four of them with *"Nothing was
+sent. This is F16 exactly."*
+
+**Why eighteen passing authentication tests missed this.** They asserted 202, and 202 is what a
+platform on which nobody can sign in also returns. The response is deliberately identical whether
+delivery succeeded, was skipped, or the number holds no account — anything else is an
+account-existence oracle — so the API surface cannot carry this evidence and a test written against
+it never will. The outcome goes in the audit trail instead, as `identity.code-sent` or
+`identity.code-undelivered`, which is where an operator can see that nobody can sign in.
+
+### The half that is not code — **THERE IS NO SMS PROVIDER**
+
+Not unconfigured. Not chosen. `ChannelRegistry` binds `new NullChannel('sms')` and there is no
+adapter for any provider anywhere in the codebase. **A real resident still receives nothing**, and
+`NullTransactionalSender` is what a deployment binds today.
+
+Selecting and contracting a Philippine SMS provider is a procurement decision for the LGU, with
+credentials an agent must never hold. It is on the mobile repository's master manual-task list. The
+seam it plugs into now exists, is bound by one line of config, and is covered by tests — so the
+remaining work is a vendor and an adapter, not a design.
 
 ### Two more, from the same session
 

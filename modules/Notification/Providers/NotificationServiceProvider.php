@@ -13,6 +13,9 @@ use Modules\Notification\Application\NotifyRegistrantOnWaitlistPromotion;
 use Modules\Notification\Infrastructure\Channels\DatabaseChannel;
 use Modules\Notification\Infrastructure\Channels\FcmChannel;
 use Modules\Notification\Infrastructure\Channels\NullChannel;
+use Modules\Shared\Contracts\TransactionalSender;
+use Modules\Notification\Infrastructure\Transactional\LogTransactionalSender;
+use Modules\Notification\Infrastructure\Transactional\NullTransactionalSender;
 use Modules\Welfare\Contracts\CaseStatusChanged;
 
 /**
@@ -38,6 +41,26 @@ final class NotificationServiceProvider extends ServiceProvider
             new NullChannel('email'),
             new NullChannel('sms'),
         ]));
+
+        /*
+         * TRANSACTIONAL DELIVERY — the seam a sign-in code travels through (L-18, F16).
+         *
+         * Separate from the channel registry on purpose. A channel is chosen by preference and
+         * may be switched off by the recipient; this may not, because switching it off means
+         * nobody can sign in. It also persists nothing, where `database` is a channel whose
+         * entire job is to persist.
+         *
+         * `null` is the default because it is the truth: this platform has no SMS provider, and
+         * choosing one is a procurement decision the LGU has not made. `log` exists so sign-in
+         * is exercisable end to end on a developer machine, and refuses to construct anywhere
+         * else — see LogTransactionalSender.
+         */
+        $this->app->singleton(TransactionalSender::class, function (): TransactionalSender {
+            return match ((string) config('notification.transactional.sender', 'null')) {
+                'log' => new LogTransactionalSender($this->app),
+                default => new NullTransactionalSender,
+            };
+        });
     }
 
     public function boot(): void
