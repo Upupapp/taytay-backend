@@ -84,6 +84,38 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('admin registrant list', $small, $large);
     }
 
+    /**
+     * THE SAME LIST, WHEN A RESIDENT CANNOT BE RESOLVED — which the test above cannot see.
+     *
+     * `staffProjection()` took `array $names = []` and did `$names[$id] ?? summaryFor($id)`. An
+     * empty default is indistinguishable from a supplied page that has no entry for this row, so
+     * every unresolvable registrant cost a query **on top of** the batch: 12 for one, 17 for six,
+     * against 11 flat when every resident resolves.
+     *
+     * That is the fallback ADR 0042 section 1 records as measuring worse than the N+1 it replaced,
+     * still present in the endpoint that section fixed — invisible because the fixture always
+     * produced residents that resolve.
+     *
+     * Residents become unresolvable through an operation this system performs deliberately:
+     * duplicate merging.
+     */
+    #[Test]
+    public function the_staff_registrant_list_does_not_grow_when_a_resident_cannot_be_resolved(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+        $event = $this->publishedEvent();
+
+        $url = "/api/v1/admin/events/{$event}/registrations";
+        $orphan = static fn () => DB::table('residents')->delete();
+
+        $small = $this->measure($url, fn () => $this->registerOneCitizen($event), 1, beforeMeasuring: $orphan);
+        $large = $this->measure($url, fn () => $this->registerOneCitizen($event), 6, beforeMeasuring: $orphan);
+
+        $this->assertSame(0, DB::table('residents')->count(), 'The fixture left residents resolvable.');
+        $this->assertFixtureProduced(6, DB::table('event_registrations')->count(), 'registrations to render');
+        $this->assertBudget('registrant list, unresolvable residents', $small, $large);
+    }
+
     #[Test]
     public function the_citizen_newsfeed_does_not_grow_with_posts(): void
     {
@@ -108,6 +140,12 @@ final class QueryBudgetTest extends KycTestCase
         $small = $this->measure('/api/v1/newsfeed', fn () => $this->publishPostWithImage(), 1, asCitizen: true);
         $large = $this->measure('/api/v1/newsfeed', fn () => $this->publishPostWithImage(), 6, asCitizen: true);
 
+        /*
+         * The fixture must have produced actual renditions. A stub image that passes the upload's
+         * type check and then fails to decode derives nothing, and the lookup this test exists to
+         * measure returns an empty answer without querying — the empty path, passing silently.
+         */
+        $this->assertFixtureProduced(6, DB::table('media_variants')->count(), 'derived public image renditions');
         $this->assertBudget('citizen newsfeed with images', $small, $large);
     }
 
@@ -127,11 +165,7 @@ final class QueryBudgetTest extends KycTestCase
         $small = $this->measure('/api/v1/events', fn () => $this->publishedEventWithCover(), 1, asCitizen: true);
         $large = $this->measure('/api/v1/events', fn () => $this->publishedEventWithCover(), 8, asCitizen: true);
 
-        $this->assertSame(
-            8,
-            DB::table('events')->whereNotNull('cover_file_id')->count(),
-            'The fixture published events with no cover, so the cover lookup never ran.',
-        );
+        $this->assertFixtureProduced(8, DB::table('events')->whereNotNull('cover_file_id')->count(), 'events with a cover image');
         $this->assertBudget('public events list', $small, $large);
     }
 
@@ -152,11 +186,7 @@ final class QueryBudgetTest extends KycTestCase
         $small = $this->measure($url, fn () => $this->addComment($post, $this->threadRoot), 1, asCitizen: true);
         $large = $this->measure($url, fn () => $this->addComment($post, $this->threadRoot), 6, asCitizen: true);
 
-        $this->assertSame(
-            6,
-            DB::table('newsfeed_comments')->whereNotNull('parent_id')->count(),
-            'The fixture created no replies, so the parent lookup never ran.',
-        );
+        $this->assertFixtureProduced(6, DB::table('newsfeed_comments')->whereNotNull('parent_id')->count(), 'comments with a parent');
         $this->assertBudget('comment thread', $small, $large);
     }
 
@@ -183,7 +213,7 @@ final class QueryBudgetTest extends KycTestCase
         $small = $this->measure($url, fn () => $this->recordOneDocument($case), 1);
         $large = $this->measure($url, fn () => $this->recordOneDocument($case), 6);
 
-        $this->assertHasDocuments(6);
+        $this->assertFixtureProduced(6, DB::table('welfare_case_requirements')->whereNotNull('document_id')->count(), 'requirements with a document');
         $this->assertBudget('staff requirements page', $small, $large);
     }
 
@@ -198,7 +228,7 @@ final class QueryBudgetTest extends KycTestCase
         $small = $this->measure($url, fn () => $this->recordOneDocument($case), 1, asApplicant: true);
         $large = $this->measure($url, fn () => $this->recordOneDocument($case), 6, asApplicant: true);
 
-        $this->assertHasDocuments(6);
+        $this->assertFixtureProduced(6, DB::table('welfare_case_requirements')->whereNotNull('document_id')->count(), 'requirements with a document');
         $this->assertBudget('citizen requirements page', $small, $large);
     }
 
@@ -265,17 +295,28 @@ final class QueryBudgetTest extends KycTestCase
     }
 
     /**
-     * A fixture that produced no documents would measure the empty path and pass while asserting
-     * nothing — which is exactly what the first run of the requirements test did.
+     * THE FIXTURE MUST HAVE PRODUCED THE DATA THE ENDPOINT IS CHARGED FOR.
+     *
+     * Every per-row lookup measured here is conditional on something: a requirement with a
+     * document, an event with a cover, a comment with a parent, an image that actually decoded.
+     * When the condition is absent the lookup returns without querying, the endpoint measures
+     * flat, and the gate reports it safe.
+     *
+     * That is not hypothetical. `/events` passed this suite at 4 → 4 for two rounds while really
+     * costing three queries per row, and the requirements page did the same — both because their
+     * fixtures produced rows the projection never had to resolve. A measurement that does not
+     * assert its own reach is not evidence.
      */
-    private function assertHasDocuments(int $expected): void
+    private function assertFixtureProduced(int $atLeast, int $actual, string $what): void
     {
-        $this->assertSame(
-            $expected,
-            DB::table('welfare_case_requirements')->whereNotNull('document_id')->count(),
-            'The fixture did not attach documents, so this measured requirements whose lookups all '
-            .'short-circuit on a null document id — the empty path, not the one production takes.',
-        );
+        $this->assertGreaterThanOrEqual($atLeast, $actual, sprintf(
+            'The fixture produced %d %s and needed at least %d. Without them the per-row lookup '
+            .'this test exists to measure never runs, so the endpoint measures flat whether or '
+            .'not it has an N+1.',
+            $actual,
+            $what,
+            $atLeast,
+        ));
     }
 
     /**
@@ -288,6 +329,7 @@ final class QueryBudgetTest extends KycTestCase
         bool $asCitizen = false,
         bool $asApplicant = false,
         bool $asReviewer = false,
+        ?callable $beforeMeasuring = null,
     ): int {
         if ($asReviewer) {
             Sanctum::actingAs($this->reviewer('lgu_admin'));
@@ -310,6 +352,12 @@ final class QueryBudgetTest extends KycTestCase
             );
 
             $addOne();
+        }
+
+        // Runs after the rows exist and before anything is counted, for a test whose subject is
+        // the state of the data rather than its volume.
+        if ($beforeMeasuring !== null) {
+            $beforeMeasuring();
         }
 
         if ($asCitizen) {

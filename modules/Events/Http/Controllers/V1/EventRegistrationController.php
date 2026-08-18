@@ -244,9 +244,17 @@ final class EventRegistrationController
         $model = $this->eventOrFail($event);
         $promoted = $this->registrations->promoteFromWaitlist($model);
 
+        // A list, so the names resolve in one query rather than one per promoted registrant.
+        $promotedNames = $this->residents->summariesFor(
+            array_map(static fn (EventRegistration $r): string => (string) $r->resident_id, $promoted),
+        );
+
         return ApiResponse::item([
             'promoted_count' => count($promoted),
-            'promoted' => array_map(fn (EventRegistration $r): array => $this->staffProjection($r), $promoted),
+            'promoted' => array_map(
+                fn (EventRegistration $r): array => $this->staffProjection($r, $promotedNames),
+                $promoted,
+            ),
         ] + $this->registrations->summaryFor($model->refresh()));
     }
 
@@ -319,18 +327,29 @@ final class EventRegistrationController
     /**
      * The list the office works from.
      *
-     * @param  array<string, ResidentSummary>  $names  resolved
-     *                                                 for the
-     *                                                 whole page
+     * @param  array<string, ResidentSummary>|null  $names  resolved for the whole page, or null
+     *                                                      when rendering a single row
      * @return array<string, mixed>
      */
-    private function staffProjection(EventRegistration $registration, array $names = []): array
+    private function staffProjection(EventRegistration $registration, ?array $names = null): array
     {
         $residentId = (string) $registration->resident_id;
 
-        // Falls back to a single lookup for the callers that render one row. The list path passes
-        // the whole page's names in, which is what keeps it flat.
-        $summary = $names[$residentId] ?? $this->residents->summaryFor($residentId);
+        /*
+         * `null` means no map was supplied — a single-row caller, which does its own lookup.
+         * An absent KEY in a supplied map means the page asked and this resident could not be
+         * resolved, which is a real answer: the row renders without a name.
+         *
+         * This was `array $names = []` with `$names[$id] ?? $this->residents->summaryFor($id)`,
+         * where an empty default is indistinguishable from a supplied page that lacks the row —
+         * so every unresolvable registrant cost a query, ON TOP of the batch. Measured 12 queries
+         * for one such row and 17 for six, against 11 flat when every resident resolves. Residents
+         * become unresolvable through exactly the operation this system performs on purpose:
+         * duplicate merging (ADR 0042 section 10).
+         */
+        $summary = $names === null
+            ? $this->residents->summaryFor($residentId)
+            : ($names[$residentId] ?? null);
 
         return [
             'id' => $registration->uuid,

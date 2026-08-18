@@ -329,10 +329,63 @@ per-row lookup — the correct trade for a tool used only to choose what to meas
 
 ---
 
+## 10. Round four: auditing the gates themselves
+
+Round three showed a gate can pass while its endpoint is broken. So the remaining gates were
+audited the way `/events` had to be: **does this fixture produce the data the endpoint is charged
+for?**
+
+`me/cases` is genuinely safe — its projection reads only columns already on the row, so there is no
+condition to miss. The newsfeed-with-images fixture was honest too, though nothing proved it until
+a reach assertion was added and mutation-tested by replacing the JPEG with a byte-signature stub
+(which derives no renditions): the assertion fires.
+
+**The registrant list was not.** Its projection still read:
+
+```php
+private function staffProjection(EventRegistration $registration, array $names = []): array
+{
+    $summary = $names[$residentId] ?? $this->residents->summaryFor($residentId);
+```
+
+`array $names = []` cannot distinguish *"no map was supplied"* from *"a page was supplied and this
+row is not on it"* — so every registrant whose resident does not resolve cost a query, **on top of
+the batch**:
+
+| registrant list | 1 row | 6 rows |
+| --- | --- | --- |
+| residents resolve | 11 | 11 |
+| residents do not resolve | 12 | **17** |
+
+This is precisely the fallback §1 records as *measuring worse than the N+1 it replaced* — living in
+the very endpoint §1 fixed, and surviving three rounds of measurement because every fixture created
+residents that resolve. §1 diagnosed the pattern and every later fix used `?array = null`; the
+original was never brought back into line.
+
+It is not a theoretical data shape either: residents become unresolvable through an operation this
+system performs deliberately — **duplicate merging**.
+
+Fixed with the same `null`-versus-absent-key distinction, and gated by a test that deletes the
+residents before measuring. Mutation-tested: restoring the `??` fallback fails the new test at
+12 → 17 while **the original registrant test still passes**, which is the clearest possible
+statement of what the old gate could not see.
+
+`promote()` was fixed alongside it — it rendered a list with no map at all.
+
+### The reach assertion is now one helper
+
+Five gates asserted their own fixture by hand. They now share `assertFixtureProduced()`, which
+carries the reasoning once: every per-row lookup here is conditional on something — a requirement
+with a document, an event with a cover, a comment with a parent, an image that decoded — and when
+that condition is absent the endpoint measures flat whether or not it has an N+1.
+
+---
+
 ## Consequences
 
-* Nine endpoints now cost a fixed number of queries at any page size, each with a gate the build
+* Ten endpoints now cost a fixed number of queries at any page size, each with a gate the build
   fails on, and every gate mutation-tested by reverting its fix.
+* Every gate asserts what its fixture produced, through one shared helper.
 * Three batch lookups exist alongside their single-row forms. A caller rendering a list must use
   the batch; the test is what enforces it.
 * `CaseRequirementService` separates the satisfaction *rule* from the *lookup*, so a list path and

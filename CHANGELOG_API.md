@@ -102,6 +102,16 @@ value on a field the client already treats as open, a reworded `message`.
   `GET /api/v1/admin/cases/{case}/eligibility-checks`, `GET /api/v1/me/profile/corrections`, and
   `GET /api/v1/admin/resident-corrections` (which ran **two** queries per row).
 
+* **`GET /api/v1/admin/events/{event}/registrations` still ran a query per row when a registrant's
+  resident could not be resolved** — 12 queries for one such row and 17 for six, against 11 flat
+  when every resident resolves. It paid for the batch lookup *and* then did the per-row work.
+
+  Residents become unresolvable through duplicate merging, which this system does deliberately, so
+  this degraded exactly on the lists most likely to be long. Now flat either way.
+
+  The response is unchanged: an unresolvable registrant still renders with a null `resident_name`,
+  as before.
+
 ---
 
 ## 2026-08-18 — first published contract (TAB 33)
