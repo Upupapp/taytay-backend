@@ -19,6 +19,20 @@ use Modules\Reporting\Http\Controllers\V1\ReportController;
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('admin/dashboard', [ReportController::class, 'dashboard'])->name('v1.admin.dashboard');
 
+    /*
+     * ── the report catalogue and synchronous run (TAB 07) ─────────────────────────────
+     *
+     * Alongside the export lifecycle below, not replacing it: somebody who wants a figure on
+     * a screen should not have to request a file, poll for it and download it.
+     *
+     * The catalogue is filtered by permission rather than annotated with it — a listing that
+     * names what somebody may not have is a listing that tells them it exists.
+     */
+    Route::get('admin/reports', [ReportController::class, 'catalogue'])->name('v1.admin.reports.index');
+    // Aggregate only. A report that names people is an export, because the retention window
+    // and the audit entry that come with an export are the point.
+    Route::post('admin/reports/{report}/run', [ReportController::class, 'run'])->name('v1.admin.reports.run');
+
     Route::get('admin/exports', [ReportController::class, 'listExports'])->name('v1.admin.exports.index');
     /*
      * THE TIGHTEST AUTHENTICATED LIMIT IN THE SYSTEM, and it is per HOUR.

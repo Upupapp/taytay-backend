@@ -15,6 +15,10 @@ use Modules\Reporting\Application\ReportingAudit;
 use Modules\Reporting\Domain\ReportCatalog;
 use Modules\Reporting\Infrastructure\Eloquent\ReportExport;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\Pagination\Page;
+use Modules\Shared\Application\Pagination\PaginationParams;
+use Modules\Shared\Exceptions\ApiException;
+use Modules\Shared\Exceptions\ErrorCode;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
 use Modules\Shared\Http\ApiResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -211,6 +215,143 @@ final class ReportController
             'failure_reason' => $export->failure_reason,
             // Deliberately absent: the storage key. There is no path in this payload to fetch
             // from anywhere but the gated endpoint.
+        ];
+    }
+
+    /**
+     * The catalogue: the reports this caller may open (TAB 07).
+     *
+     * **Filtered by permission, not annotated with it.** A caller who cannot run the payout
+     * manifest does not see a greyed-out payout manifest — they see a catalogue without one. A
+     * listing that names what somebody may not have is a listing that tells them it exists, and
+     * `release-manifest` existing is itself a fact about how this office pays people.
+     */
+    public function catalogue(Request $request, ActorContext $actor): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::ReportView);
+
+        $reports = [];
+
+        foreach (ReportCatalog::cases() as $report) {
+            if (! $this->authorization->allows($actor, $report->requiredPermission())) {
+                continue;
+            }
+
+            $reports[] = [
+                'id' => $report->value,
+                'title' => $report->title(),
+                'question' => $report->question(),
+                'area' => $report->area(),
+                // The console's vocabulary; `person-level` costs the higher permission above.
+                'grain' => $report->isPersonLevel() ? 'person-level' : 'aggregate',
+                'permission' => $report->requiredPermission()->value,
+                'filters' => $report->filters(),
+                /*
+                 * Whether it can be run here and read on screen, or only composed as a file.
+                 * A person-level report has no synchronous form on purpose: naming people is an
+                 * export, which carries a retention window, an audit entry and a warning the
+                 * caller has already seen. A synchronous endpoint returning the same rows would
+                 * route around all three.
+                 */
+                'runnable' => $report->metric() !== null,
+                'export_retention_hours' => $report->retentionHours(),
+            ];
+        }
+
+        return ApiResponse::page(
+            Page::fromArray($reports, PaginationParams::fromRequest($request)),
+            null,
+            $this->suppressionMeta(),
+        );
+    }
+
+    /**
+     * Run one aggregate report, synchronously.
+     *
+     * Alongside the export lifecycle rather than replacing it: a caller who wants a figure on a
+     * screen should not have to request a file, poll for it and download it.
+     *
+     * ── THREE REFUSALS, EACH FOR A DIFFERENT REASON ──────────────────────────────────
+     *
+     * A report that names people is refused here whatever the caller holds — it is an export, and
+     * the retention window and audit entry that come with an export are the point.
+     *
+     * `assigned_to` is refused **on this endpoint**, unlike the dashboard where filtering to one
+     * named worker is how a supervisor reviews a caseload they are responsible for. The command
+     * permits that filter and forbids the leaderboard; a report is the artefact that gets pasted
+     * into a meeting pack, and a per-worker report is a league table however it was produced.
+     *
+     * And the run is scoped like every other metric, because an aggregate is exactly the shape
+     * that hides a scope leak: a single number reveals nothing about where it came from.
+     */
+    public function run(Request $request, ActorContext $actor, string $report): JsonResponse
+    {
+        $definition = ReportCatalog::tryFrom($report);
+
+        if ($definition === null || $definition->metric() === null) {
+            throw ResourceNotFoundException::make('That report was not found.');
+        }
+
+        $this->authorization->authorize($actor, $definition->requiredPermission());
+
+        if ($definition->isPersonLevel()) {
+            throw ResourceNotFoundException::make('That report was not found.');
+        }
+
+        if ($request->query('assigned_to') !== null) {
+            throw new ApiException(
+                ErrorCode::ValidationFailed,
+                'A report cannot be filtered to one caseworker. A queue length measures the cases somebody was given, not how well they work.',
+            );
+        }
+
+        $filters = $this->filters($request);
+        $metric = $definition->metric();
+
+        $rows = $metric === 'dataCompleteness'
+            ? $this->metrics->dataCompleteness($actor)
+            : $this->metrics->{$metric}($actor, $filters);
+
+        /*
+         * Recorded even though nothing was written and no name was returned. Who asked which
+         * question of the welfare registry, and with what filter, is itself the audit interest —
+         * "who has been looking at Barangay Dolores" is a question the trail should be able to
+         * answer.
+         */
+        $this->audit->record(
+            $actor->subjectId,
+            'report.run',
+            'Report run: '.$definition->title(),
+            $definition->value,
+        );
+
+        return ApiResponse::item([
+            'id' => $definition->value,
+            'title' => $definition->title(),
+            'question' => $definition->question(),
+            'filters' => $filters,
+            'rows' => $rows,
+        ], meta: $this->suppressionMeta());
+    }
+
+    /**
+     * Published on every reporting response so a client can label a blank cell honestly.
+     *
+     * A screen that silently shows nothing where a number was withheld reads as a bug, and
+     * somebody eventually "fixes" it.
+     *
+     * @return array<string, mixed>
+     */
+    private function suppressionMeta(): array
+    {
+        return [
+            'suppression' => [
+                'minimum_cell' => MetricsService::MINIMUM_CELL,
+                'note' => 'Counts below the minimum are withheld so a small cell cannot identify a household.',
+                // Never rounded and never zeroed: a rounded figure is an untrue number in a
+                // report, and a zero says the office served nobody, which is itself the finding.
+                'method' => 'withheld',
+            ],
         ];
     }
 

@@ -246,7 +246,10 @@ export type ReportingReportCatalog =
 |  'barangay-reach'
 |  'referral-outcomes'
 |  'release-manifest'
-|  'event-registrants';
+|  'event-registrants'
+|  'case-aging'
+|  'field-workload'
+|  'data-completeness';
 
 export type ResidentProfileCivilStatus =
    'single'

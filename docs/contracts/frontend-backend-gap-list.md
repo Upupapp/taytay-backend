@@ -35,6 +35,7 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-24](#g-24) | One family per resident here; the console's model is plural | high | LGU (MSWDO) |
 | [G-25](#g-25) | The console's `WorkItem` wants a subject and preview the queue withholds | low | Angular |
 | [G-26](#g-26) | No published contract for pending duplicate pairs, so no alert for them | medium | backend |
+| [G-27](#g-27) | The console defines 14 reports; 7 have a server-side implementation | medium | backend |
 | [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
@@ -783,3 +784,26 @@ unreviewed — and is **not built**, because Tasks may not read `ResidentProfile
 Adding one is a small change **in that module**. Reaching across from Tasks to avoid asking would
 be precisely the boundary violation `ModuleBoundaryTest` exists to catch, so the alert is absent
 and named rather than present and wrong.
+
+---
+
+### G-27
+**Seven of the console's fourteen reports have no server-side implementation.** `medium`
+
+`GET /api/v1/admin/reports` lists what this API can actually run: `case-summary`, `case-aging`,
+`barangay-reach`, `program-utilization`, `referral-outcomes`, `field-workload` and
+`data-completeness`, plus the two person-level exports.
+
+Absent: `assistance-pipeline`, `vulnerability-indicators`, `service-reach`,
+`requirement-bottlenecks`, `release-status`, `repeat-assistance`, `staff-workload`. Two of those —
+`release-status` and `repeat-assistance` — belong to TAB 08 by the command's own sequencing, and
+`staff-workload` needs the leaderboard question settled before it can exist at all.
+
+Listing them with an `available: false` flag was the obvious alternative and is worse: a catalogue
+is read as a menu, and a menu with items that cannot be ordered is a menu that lies. The console
+holds its own definitions and can show what is coming; it should not learn it from a server
+pretending to offer it.
+
+**One naming divergence worth catching now:** the console spells it `program-utilisation`, this API
+spells it `program-utilization`. Same report, two ids. Whoever owns the vocabulary picks one — it
+is not a matter of taste once a client routes on it.
