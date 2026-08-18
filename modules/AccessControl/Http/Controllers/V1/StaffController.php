@@ -52,10 +52,25 @@ final class StaffController
         $pagination = PaginationParams::fromRequest($request);
         $directory = $this->accounts->paginate($pagination->page, $pagination->perPage);
 
+        /*
+         * Authority for the whole page in two queries. Asked per row it was two EACH — the
+         * roles, then the scope — measured 8 queries for one staff member and 18 for six
+         * (ADR 0042 section 11).
+         */
+        $subjectIds = array_map(static fn ($summary): string => (string) $summary->id, $directory['items']);
+        $authority = $this->assignments->authorityForMany($subjectIds);
+        $scopes = $this->scopes->forSubjects($subjectIds);
+
         return ApiResponse::page(
             new Page($directory['items'], $directory['total'], $pagination),
             fn ($summary): array => $summary->toArray() + [
-                'authority' => $this->authorityFor($summary->id),
+                'authority' => [
+                    'roles' => $authority[(string) $summary->id]['roles'] ?? [],
+                    'permissions' => Role::permissionsFor($authority[(string) $summary->id]['roles'] ?? []),
+                    // An absent subject is one with no live assignment, which `forSubjects()`
+                    // already resolved to `DataScope::none()` — a real answer, not a miss.
+                    'scope' => ($scopes[(string) $summary->id] ?? DataScope::none())->forAudit(),
+                ],
             ],
         );
     }

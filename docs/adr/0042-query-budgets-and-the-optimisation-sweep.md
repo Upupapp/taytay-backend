@@ -381,10 +381,66 @@ that condition is absent the endpoint measures flat whether or not it has an N+1
 
 ---
 
+## 11. Round five: the detector cannot see through an interface
+
+The `array $names = []` defect of §10 is precise enough to search for mechanically, so it was.
+**No other instance exists** — the five hits for that signature are all legitimate (cache-key
+parts, error details, response meta), and a fixed-string search for `?? $this->` found only value
+defaults.
+
+But an adjacent line in that search output exposed something the detector had missed entirely:
+
+```php
+// StaffController::index
+fn ($summary): array => $summary->toArray() + ['authority' => $this->authorityFor($summary->id)],
+```
+
+`authorityFor()` reads the subject's roles and then their scope — **two queries per row**, measured
+8 for one staff member and 18 for six.
+
+### Why the detector was blind to it
+
+`authorityFor()` calls `$this->assignments->rolesFor(...)`, and `assignments` is typed
+`RoleAssignmentRepository` — **an interface**. The detector resolves a property's type to a file
+and looks for the method's body; an interface has a declaration and no body, so the call chain ends
+there and nothing downstream is seen.
+
+This is not a small gap. **This codebase inverts dependencies deliberately** — Article 2.2 requires
+cross-module calls to go through `Application/` services or published `Contracts/`, and ADR-level
+decisions like `Shared\Contracts\AuditWriter` exist precisely to break cycles that way. So the
+detector is blind to exactly the calls the constitution mandates, and its silence about the
+remaining endpoints certifies nothing at all.
+
+Recorded rather than fixed: a detector that resolves interfaces to their bindings is a larger tool
+than this sweep needs, and §9 already establishes that its negatives are not evidence. What matters
+is that the *reason* is now known, so nobody reads its clean output as coverage.
+
+### The fix
+
+| Endpoint | before | after |
+| --- | --- | --- |
+| `GET /staff` | 8 → **18** (1 → 6) | 8 → 8 |
+
+`RoleAssignmentRepository` gained one batch method returning roles, assignments and grants for many
+subjects in two queries, with the same validity window and the same deny-by-default (a subject with
+nothing live is **absent**, not present and empty).
+
+`ScopeResolver` needed care: its widest-first decision is subtle, and a list path that reimplemented
+it would drift. The decision was extracted into one private method with two entry points —
+`forSubject()` and `forSubjects()`. Granted barangays are passed as a **callable** so the decision
+still short-circuits: an `all-barangays` subject never resolves them, and eagerly loading them would
+have added a query to a path that previously avoided one.
+
+**The equivalence is asserted, not assumed.** `ScopeResolverTest::resolve()` now runs both entry
+points on every case in the file and fails if they disagree — so all seven scope rules cover both,
+and a change to one without the other is caught.
+
+---
+
 ## Consequences
 
-* Ten endpoints now cost a fixed number of queries at any page size, each with a gate the build
-  fails on, and every gate mutation-tested by reverting its fix.
+* Eleven endpoints now cost a fixed number of queries at any page size, each with a gate the
+  build fails on, and every gate mutation-tested by reverting its fix.
 * Every gate asserts what its fixture produced, through one shared helper.
 * Three batch lookups exist alongside their single-row forms. A caller rendering a list must use
   the batch; the test is what enforces it.
@@ -397,6 +453,9 @@ that condition is absent the endpoint measures flat whether or not it has an N+1
     own probes were measuring empty data and reporting success;
   * **a check with no negative fixture may be inert, wrong, or both**, and the inert half hides
     the wrong half.
+* From §11: **the detector cannot follow a call through an interface**, which is how this
+  codebase is required to make cross-module calls. Its clean output is not coverage, and the
+  endpoints it does not flag remain unmeasured rather than proven safe.
 * And from §9: **a passing gate is not evidence its endpoint is safe.** `/events` passed for two
   rounds while costing three queries per row, because nothing asserted its fixture created the
   data the endpoint charges for. Every gate here now asserts what its fixture produced.

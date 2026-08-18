@@ -263,6 +263,25 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('document request list', $small, $large);
     }
 
+    /**
+     * The staff directory described each person's authority with its own two queries — the roles,
+     * then the scope — 8 for one staff member and 18 for six.
+     *
+     * Found by grep rather than by the detector, which cannot follow a call through an interface:
+     * `RoleAssignmentRepository` is a contract, and the detector reads the named class for a
+     * method body an interface does not have. This codebase inverts dependencies deliberately
+     * (Article 2.2), so that blind spot covers exactly the calls the constitution requires.
+     */
+    #[Test]
+    public function the_staff_directory_does_not_grow_with_staff(): void
+    {
+        $small = $this->measure('/api/v1/staff', fn () => $this->reviewer('lgu_admin'), 1, asReviewer: true);
+        $large = $this->measure('/api/v1/staff', fn () => $this->reviewer('lgu_admin'), 6, asReviewer: true);
+
+        $this->assertFixtureProduced(6, DB::table('role_assignments')->count(), 'staff with a role assignment');
+        $this->assertBudget('staff directory', $small, $large);
+    }
+
     #[Test]
     public function a_citizens_own_case_list_does_not_grow_with_cases(): void
     {
@@ -403,6 +422,7 @@ final class QueryBudgetTest extends KycTestCase
             // would satisfy the loop without ever creating what is under test.
             str_contains($url, '/comments') => DB::table('newsfeed_comments')->whereNotNull('parent_id')->count(),
             str_contains($url, '/kyc-cases') => DB::table('kyc_cases')->count(),
+            str_contains($url, '/staff') => DB::table('role_assignments')->count(),
             str_contains($url, '/document-requests') => DB::table('document_requests')->count(),
             str_contains($url, '/registrations') => DB::table('event_registrations')->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),

@@ -140,8 +140,48 @@ final class ScopeResolverTest extends TestCase
             {
                 return $this->granted;
             }
+
+            public function authorityForMany(array $subjectIds): array
+            {
+                // Deny by default, like the real one: a subject with no live assignment is
+                // ABSENT from the result rather than present and empty.
+                if ($this->assignments === [] && $this->granted === []) {
+                    return [];
+                }
+
+                $authority = [];
+
+                foreach ($subjectIds as $subjectId) {
+                    $authority[$subjectId] = [
+                        'roles' => array_values(array_unique(array_column($this->assignments, 'role'))),
+                        'assignments' => $this->assignments,
+                        'granted_barangay_ids' => $this->granted,
+                    ];
+                }
+
+                return $authority;
+            }
         };
 
-        return (new ScopeResolver($repository))->forSubject('subject-1');
+        $resolver = new ScopeResolver($repository);
+        $single = $resolver->forSubject('subject-1');
+
+        /*
+         * THE BATCH PATH MUST AGREE WITH THE SINGLE ONE, on every case in this file.
+         *
+         * `forSubjects()` exists so a list costs two queries instead of two per row, and the
+         * widest-first ordering it applies is subtle enough that a second copy would drift.
+         * Asserting equivalence here means every scope rule tested above is tested for both
+         * entry points, and a future change that alters one without the other fails.
+         */
+        $batch = $resolver->forSubjects(['subject-1'])['subject-1'];
+
+        $this->assertSame(
+            $single->forAudit(),
+            $batch->forAudit(),
+            'forSubjects() resolved a different scope than forSubject() for the same assignments.',
+        );
+
+        return $single;
     }
 }

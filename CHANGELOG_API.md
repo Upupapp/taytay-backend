@@ -112,6 +112,12 @@ value on a field the client already treats as open, a reworded `message`.
   The response is unchanged: an unresolvable registrant still renders with a null `resident_name`,
   as before.
 
+* **`GET /api/v1/staff` described each person's authority with its own two queries** — the roles,
+  then the scope — 8 queries for one staff member and 18 for six. Now two for the whole page.
+
+  The `authority` object is unchanged: the same `roles`, `permissions` and `scope`, with the same
+  values, including for a staff member who has no live role assignment.
+
 ---
 
 ## 2026-08-18 — first published contract (TAB 33)

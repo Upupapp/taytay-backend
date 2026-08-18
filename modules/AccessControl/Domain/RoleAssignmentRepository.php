@@ -35,4 +35,19 @@ interface RoleAssignmentRepository
      * @return list<int>
      */
     public function grantedBarangayIdsFor(string $subjectId): array;
+
+    /**
+     * The same facts as the three methods above, for SEVERAL subjects at once.
+     *
+     * For a caller rendering a list. The per-subject methods cost a query each, and describing
+     * one person's authority needs two of them — so a staff directory cost two queries per row
+     * (measured 8 for one row, 18 for six; ADR 0042 section 11).
+     *
+     * Same validity window, same deny-by-default: a subject with nothing live is absent from
+     * the result rather than present and empty, and a caller must read that as "no authority".
+     *
+     * @param  list<string>  $subjectIds
+     * @return array<string, array{roles: list<string>, assignments: list<array{role: string, scope_type: string, barangay_id: int|null}>, granted_barangay_ids: list<int>}>
+     */
+    public function authorityForMany(array $subjectIds): array;
 }
