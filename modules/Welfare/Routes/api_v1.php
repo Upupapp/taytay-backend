@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Modules\Welfare\Http\Controllers\V1\AssessmentController;
+use Modules\Welfare\Http\Controllers\V1\BeneficiaryController;
 use Modules\Welfare\Http\Controllers\V1\CaseController;
 use Modules\Welfare\Http\Controllers\V1\CaseEligibilityController;
 use Modules\Welfare\Http\Controllers\V1\CaseNoteController;
@@ -34,6 +35,20 @@ use Modules\Welfare\Http\Controllers\V1\SafeguardingController;
  */
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    /*
+     * ── the beneficiary registry (TAB 07) ─────────────────────────────────────────────
+     *
+     * A projection, never an entity: no beneficiary table, no beneficiary identifier, no
+     * stored standing. It lives in this module rather than `ResidentProfile` because a
+     * standing is a welfare fact about a person — and because the other way round made the
+     * module dependency graph cyclic, which `ModuleBoundaryTest` caught.
+     *
+     * `program.view` rather than `resident.view`: a resident row says a person exists, a
+     * beneficiary row says what this office has done for them.
+     */
+    Route::get('admin/beneficiaries', [BeneficiaryController::class, 'index'])->name('v1.admin.beneficiaries.index');
+    Route::get('admin/beneficiaries/{resident}', [BeneficiaryController::class, 'show'])->name('v1.admin.beneficiaries.show');
+
     // ── the applicant's own requests ──────────────────────────────────────────────────
     Route::get('me/cases', [MyCaseController::class, 'index'])->name('v1.me.cases.index');
     Route::get('me/cases/{case}', [MyCaseController::class, 'show'])->name('v1.me.cases.show');

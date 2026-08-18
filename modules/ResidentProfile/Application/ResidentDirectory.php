@@ -7,6 +7,7 @@ namespace Modules\ResidentProfile\Application;
 use Modules\ResidentProfile\Contracts\ResidentSummary;
 use Modules\ResidentProfile\Infrastructure\Eloquent\HouseholdMembership;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
+use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentDuplicatePair;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentSector;
 
 /**
@@ -69,6 +70,101 @@ final class ResidentDirectory
         }
 
         return $summaries;
+    }
+
+    /**
+     * A **page** of the registry, as summaries, for a module that needs to list residents.
+     *
+     * Published for TAB 07's beneficiary registry, which lives in `Welfare` because a beneficiary
+     * standing is a welfare fact about a person — and because `Welfare` already depends on this
+     * module, so putting the projection the other way round would have made the dependency graph
+     * cyclic. `ModuleBoundaryTest` caught exactly that on the first attempt.
+     *
+     * Returns {@see ResidentSummary} objects and a total, never a query builder and never the
+     * Eloquent model. Handing back a builder would let the caller filter on income or sectors and
+     * the boundary would exist only in the documentation.
+     *
+     * Barangay scoping is the **caller's** job: it holds the actor. This returns what it is asked
+     * for, and `$barangayIds` is how the caller says what its actor may reach — `null` means
+     * unrestricted, `[]` means nothing, which is deny-by-default rather than a missing filter.
+     *
+     * @param  list<int>|null  $barangayIds
+     * @return array{summaries: list<ResidentSummary>, total: int}
+     */
+    public function searchSummaries(?string $term, ?array $barangayIds, int $page, int $perPage): array
+    {
+        $query = Resident::query();
+
+        if ($barangayIds !== null) {
+            $barangayIds === []
+                ? $query->whereRaw('1 = 0')
+                : $query->whereIn('barangay_id', $barangayIds);
+        }
+
+        if ($term !== null && trim($term) !== '') {
+            $like = '%'.strtolower(trim($term)).'%';
+            $query->where(function ($builder) use ($like): void {
+                $builder
+                    ->whereRaw('lower(first_name) like ?', [$like])
+                    ->orWhereRaw('lower(last_name) like ?', [$like]);
+            });
+        }
+
+        $total = (clone $query)->count();
+
+        $rows = $query->orderBy('last_name')->orderBy('id')->forPage($page, $perPage)->get();
+
+        return [
+            'summaries' => $rows->map(fn (Resident $resident): ResidentSummary => new ResidentSummary(
+                id: $resident->uuid,
+                displayName: $resident->displayName(),
+                verificationTier: $resident->verification_tier,
+                barangayId: $resident->barangay_id === null ? null : (int) $resident->barangay_id,
+            ))->all(),
+            'total' => $total,
+        ];
+    }
+
+    /**
+     * Which of these residents sit in an **undecided** duplicate pair.
+     *
+     * A set of identifiers and nothing else. The pair, the rule that matched and the resemblance
+     * band belong to the duplicate-review queue behind `resident.merge` — *"possible duplicate of
+     * somebody"* is a claim about a person, and a module asking "should this row show a flag" has
+     * no need to substantiate it.
+     *
+     * @param  list<string>  $residentUuids
+     * @return list<string> the subset under review
+     */
+    public function underDuplicateReview(array $residentUuids): array
+    {
+        $uuids = array_values(array_unique(array_filter($residentUuids)));
+
+        if ($uuids === []) {
+            return [];
+        }
+
+        $ids = Resident::query()->whereIn('uuid', $uuids)->pluck('id', 'uuid')->all();
+
+        $pairs = ResidentDuplicatePair::query()
+            ->where('decision', 'undecided')
+            ->where(function ($query) use ($ids): void {
+                $query->whereIn('lower_resident_id', array_values($ids))
+                    ->orWhereIn('higher_resident_id', array_values($ids));
+            })
+            ->get(['lower_resident_id', 'higher_resident_id']);
+
+        $flagged = [];
+
+        foreach ($pairs as $pair) {
+            $flagged[(int) $pair->lower_resident_id] = true;
+            $flagged[(int) $pair->higher_resident_id] = true;
+        }
+
+        return array_values(array_keys(array_filter(
+            $ids,
+            static fn (int $id): bool => isset($flagged[$id]),
+        )));
     }
 
     /**

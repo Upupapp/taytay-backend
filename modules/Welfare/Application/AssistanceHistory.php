@@ -117,6 +117,116 @@ final class AssistanceHistory
     /**
      * @return Collection<int, WelfareCase>
      */
+    /**
+     * The assistance facts for a **page** of residents, in a fixed number of queries.
+     *
+     * Published for TAB 07's beneficiary projection, which lives in `ResidentProfile` because it
+     * is a projection over the resident registry — the registry is the spine, and this module owns
+     * only what the office has done for those people. Article 2.1 forbids that module reading
+     * `welfare_cases`, `releases` or `program_enrollments` directly, and it should: the question
+     * *"has this person received assistance"* has one owner, and that owner is here.
+     *
+     * ── WHY BATCHED ──────────────────────────────────────────────────────────────────
+     *
+     * {@see historyFor()} answers one resident. A registry page of 100 asking it 100 times is the
+     * N+1 the command singles out as *"a production incident on the first busy morning"*. This
+     * takes the whole page in three grouped queries and returns a map, so the caller loops over
+     * memory rather than over the database.
+     *
+     * ── WHAT EACH FIGURE MEANS, PRECISELY ────────────────────────────────────────────
+     *
+     * `open_request_count` counts cases **not** yet granted or closed — somebody waiting on us.
+     * `granted_count` counts cases that reached approved or beyond, which is this module's
+     * existing definition of received ({@see GRANTED}) and deliberately includes `approved`: a
+     * commitment made is a commitment, and hiding it until payout shows a blank history to
+     * somebody who has been promised money.
+     *
+     * `total_released_centavos` sums **cash releases that actually happened**, and nothing else.
+     * In-kind releases carry no amount by design — nobody priced that sack of rice — so they are
+     * counted separately rather than coerced to zero. A zero would read as "given, worth nothing".
+     *
+     * @param  list<string>  $residentUuids
+     * @return array<string, array<string, mixed>> keyed by resident uuid
+     */
+    public function factsFor(array $residentUuids): array
+    {
+        if ($residentUuids === []) {
+            return [];
+        }
+
+        $granted = array_map(static fn (CaseStatus $s): string => $s->value, self::GRANTED);
+
+        /*
+         * "Still waiting on us" = open, and not already granted. `openValues()` is the domain's own
+         * answer to which states are non-terminal, so this cannot drift from the lifecycle the way
+         * a hand-listed set of terminal statuses would the next time one is added.
+         */
+        $waiting = array_values(array_diff(CaseStatus::openValues(), $granted));
+
+        $facts = [];
+
+        foreach ($residentUuids as $uuid) {
+            $facts[$uuid] = [
+                'open_request_count' => 0,
+                'granted_count' => 0,
+                'last_assistance_at' => null,
+                'total_released_centavos' => 0,
+                'in_kind_release_count' => 0,
+                'current_program_codes' => [],
+            ];
+        }
+
+        $grantedPlaceholders = implode(',', array_fill(0, count($granted), '?'));
+        $waitingPlaceholders = $waiting === [] ? null : implode(',', array_fill(0, count($waiting), '?'));
+
+        $cases = WelfareCase::query()
+            ->whereIn('resident_id', $residentUuids)
+            ->selectRaw('resident_id')
+            ->selectRaw("sum(case when status in ({$grantedPlaceholders}) then 1 else 0 end) as granted_count", $granted)
+            ->selectRaw(
+                $waitingPlaceholders === null
+                    ? '0 as open_count'
+                    : "sum(case when status in ({$waitingPlaceholders}) then 1 else 0 end) as open_count",
+                $waiting,
+            )
+            ->selectRaw('max(last_activity_at) as last_activity_at')
+            ->groupBy('resident_id')
+            ->get();
+
+        foreach ($cases as $row) {
+            $facts[$row->resident_id]['granted_count'] = (int) $row->granted_count;
+            $facts[$row->resident_id]['open_request_count'] = (int) $row->open_count;
+            $facts[$row->resident_id]['last_assistance_at'] = $row->last_activity_at;
+        }
+
+        $releases = Release::query()
+            ->whereIn('resident_id', $residentUuids)
+            // Money that actually moved. A scheduled release is a plan, and counting it as
+            // received would tell a screen somebody was paid on the day it was written down.
+            ->whereIn('status', [ReleaseStatus::Released->value, ReleaseStatus::Completed->value])
+            ->selectRaw('resident_id')
+            ->selectRaw('sum(case when kind = ? then coalesce(amount_centavos, 0) else 0 end) as cash_total', ['cash'])
+            ->selectRaw('sum(case when kind = ? then 1 else 0 end) as in_kind_count', ['in-kind'])
+            ->groupBy('resident_id')
+            ->get();
+
+        foreach ($releases as $row) {
+            $facts[$row->resident_id]['total_released_centavos'] = (int) $row->cash_total;
+            $facts[$row->resident_id]['in_kind_release_count'] = (int) $row->in_kind_count;
+        }
+
+        $enrollments = ProgramEnrollment::query()
+            ->whereIn('resident_id', $residentUuids)
+            ->where('status', 'active')
+            ->get(['resident_id', 'program_code']);
+
+        foreach ($enrollments as $enrollment) {
+            $facts[$enrollment->resident_id]['current_program_codes'][] = $enrollment->program_code;
+        }
+
+        return $facts;
+    }
+
     private function grantedCases(string $residentUuid): Collection
     {
         return WelfareCase::query()

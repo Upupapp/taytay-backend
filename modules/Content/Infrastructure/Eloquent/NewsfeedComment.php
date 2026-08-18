@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Content\Infrastructure\Eloquent;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 use Modules\Content\Domain\ModerationState;
 
@@ -22,7 +23,7 @@ final class NewsfeedComment extends Model
      * a reader learning that three people objected to a neighbour's comment is the feed reporting
      * on its own residents.
      */
-    public function reports(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function reports(): HasMany
     {
         return $this->hasMany(NewsfeedCommentReport::class, 'newsfeed_comment_id');
     }

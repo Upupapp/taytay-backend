@@ -12,6 +12,7 @@ use Modules\ResidentProfile\Http\Controllers\V1\RelationshipController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentCorrectionController;
 use Modules\ResidentProfile\Http\Controllers\V1\ResidentDuplicateController;
+use Modules\ResidentProfile\Http\Controllers\V1\ResidentDuplicateFindingController;
 use Modules\ResidentProfile\Http\Controllers\V1\VulnerabilityController;
 
 /*
@@ -78,6 +79,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * `admin/residents/{resident}`, because a wildcard segment declared first would swallow
      * its own siblings and the shadowed route would 404 with no obvious cause.
      */
+    // Findings already recorded about one record (TAB 07). Behind `resident.merge`: reading
+    // who was judged the same person as whom is identity administration, not registry
+    // browsing.
+    Route::get('admin/residents/{resident}/duplicate-findings', [ResidentDuplicateFindingController::class, 'index'])->name('v1.admin.residents.duplicate-findings');
+
     Route::get('admin/resident-duplicates', [ResidentDuplicateController::class, 'index'])->name('v1.admin.resident-duplicates.index');
     Route::post('admin/resident-duplicates/detect', [ResidentDuplicateController::class, 'detect'])->name('v1.admin.resident-duplicates.detect');
     Route::post('admin/resident-duplicates/{pair}/decide', [ResidentDuplicateController::class, 'decide'])->name('v1.admin.resident-duplicates.decide');
