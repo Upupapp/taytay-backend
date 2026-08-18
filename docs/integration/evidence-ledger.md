@@ -606,3 +606,60 @@ Two gates added, and mutation-tested (blanking the extraction turns the first re
 
 This is what unblocks TAB 05's remaining mapper work: the console can now write per-resource
 mappers against **published** field names rather than invented ones.
+
+---
+
+## L-15 (P2) — `barangay_id` is exposed as an auto-increment key
+
+Found by pointing the console's mappers at responses **recorded from the API actually running**,
+which is the whole reason TAB 05 step 10 asks for recorded responses rather than fixtures.
+
+```json
+{ "id": "01a013cd-2009-7226-8b7f-829e5d811a4f", "barangay_id": 2, ... }
+```
+
+The `id` is a UUIDv7, correctly. `barangay_id` is **`2`** — the raw auto-increment primary key,
+on residents and households alike.
+
+`docs/api/conventions.md` §6 states: *"Identifiers exposed to clients: UUID strings.
+Auto-increment primary keys are internal and must never appear in a payload."* The backend's own
+CLAUDE.md Article 4 repeats it, and TAB 07's guardrails say it again: *"Never expose an
+auto-increment key."*
+
+### Why this one is worth the space
+
+**Nothing the console had could have caught it.**
+
+- The hand-written fixture used a string, because that is what the console's own mock used — the
+  mock and the mapper were written by the same hand, from the same assumption.
+- The **published schema could not disagree**: payload properties are declared untyped (`{}`), so
+  there was no type to conflict with.
+- TypeScript could not see it: the envelope is cast at the boundary. That is divergence D7's exact
+  mechanism.
+
+Against the real payload, `toResident` required a string, found a number, returned `null` — and
+**every resident and every household would have been dropped**, silently, on the console's two
+busiest screens. A screen showing "no residents found" against a populated registry is the kind of
+failure an office reports as "the system is broken" and an engineer spends a day not reproducing.
+
+### What was done, and what was not
+
+The console tolerates it **narrowly and visibly**: `idTolerantOfNumeric()`, used at exactly two
+call sites, with the violation named in its doc comment. The shared `id()` primitive is
+**unchanged** — widening that would normalise auto-increment keys across the whole mapping layer
+and quietly retire a convention the API is supposed to keep.
+
+The tolerance is one-way: a proper UUID passes through unchanged, so nothing in the console needs
+touching when the backend fixes it.
+
+**The fix belongs to the backend and is TAB 07's** — expose the barangay's UUID, or its code.
+Recorded rather than patched here, because the console is not the place to decide what an
+identifier is.
+
+### The wider point about step 10
+
+This is the first defect in the whole sequence found by *running the thing*. Every earlier one
+came from reading two descriptions against each other. The command's wording is exact —
+*"not hand-written fixtures, which drift toward what the author expected"* — and the drift here
+was not carelessness: the fixture matched the documentation, the schema, and the mock. It just did
+not match the API.
