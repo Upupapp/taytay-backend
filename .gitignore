@@ -23,6 +23,8 @@
 /public/storage
 /storage/*.key
 /storage/pail
+# Local API state built by tools/local-api.sh — a database, not source.
+/storage/local-api
 /vendor
 _ide_helper.php
 Homestead.json
