@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Modules\Shared\Http\Exceptions\ApiExceptionRenderer;
 use Modules\Shared\Http\Middleware\ApplyCacheDirectives;
 use Modules\Shared\Http\Middleware\AssignRequestId;
+use Modules\Shared\Http\Middleware\EnforceTokenAbilities;
 use Modules\Shared\Http\Middleware\ForceJsonResponse;
 use Modules\Shared\Http\Middleware\ResolveClientChannel;
 use Modules\Shared\Http\Middleware\SecurityHeaders;
@@ -55,6 +56,17 @@ return Application::configure(basePath: dirname(__DIR__))
              * 259 did not (ADR 0035 §3).
              */
             SecurityHeaders::class,
+        ]);
+
+        /*
+         * Appended, so it runs after `auth:sanctum` has resolved the token —
+         * there is nothing to inspect before that. It is registered globally
+         * rather than per route because the rule it enforces is deny-by-default:
+         * a route added next year is refused to a restricted token without
+         * anybody remembering to constrain it.
+         */
+        $middleware->api(append: [
+            EnforceTokenAbilities::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

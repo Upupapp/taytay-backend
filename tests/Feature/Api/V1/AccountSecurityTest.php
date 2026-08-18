@@ -302,10 +302,15 @@ final class AccountSecurityTest extends TestCase
         $this->assertSame(0, $account->tokens()->count());
 
         RateLimiter::clear('identity-sign-in');
+
+        // Reaching the enrolment step is proof the new password was accepted: a wrong
+        // one fails identically to an unknown address, well before this branch. This
+        // account has no second factor, and since TAB 02 that no longer yields a working
+        // session — it yields a token that can only enrol one.
         $this->postJson('/api/v1/auth/tokens', [
             'email' => 'reset@taytay.test',
             'password' => 'a-much-longer-passphrase',
-        ])->assertCreated();
+        ])->assertOk()->assertJsonPath('data.status', 'mfa-enrolment-required');
     }
 
     #[Test]

@@ -104,6 +104,14 @@ return [
         'issuer' => env('IDENTITY_MFA_ISSUER', 'Taytay LGU IDS'),
         'window' => 1,
         'challenge_ttl_minutes' => 5,
+
+        /*
+         * How long a staff member has to enrol a second factor after signing in
+         * without one. The token issued for it reaches enrolment and nothing
+         * else, so this is a step in signing in rather than a session — it is
+         * measured in minutes for the same reason the challenge is.
+         */
+        'enrolment_ttl_minutes' => 15,
         'recovery_code_count' => 8,
     ],
 

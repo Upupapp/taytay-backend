@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 use Laravel\Sanctum\PersonalAccessToken;
 use Modules\Identity\Infrastructure\Eloquent\Account;
 use Modules\Shared\Application\ClientChannel;
+use Modules\Shared\Http\Middleware\EnforceTokenAbilities;
 
 /**
  * Issues and revokes bearer tokens.
@@ -128,5 +129,37 @@ final class TokenService
         return $account->account_type->requiresMultiFactor()
             ? ['staff']
             : ['citizen'];
+    }
+
+    /**
+     * A token that can reach second-factor enrolment and nothing else.
+     *
+     * Issued to a staff member whose account requires a second factor and who
+     * has never enrolled one. Refusing them outright would be the safer-looking
+     * answer and is in fact a lockout: `POST me/mfa` is itself authenticated, so
+     * an office with nobody enrolled would have no route to compliance.
+     *
+     * The restriction is real, not advisory — `EnforceTokenAbilities` refuses
+     * this token on every route except enrolment. The TTL is the challenge
+     * window rather than the staff session, because this is a step in signing
+     * in, not a working session.
+     */
+    public function issueForMfaEnrolment(Account $account, ClientChannel $channel, ?string $deviceName = null): array
+    {
+        $expiresAt = now()->addMinutes((int) config('identity.mfa.enrolment_ttl_minutes'));
+
+        $token = $account->createToken(
+            trim(($deviceName ?? 'Unnamed device').' · '.$channel->value.' · enrolment'),
+            [EnforceTokenAbilities::ENROLMENT_ABILITY],
+            $expiresAt,
+        );
+
+        $this->audit->record(
+            $account,
+            'identity.mfa-enrolment-token-issued',
+            "Restricted enrolment token issued for {$channel->value}: the account requires a second factor and has none",
+        );
+
+        return ['token' => $token->plainTextToken, 'expires_at' => $expiresAt];
     }
 }

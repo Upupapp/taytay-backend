@@ -7,10 +7,12 @@ namespace Tests\Feature\Api\V1;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
+use Modules\Identity\Application\MultiFactorService;
 use Modules\Identity\Application\OneTimeCodes;
 use Modules\Identity\Contracts\VerificationPurpose;
 use Modules\Identity\Infrastructure\Eloquent\Account;
 use PHPUnit\Framework\Attributes\Test;
+use PragmaRX\Google2FA\Google2FA;
 use Tests\TestCase;
 
 /**
@@ -35,13 +37,22 @@ final class AuthenticationTest extends TestCase
     // ── staff: password ───────────────────────────────────────────────────────────────
 
     #[Test]
-    public function staff_can_sign_in_with_a_password(): void
+    public function staff_can_sign_in_with_a_password_and_a_second_factor(): void
     {
-        Account::factory()->staff()->create(['email' => 'officer@taytay.test']);
+        $account = Account::factory()->staff()->create(['email' => 'officer@taytay.test']);
+        $secret = $this->enrolSecondFactor($account);
 
-        $response = $this->postJson('/api/v1/auth/tokens', [
+        $challenge = $this->postJson('/api/v1/auth/tokens', [
             'email' => 'officer@taytay.test',
             'password' => 'correct-horse-battery-staple',
+        ], ['X-Client-Channel' => 'admin-console'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'mfa-required')
+            ->json('data.challenge');
+
+        $response = $this->postJson('/api/v1/auth/tokens/mfa', [
+            'challenge' => $challenge,
+            'code' => (new Google2FA)->getCurrentOtp($secret),
         ], ['X-Client-Channel' => 'admin-console']);
 
         $response->assertCreated()
@@ -49,6 +60,98 @@ final class AuthenticationTest extends TestCase
             ->assertJsonStructure(['data' => ['token', 'expires_at']]);
 
         $this->assertNotEmpty($response->json('data.token'));
+    }
+
+    #[Test]
+    public function a_staff_account_with_no_second_factor_gets_a_session_that_can_only_enrol_one(): void
+    {
+        /*
+         * THE GAP THIS CLOSES.
+         *
+         * Sign-in used to read `requiresMultiFactor() && confirmedTotpFactor() !== null`,
+         * so an account that had simply never enrolled fell through to a full session — a
+         * second factor staff could decline by not setting one up, which is a second
+         * factor the office does not have.
+         *
+         * Refusing outright would be a lockout rather than a control: `POST me/mfa` is
+         * itself authenticated. So the account gets a token that reaches enrolment and
+         * nothing else, and this test is what stops that restriction quietly widening.
+         */
+        Account::factory()->staff()->create(['email' => 'unenrolled@taytay.test']);
+
+        $token = $this->postJson('/api/v1/auth/tokens', [
+            'email' => 'unenrolled@taytay.test',
+            'password' => 'correct-horse-battery-staple',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'mfa-enrolment-required')
+            ->json('data.token');
+
+        $this->assertNotEmpty($token);
+
+        // It may enrol.
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v1/me/mfa')
+            ->assertCreated();
+
+        // It may not do the job.
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/admin/services')
+            ->assertForbidden()
+            ->assertJsonPath('error.code', 'FORBIDDEN');
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/admin/residents')
+            ->assertForbidden();
+    }
+
+    #[Test]
+    public function an_enrolment_token_becomes_a_working_session_only_after_signing_in_again(): void
+    {
+        $account = Account::factory()->staff()->create(['email' => 'enrolling@taytay.test']);
+
+        $token = $this->postJson('/api/v1/auth/tokens', [
+            'email' => 'enrolling@taytay.test',
+            'password' => 'correct-horse-battery-staple',
+        ])->assertOk()->json('data.token');
+
+        $secret = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v1/me/mfa')
+            ->assertCreated()
+            ->json('data.secret');
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v1/me/mfa/confirm', ['code' => (new Google2FA)->getCurrentOtp($secret)])
+            ->assertOk();
+
+        // Enrolling does not upgrade the restricted token in place: it is still an
+        // enrolment token, and the account has to sign in properly with the factor it
+        // just created.
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/admin/services')
+            ->assertForbidden();
+
+        RateLimiter::clear('identity-sign-in');
+        $this->postJson('/api/v1/auth/tokens', [
+            'email' => 'enrolling@taytay.test',
+            'password' => 'correct-horse-battery-staple',
+        ])->assertOk()->assertJsonPath('data.status', 'mfa-required');
+
+        unset($account);
+    }
+
+    /**
+     * Gives an account a confirmed TOTP factor and returns its secret.
+     *
+     * Every staff account needs one now, so this is the shape of a *real* staff
+     * member — a factory account without it models somebody mid-onboarding.
+     */
+    private function enrolSecondFactor(Account $account): string
+    {
+        $secret = app(MultiFactorService::class)->beginEnrolment($account)['secret'];
+        app(MultiFactorService::class)->confirmEnrolment($account, (new Google2FA)->getCurrentOtp($secret));
+
+        return $secret;
     }
 
     #[Test]
@@ -274,11 +377,17 @@ final class AuthenticationTest extends TestCase
     #[Test]
     public function authentication_alone_does_not_widen_what_a_caller_can_see(): void
     {
-        Account::factory()->staff()->create(['email' => 'plain@taytay.test']);
+        $account = Account::factory()->staff()->create(['email' => 'plain@taytay.test']);
+        $secret = $this->enrolSecondFactor($account);
 
-        $token = $this->postJson('/api/v1/auth/tokens', [
+        $challenge = $this->postJson('/api/v1/auth/tokens', [
             'email' => 'plain@taytay.test',
             'password' => 'correct-horse-battery-staple',
+        ])->json('data.challenge');
+
+        $token = $this->postJson('/api/v1/auth/tokens/mfa', [
+            'challenge' => $challenge,
+            'code' => (new Google2FA)->getCurrentOtp($secret),
         ])->json('data.token');
 
         // Six published catalog entries — the same as an anonymous caller sees. A token

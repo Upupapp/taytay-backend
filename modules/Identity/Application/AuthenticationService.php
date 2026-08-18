@@ -57,7 +57,7 @@ final class AuthenticationService
      * factor. The challenge is a short-lived opaque handle held in the cache — never a
      * partially-privileged token, because a token that "only" needs MFA is still a token.
      *
-     * @return array{status: 'authenticated'|'mfa-required', token?: string, expires_at?: Carbon, challenge?: string}
+     * @return array{status: 'authenticated'|'mfa-required'|'mfa-enrolment-required', token?: string, expires_at?: Carbon, challenge?: string}
      */
     public function signInWithPassword(string $email, string $password, ClientChannel $channel, ?string $deviceName = null): array
     {
@@ -89,8 +89,35 @@ final class AuthenticationService
             throw $this->invalidCredentials();
         }
 
-        if ($account->requiresMultiFactor() && $account->confirmedTotpFactor() !== null) {
-            return ['status' => 'mfa-required', 'challenge' => $this->issueChallenge($account, $channel, $deviceName)];
+        if ($account->requiresMultiFactor()) {
+            if ($account->confirmedTotpFactor() !== null) {
+                return ['status' => 'mfa-required', 'challenge' => $this->issueChallenge($account, $channel, $deviceName)];
+            }
+
+            /*
+             * REQUIRED, AND NOT ENROLLED.
+             *
+             * This branch used to fall through to a full session: the condition
+             * was `requiresMultiFactor() && confirmedTotpFactor() !== null`, so
+             * an account that had simply never enrolled signed in on a password
+             * alone. That made the second factor **opt-in by enrolment** — a
+             * second factor staff may decline is a second factor the office
+             * does not have.
+             *
+             * Refusing outright would be a lockout rather than a control:
+             * `POST me/mfa` is itself authenticated, so an office with nobody
+             * enrolled would have no route to compliance. Instead the account
+             * gets a token that reaches enrolment and nothing else, enforced by
+             * `EnforceTokenAbilities` rather than by the client behaving.
+             */
+            $this->audit->record(
+                $account,
+                'identity.mfa-enrolment-required',
+                'Sign-in restricted to second-factor enrolment: the account requires a second factor and has none',
+            );
+
+            return ['status' => 'mfa-enrolment-required']
+                + $this->tokens->issueForMfaEnrolment($account, $channel, $deviceName);
         }
 
         return ['status' => 'authenticated'] + $this->tokens->issue($account, $channel, $deviceName);

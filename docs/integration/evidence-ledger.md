@@ -304,3 +304,96 @@ The quotations are now described rather than reproduced, so the gate stays low-n
 **Backend half — complete.** The published contract now describes what this API actually serves;
 the defect that made every client's error handling dead code is fixed at its source; and the gate
 that catches its return has been watched failing.
+
+---
+
+## TAB 02 — Authentication and session (backend half)
+
+| | |
+| --- | --- |
+| Date | 18 August 2026 |
+| HEAD at start | `eec71e6` |
+| Severity | P0 |
+| Decision record | [ADR 0043](../adr/0043-mandatory-second-factor-and-the-refresh-question.md) |
+
+### L-04 (P1) — the second factor was opt-in by enrolment
+
+`AuthenticationService::signInWithPassword` read
+`requiresMultiFactor() && confirmedTotpFactor() !== null`. A staff account that **required** a
+second factor but had never **enrolled** one fell through to a full 12-hour session on a password
+alone. Nothing ever prompted enrolment, so the factor was optional in practice for the lifetime of
+the account.
+
+**Three existing tests asserted this behaviour** — `staff_can_sign_in_with_a_password`,
+`authentication_alone_does_not_widen_what_a_caller_can_see`, and
+`a_reset_token_works_once_and_revokes_every_session` all expected `201` and a working token for an
+unenrolled account. That is why it survived a 906-test suite: the suite encoded the bypass as the
+expectation. All three now model a real staff member, and the change is covered by two new tests.
+
+### L-05 (P1) — token abilities were assigned and never checked
+
+`TokenService::abilitiesFor()` has always stamped `['staff']` or `['citizen']`. A search of the
+whole repository found **no `tokenCan()`, no `ability:` middleware and no route constraint**. The
+grant read like enforcement where it was issued and enforced nothing where it was used.
+
+Not exploitable on its own — staff/citizen separation is enforced by permissions and
+`ScopeResolver` — but it blocked the fix for L-04, because a *restricted* token is only safe if
+abilities are real.
+
+### What was built
+
+| Change | File |
+| --- | --- |
+| `mfa-enrolment-required` status + enrolment-scoped token | `modules/Identity/Application/AuthenticationService.php` |
+| `issueForMfaEnrolment()` — ability `mfa-enrolment`, 15-minute TTL | `modules/Identity/Application/TokenService.php` |
+| Global, deny-by-default ability enforcement | `modules/Shared/Http/Middleware/EnforceTokenAbilities.php` |
+| Registered after `auth:sanctum` | `bootstrap/app.php` |
+| `identity.mfa.enrolment_ttl_minutes` | `config/identity.php` |
+
+Refusing the sign-in outright would have been a lockout rather than a control: `POST me/mfa` is
+itself authenticated, so an office with nobody enrolled would have had no route to compliance. The
+account instead gets a token that reaches enrolment and nothing else.
+
+**One correction found by testing.** The first version of the middleware refused *any* route,
+which broke `POST auth/tokens` — Sanctum resolves a bearer token even on a public route, so a
+staff member who had just enrolled could not sign in again. The restriction now applies only where
+a route demands authentication.
+
+### Steps 9 and 10 — verified
+
+- **MFA enforced for every staff role:** yes, now. `requiresMultiFactor()` is a property of the
+  account *type*, so it covers every staff role uniformly; no role can opt out, and no account can
+  reach a working session without a confirmed factor.
+- **Token lifetime:** staff 12 hours (`IDENTITY_STAFF_TOKEN_TTL`), citizen 30 days, both in
+  `config/identity.php` with the reasoning beside them. The staff figure matches NIST SP 800-63B's
+  AAL2 reauthentication requirement.
+- **Idle timeout:** **not implemented.** NIST SP 800-63B requires 30 minutes of inactivity at AAL2
+  as well as the 12-hour absolute bound. Only the absolute bound exists. Recorded as an open item
+  and carried to TAB 13/15 — it needs a decision about whether idleness is measured server-side
+  per token or by the console, and the console's memory-only token already bounds a shift.
+- **Sign-out revokes server-side:** yes — `DELETE auth/tokens/current` deletes the token row.
+- **Password reset revokes every session:** yes, asserted by
+  `a_reset_token_works_once_and_revokes_every_session`.
+
+### Step 8 — refresh, decided and deliberately not built
+
+See ADR 0043 §4. Every location a refresh credential could occupy is refused by an accepted
+decision — web storage, a cookie, a URL, a BFF — and ADR 0006 states that its own residual XSS
+exposure *"is unmitigated"* until the CSP is deployed, which is TAB 13's. Adding a second,
+longer-lived browser credential before the mitigation the first depends on exists would widen an
+open risk to buy convenience. Sequenced after TAB 13, with the leading design recorded.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `php -d memory_limit=1G vendor/bin/phpunit` | **909 passed, 6758 assertions** (907 → 909) |
+| `vendor/bin/pint --test` | passed |
+| `lguids:openapi --check` / `lguids:types --check` | current |
+
+### Carried forward
+
+- **TAB 19 runbook:** every existing staff account without a factor will meet an enrolment-only
+  session at cutover. That is correct, and it is a support event — enrolment must be run **before**
+  go-live, not discovered on the first morning.
+- **TAB 13/15:** the idle timeout.

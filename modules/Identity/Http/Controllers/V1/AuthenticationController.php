@@ -52,6 +52,17 @@ final class AuthenticationController
             $validated['device_name'] ?? null,
         );
 
+        if ($result['status'] === 'mfa-enrolment-required') {
+            /*
+             * 200, and a token — but a restricted one. The password was correct
+             * and the account requires a second factor it has never enrolled, so
+             * the only thing this session may do is enrol one.
+             */
+            return ApiResponse::item(
+                ['status' => 'mfa-enrolment-required'] + self::tokenPayload($result),
+            );
+        }
+
         if ($result['status'] === 'mfa-required') {
             // 200, not 401: the password was correct. The client must present a second
             // factor against this challenge.
