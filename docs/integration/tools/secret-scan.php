@@ -1,12 +1,50 @@
 <?php
 
 /**
- * Full-history secret scan. Reads `git cat-file --batch-all-objects --batch` on stdin,
- * so it sees every blob ever committed, not just the working tree.
- * Path attribution comes from a sha->paths map built by the caller.
+ * Full-history secret scan.
+ *
+ * Reads a `git cat-file --batch` stream on stdin, fed from `git rev-list --objects --all`, so it
+ * sees every blob **reachable from any ref** — the whole history, not just the working tree.
+ *
+ * Deliberately NOT `--batch-all-objects`. That also yields dangling objects left by aborted
+ * operations, `git add` followed by a reset, and rebases: blobs no commit references, which can
+ * never be pushed and which no history rewrite would remove. Reporting them produces alarms
+ * nobody can action, and an alarm nobody can action is how a gate stops being read.
+ *
+ * Usage:
+ *   git rev-list --objects --all > objects.txt
+ *   awk '{print $1}' objects.txt | git cat-file --batch --buffer | php secret-scan.php <repo> objects.txt
+ *
+ * Path attribution comes from the same object list.
  */
 $repo = $argv[1] ?? '.';
 $mapFile = $argv[2] ?? null;
+$allowFile = $argv[3] ?? 'docs/integration/secret-scan-allowlist.txt';
+
+/*
+ * ACCEPTED FINDINGS, REVIEWED ONCE AND RECORDED.
+ *
+ * A scanner with no way to accept a finding is a scanner that is permanently red, and a gate
+ * that is permanently red is one everybody learns to ignore — which is worse than not having
+ * it. The alternative people reach for is weakening the pattern, which blinds the scanner to
+ * the real thing as well.
+ *
+ * So the pattern stays sharp and each accepted hit is listed by `rule|path` with a reason a
+ * reviewer wrote. Adding a line is a visible diff on a file whose whole purpose is to be
+ * argued with.
+ */
+$allowed = [];
+if (is_readable($allowFile)) {
+    foreach (file($allowFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (str_starts_with(trim($line), '#')) {
+            continue;
+        }
+        $key = trim(explode('#', $line, 2)[0]);
+        if ($key !== '') {
+            $allowed[$key] = true;
+        }
+    }
+}
 
 $paths = [];
 if ($mapFile && is_readable($mapFile)) {
@@ -41,6 +79,7 @@ $patterns = [
 $placeholder = '/^(?:your[-_].*|change[-_]?me|example.*|placeholder.*|xxx+|\.{3,}|null|true|false|secret|password|passw0rd|s3cret|test.*|dummy.*|fake.*|sample.*|redacted.*|<.*>|\$\{.*\}|%s|.*_here|base64:.{0,10})$/i';
 
 $findings = [];
+$accepted = [];
 $blobs = 0;
 $scanned = 0;
 
@@ -100,6 +139,11 @@ while (! feof($fh)) {
             if (isset($findings[$key])) {
                 continue;
             }
+            if (isset($allowed[$name.'|'.$where])) {
+                $accepted[$name.'|'.$where] = true;
+
+                continue;
+            }
             $findings[$key] = [
                 'rule' => $name,
                 'path' => $where,
@@ -113,6 +157,7 @@ while (! feof($fh)) {
 
 echo "repo: $repo\n";
 echo "blobs seen: $blobs   text blobs scanned: $scanned\n";
+echo 'accepted (reviewed, in the allowlist): '.count($accepted)."\n";
 echo 'findings: '.count($findings)."\n";
 if ($findings) {
     echo str_repeat('-', 100)."\n";
