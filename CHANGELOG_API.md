@@ -98,9 +98,10 @@ value on a field the client already treats as open, a reworded `message`.
   * `GET /api/v1/admin/kyc-cases` — 5 → 10, a `COUNT` per case for its undecided candidates;
   * `GET /api/v1/admin/cases/{case}/document-requests` — 5 → 10, a lookup per request.
 
-  Fixed on the same pattern, covered by the suite but not measured at two row counts:
-  `GET /api/v1/admin/cases/{case}/eligibility-checks`, `GET /api/v1/me/profile/corrections`, and
-  `GET /api/v1/admin/resident-corrections` (which ran **two** queries per row).
+  Three more on the same pattern, since measured before and after:
+  `GET /api/v1/admin/cases/{case}/eligibility-checks` (5 → 10 queries for one row versus six),
+  `GET /api/v1/me/profile/corrections` (7 → 12), and `GET /api/v1/admin/resident-corrections`
+  (7 → 17, **two** queries per row — the changed fields and the resident). All three are now flat.
 
 * **`GET /api/v1/admin/events/{event}/registrations` still ran a query per row when a registrant's
   resident could not be resolved** — 12 queries for one such row and 17 for six, against 11 flat

@@ -13,6 +13,8 @@ use Modules\Files\Application\DocumentLibrary;
 use Modules\Files\Application\FileStore;
 use Modules\Files\Contracts\DocumentSource;
 use Modules\Files\Contracts\FileClassification;
+use Modules\ServiceCatalog\Infrastructure\Eloquent\Program;
+use Modules\ServiceCatalog\Infrastructure\Eloquent\ProgramEligibilityCriterion;
 use Modules\Shared\Application\ActorContext;
 use Modules\Welfare\Application\CaseRequirementService;
 use Modules\Welfare\Domain\RequirementApplicability;
@@ -59,6 +61,8 @@ final class QueryBudgetTest extends KycTestCase
     private ?object $applicant = null;
 
     private ?string $threadRoot = null;
+
+    private ?Program $program = null;
 
     protected function setUp(): void
     {
@@ -282,6 +286,65 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('staff directory', $small, $large);
     }
 
+    /**
+     * Each eligibility check read its results with its own query — 5 for one check, 10 for six.
+     * Unconditional: a check always has results, so no shape of data avoided it.
+     */
+    #[Test]
+    public function the_eligibility_history_does_not_grow_with_checks(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $case = $this->caseForEligibility();
+        $url = "/api/v1/admin/cases/{$case}/eligibility-checks";
+
+        $small = $this->measure($url, fn () => $this->runEligibilityCheck($case), 1);
+        $large = $this->measure($url, fn () => $this->runEligibilityCheck($case), 6);
+
+        $this->assertFixtureProduced(6, DB::table('welfare_case_eligibility_results')->count(), 'eligibility results');
+        $this->assertBudget('eligibility history', $small, $large);
+    }
+
+    /**
+     * A resident's own correction requests read their changed fields per row — 7 for one, 12 for
+     * six. Only one request may be pending at a time, so the fixture closes each before filing
+     * the next, which is also how this list gets long in practice.
+     */
+    #[Test]
+    public function a_citizens_own_corrections_do_not_grow_with_requests(): void
+    {
+        [$citizen] = $this->activeCitizenWithResident();
+        $this->applicant = $citizen;
+
+        $small = $this->measure('/api/v1/me/profile/corrections', fn () => $this->fileAndCloseCorrection($citizen), 1, asApplicant: true);
+        $large = $this->measure('/api/v1/me/profile/corrections', fn () => $this->fileAndCloseCorrection($citizen), 6, asApplicant: true);
+
+        $this->assertFixtureProduced(6, DB::table('resident_correction_fields')->count(), 'correction fields');
+        $this->assertBudget('own corrections', $small, $large);
+    }
+
+    /**
+     * TWO queries per row — the changed fields, and the resident — 7 for one, 17 for six.
+     *
+     * A DIFFERENT resident per row, which is what the batch resident lookup has to survive: a
+     * fixture reusing one resident would resolve a single-entry map and hide nothing.
+     */
+    #[Test]
+    public function the_correction_review_queue_does_not_grow_with_requests(): void
+    {
+        $url = '/api/v1/admin/resident-corrections?status=pending';
+
+        $small = $this->measure($url, fn () => $this->fileCorrectionAsNewResident(), 1, asReviewer: true);
+        $large = $this->measure($url, fn () => $this->fileCorrectionAsNewResident(), 6, asReviewer: true);
+
+        $this->assertFixtureProduced(
+            6,
+            DB::table('resident_correction_requests')->where('status', 'pending')->distinct()->count('resident_id'),
+            'pending requests from DISTINCT residents',
+        );
+        $this->assertBudget('correction review queue', $small, $large);
+    }
+
     #[Test]
     public function a_citizens_own_case_list_does_not_grow_with_cases(): void
     {
@@ -350,10 +413,6 @@ final class QueryBudgetTest extends KycTestCase
         bool $asReviewer = false,
         ?callable $beforeMeasuring = null,
     ): int {
-        if ($asReviewer) {
-            Sanctum::actingAs($this->reviewer('lgu_admin'));
-        }
-
         $admin = auth()->user();
 
         /*
@@ -377,6 +436,12 @@ final class QueryBudgetTest extends KycTestCase
         // the state of the data rather than its volume.
         if ($beforeMeasuring !== null) {
             $beforeMeasuring();
+        }
+
+        // AFTER the growth loop, never before: a fixture that files a request as the citizen
+        // leaves that citizen authenticated, and measuring as them answers 403.
+        if ($asReviewer) {
+            Sanctum::actingAs($this->reviewer('lgu_admin'));
         }
 
         if ($asCitizen) {
@@ -423,6 +488,12 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/comments') => DB::table('newsfeed_comments')->whereNotNull('parent_id')->count(),
             str_contains($url, '/kyc-cases') => DB::table('kyc_cases')->count(),
             str_contains($url, '/staff') => DB::table('role_assignments')->count(),
+            str_contains($url, '/eligibility-checks') => DB::table('welfare_case_eligibility_checks')->count(),
+            // Pending only: a closed request leaves the queue, so counting all of them would end
+            // the loop with a page the endpoint does not render.
+            str_contains($url, '/admin/resident-corrections') => DB::table('resident_correction_requests')
+                ->where('status', 'pending')->count(),
+            str_contains($url, '/me/profile/corrections') => DB::table('resident_correction_requests')->count(),
             str_contains($url, '/document-requests') => DB::table('document_requests')->count(),
             str_contains($url, '/registrations') => DB::table('event_registrations')->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
@@ -509,6 +580,89 @@ final class QueryBudgetTest extends KycTestCase
             'cover_file_id' => (string) $file->uuid,
             'cover_alt_text' => 'Residents queueing outside the barangay hall.',
         ]);
+    }
+
+    private function caseForEligibility(): string
+    {
+        $resident = $this->existingResident(['first_name' => 'Elig', 'last_name' => 'Ible']);
+
+        return (string) $this->postJson('/api/v1/admin/assistance-intakes', [
+            'resident_id' => (string) $resident->uuid,
+            'category' => 'food',
+            'narrative' => 'Assistance needed.',
+        ])->assertCreated()->json('data.case_id');
+    }
+
+    private function runEligibilityCheck(string $case): void
+    {
+        $this->postJson("/api/v1/admin/cases/{$case}/eligibility-checks", [
+            'program_id' => (string) $this->eligibilityProgram()->uuid,
+        ])->assertCreated();
+    }
+
+    /**
+     * Several criteria, so every check has several RESULTS — the relation read per row.
+     */
+    private function eligibilityProgram(): Program
+    {
+        if ($this->program !== null) {
+            return $this->program;
+        }
+
+        $program = Program::query()->create([
+            'code' => 'budget-program',
+            'name' => 'Budget assistance programme',
+            'owner_office' => 'MSWDO',
+            'service_type' => 'financial',
+            'benefit_type' => 'cash',
+            'status' => 'draft',
+            'is_citizen_visible' => true,
+            'eligibility_guidance_version' => '1',
+        ]);
+
+        foreach ([['age', 'at-least', '18'], ['age2', 'at-most', '99'], ['age3', 'at-least', '1']] as [$code, $comparator, $value]) {
+            ProgramEligibilityCriterion::query()->create([
+                'program_id' => $program->id,
+                'code' => $code,
+                'fact' => 'age',
+                'comparator' => $comparator,
+                'value' => $value,
+                'citizen_explanation' => 'A criterion.',
+                'guidance_version' => '1',
+                'is_blocking' => false,
+            ]);
+        }
+
+        $program->forceFill(['status' => 'published'])->save();
+
+        return $this->program = $program->refresh();
+    }
+
+    private function fileAndCloseCorrection(object $citizen): void
+    {
+        Sanctum::actingAs($citizen);
+
+        $id = $this->postJson('/api/v1/me/profile/corrections', [
+            'note' => 'My name is spelt wrong on my papers.',
+            'changes' => ['first_name' => 'Corrected'.DB::table('resident_correction_requests')->count()],
+        ])->assertCreated()->json('data.id');
+
+        // Only one may be pending at a time, so it is closed before the next is filed.
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+        $this->postJson("/api/v1/admin/resident-corrections/{$id}/reject", [
+            'review_note' => 'Please bring your birth certificate.',
+        ])->assertOk();
+    }
+
+    private function fileCorrectionAsNewResident(): void
+    {
+        [$other] = $this->activeCitizenWithResident();
+        Sanctum::actingAs($other);
+
+        $this->postJson('/api/v1/me/profile/corrections', [
+            'note' => 'Wrong spelling.',
+            'changes' => ['last_name' => 'Fixed'.DB::table('resident_correction_requests')->count()],
+        ])->assertCreated();
     }
 
     private function openDocumentRequest(string $case): void

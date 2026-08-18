@@ -437,10 +437,54 @@ and a change to one without the other is caught.
 
 ---
 
+## 12. Round six: the three that were fixed on argument, measured
+
+Round three fixed three endpoints by inspection — the pattern was an unconditional relation read
+per row, which no shape of data avoids — and recorded them at that weaker standard rather than
+claiming they had been measured. They have now been measured, before and after:
+
+| Endpoint | before (1 → 6 rows) | after | per row |
+| --- | --- | --- | --- |
+| `GET /admin/cases/{case}/eligibility-checks` | 5 → **10** | 5 → 5 | 1 |
+| `GET /me/profile/corrections` | 7 → **12** | 7 → 7 | 1 |
+| `GET /admin/resident-corrections` | 7 → **17** | 6 → 6 | 2 |
+
+The argument was right in all three cases. That is worth stating plainly rather than quietly: the
+reasoning held, and it still needed checking, because §6 and §9 are both cases where reasoning that
+looked equally sound was wrong about which path the data actually took.
+
+The "before" figures come from reverting the three fixes and re-running the same probe, so they are
+measurements of this code rather than recollections of it.
+
+### Two fixture rules the business logic dictated
+
+**A resident may hold only one pending correction request.** So the citizen's own list cannot be
+grown by filing six — each must be closed before the next is filed, which is also how that list
+gets long in practice. A fixture that ignored the rule got a 409 and would have measured a
+one-row page.
+
+**The review queue needed a different resident per row.** It reads the changed fields *and* the
+resident, and a fixture reusing one resident resolves a single-entry map — which would hide a
+broken batch lookup completely. The gate asserts `DISTINCT resident_id`, not merely a row count.
+
+Both are the §6 lesson in a new form: the fixture has to produce the shape the endpoint charges
+for, and here the business rules decide what that shape is.
+
+### One harness bug this found
+
+`measure()` switched to the reviewer *before* growing the rows. The correction fixtures authenticate
+as a citizen to file a request, so by the time the request was measured the citizen was still
+signed in and the endpoint answered 403 — which the harness's own status assertion caught. The
+actor switch now happens after growth, alongside the others.
+
+---
+
 ## Consequences
 
-* Eleven endpoints now cost a fixed number of queries at any page size, each with a gate the
+* Fourteen endpoints now cost a fixed number of queries at any page size, each with a gate the
   build fails on, and every gate mutation-tested by reverting its fix.
+* **Every fix in this ADR is now backed by a measurement rather than an argument.** No endpoint
+  is recorded at the weaker standard.
 * Every gate asserts what its fixture produced, through one shared helper.
 * Three batch lookups exist alongside their single-row forms. A caller rendering a list must use
   the batch; the test is what enforces it.
