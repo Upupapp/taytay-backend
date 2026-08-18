@@ -717,3 +717,70 @@ equivalent of ADR 0007's `available_actions`, and it is exactly the right shape.
 ### Also confirmed
 
 `barangay_id` is a number here too (L-15), on a third resource.
+
+---
+
+## Money — walked end to end, and it is where the two sides disagree most
+
+An assistance request was walked `draft → submitted → intake-review → assessment → endorsed`,
+approved by a **second** officer, and a cash release scheduled and confirmed against it. Everything
+below was observed, not inferred.
+
+### L-19 (P0 for TAB 08) — the API blocks self-release; the console warns
+
+Two refusals, both at the person level rather than the permission level:
+
+- `endorsed → approved` by the endorser: **`The person who endorsed a case may not approve it.`**
+- Confirming a release by the approver: **`The person who approved this assistance cannot also release it.`**
+
+The second is the console's `DL-91` exactly — and the console takes the opposite position:
+
+> `isSelfRelease` … the screen warns before the money moves. It **warns rather than blocks**: a
+> small office on a bad day may have one person available, and refusing the payout punishes the
+> family for the office's staffing.
+
+Both are defensible and **they cannot both be executed.** This is TAB 04's shape — a doctrinal
+conflict, not a naming one — arriving on the surface where being wrong costs a family their
+payout.
+
+It is worse than a disagreement in the abstract: the console's release screen is built to warn and
+then proceed. Against this API the proceed always fails, so **the warning becomes a lie** — it
+tells an officer they may continue with care, and the server refuses. A one-officer office on a
+bad day gets a family turned away and no way forward in the product.
+
+**This is the office's decision, not engineering's**, and it belongs with the TAB 04 session:
+either the API relaxes to warn-and-record (with the self-release audited, which is what the console
+assumes), or the console stops offering the path and says plainly that a second officer is
+required.
+
+### L-20 (P1) — `available_transitions` advertises a transition the endpoint refuses
+
+The release payload says `available_transitions: ["released", "failed", "deferred", "cancelled"]`.
+`POST admin/releases/{id}/status` accepts `in:completed,failed,deferred,cancelled,ready` —
+**`released` is not among them.** Handing money over goes through `POST .../confirmation`.
+
+A client doing exactly what the payload tells it gets a `422`. That matters more here than
+elsewhere, because `available_transitions` is precisely the mechanism that lets the console stop
+re-deriving a transition map — the thing this integration has been praising. On the one surface
+where being wrong moves money, the advertised set and the accepted set differ.
+
+### The release vocabulary divergence, now live
+
+Every release is created in **`ready`** — one of the three API statuses the console has no catalog
+entry for. So on the current vocabularies the first thing a disbursing officer sees is a **blank
+status chip**, on every release. TAB 04 step 4 found this in the enums; this is it on the wire, and
+it is the default case rather than an edge case.
+
+### What agrees, and it is the part that matters most
+
+- **Money is `amount_centavos` plus `currency`** — integer minor units on both sides, no floating
+  point anywhere in the chain.
+- **Goods are counted, never valued.** `in_kind_description` with no amount, exactly `DL-93`.
+- **`Idempotency-Key` is accepted on confirmation**, which is TAB 05 step 8's requirement arriving
+  from the other direction: the API was already built for the retry semantics the console now
+  sends.
+- `approval_reference` and `funding_source` line up with `approvingReference` and
+  `fundingSourceLabel`.
+
+On the arithmetic of money the two sides agree completely. They disagree about **who may press the
+button**, which is a policy question rather than a technical one.
