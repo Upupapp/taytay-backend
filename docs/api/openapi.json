@@ -7030,7 +7030,9 @@
                                                 "moderation_state": {},
                                                 "moderation_reason": {},
                                                 "moderated_by": {},
-                                                "moderated_at": {}
+                                                "moderated_at": {},
+                                                "report_count": {},
+                                                "report_reasons": {}
                                             }
                                         },
                                         "meta": {
@@ -7114,7 +7116,9 @@
                                                 "moderation_state": {},
                                                 "moderation_reason": {},
                                                 "moderated_by": {},
-                                                "moderated_at": {}
+                                                "moderated_at": {},
+                                                "report_count": {},
+                                                "report_reasons": {}
                                             }
                                         },
                                         "meta": {
@@ -18453,6 +18457,77 @@
                 "x-rate-limit": "engagement"
             }
         },
+        "/newsfeed-comments/{comment}/reports": {
+            "post": {
+                "operationId": "v1.newsfeed.comments.report",
+                "tags": [
+                    "citizen"
+                ],
+                "summary": "Newsfeed comments report",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "comment",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                },
+                "x-rate-limit": "engagement"
+            }
+        },
         "/newsfeed/{post}": {
             "get": {
                 "operationId": "v1.newsfeed.show",
@@ -20305,6 +20380,17 @@
                     "archived"
                 ],
                 "description": "Where a newsfeed post stands."
+            },
+            "ContentReportReason": {
+                "type": "string",
+                "enum": [
+                    "abusive",
+                    "harassment",
+                    "false-information",
+                    "spam",
+                    "personal-information"
+                ],
+                "description": "Why a resident says a comment should not be there (F26)."
             },
             "CredentialCredentialStatus": {
                 "type": "string",

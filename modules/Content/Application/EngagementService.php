@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Modules\Content\Application;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 use Modules\Content\Domain\ModerationState;
+use Modules\Content\Domain\ReportReason;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedComment;
+use Modules\Content\Infrastructure\Eloquent\NewsfeedCommentReport;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedPost;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedReaction;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedShare;
@@ -186,6 +189,80 @@ final class EngagementService
 
     // ── moderation ────────────────────────────────────────────────────────────────────
 
+    /**
+     * A resident reports a comment (F26).
+     *
+     * ---
+     *
+     * **THIS CHANGES NOTHING ABOUT THE COMMENT.** It records that somebody objected, and that is
+     * all. The comment stays exactly as visible as it was, and a person decides.
+     *
+     * The first version of this moved a reported comment to `review-needed` so it would appear in
+     * the moderation queue. **That silently hid it**: `visibleComments()` filters on
+     * `moderation_state = visible`, so `review-needed` is not public, and one resident reporting
+     * another would have removed them from the municipality's own feed — the exact outcome the
+     * design was written to prevent, arriving through the state I chose to express it with. A test
+     * asserting that a reader could still see a reported comment is what caught it, which is why
+     * that assertion is made from the reader's side rather than from the column.
+     *
+     * `review-needed` is left to what its own docblock reserves it for: a future automated
+     * moderation provider. A machine classifier withholding a comment pending review is a policy
+     * somebody can adopt; a resident doing it to a neighbour is not.
+     *
+     * Moderators find these through the queue's `reported` filter instead — see
+     * `EngagementService::allComments()` and the moderator projection.
+     *
+     * **Idempotent per person**, on a unique key rather than a read-then-write: a resident tapping
+     * a button twice on a slow connection must not put two identical items in front of a human.
+     * The second call returns quietly, and **says nothing about the first** — see the controller
+     * for why the response must not distinguish them.
+     *
+     * A comment a moderator has already hidden, or the author has deleted, is still reportable and
+     * the report is still recorded — "people objected to this" is worth knowing even once it is
+     * gone, and refusing would tell the reporter that something had already happened to it.
+     */
+    public function report(NewsfeedComment $comment, ReportReason $reason, ActorContext $actor): void
+    {
+        /*
+         * Reporting your own comment is refused rather than ignored.
+         *
+         * The author already has delete, which is immediate and needs nobody. A self-report is
+         * either a misunderstanding — answered here with the action they actually want — or a way
+         * to put work in front of staff for nothing.
+         */
+        if ((string) $comment->author_subject_id === (string) $actor->subjectId) {
+            throw new ApiException(
+                ErrorCode::Conflict,
+                'This is your own comment. Delete it instead.',
+            );
+        }
+
+        NewsfeedCommentReport::query()->firstOrCreate(
+            [
+                'newsfeed_comment_id' => $comment->id,
+                'reporter_subject_id' => $actor->subjectId,
+            ],
+            [
+                'uuid' => (string) Str::uuid7(),
+                'reason' => $reason,
+            ],
+        );
+
+        /*
+         * Recorded against the comment, and the reporter is the actor on the entry.
+         *
+         * The trail must be able to answer "who reported this" when an author complains that
+         * their comment was removed — and it must not become a way for anybody reading the feed
+         * to find out. Which is why this is in the audit trail rather than on the comment.
+         */
+        $this->audit->record(
+            $actor->subjectId,
+            'newsfeed.comment-reported',
+            'Comment reported: '.$reason->value,
+            (string) $comment->uuid,
+        );
+    }
+
     public function moderate(
         NewsfeedComment $comment,
         ModerationState $state,
@@ -302,7 +379,45 @@ final class EngagementService
      */
     public function allComments(): Builder
     {
-        return NewsfeedComment::query()->orderByDesc('created_at')->orderByDesc('id');
+        /*
+         * The report count travels with the row, as a subquery on the page's own select rather
+         * than a COUNT per comment. A moderation queue is read constantly by the few people who
+         * moderate, and a per-row count is the classic N+1 this codebase has already paid for once
+         * (ADR 0042 §9).
+         */
+        return NewsfeedComment::query()
+            ->withCount('reports')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+    }
+
+    /**
+     * The queue's other question: what have residents objected to (F26)?
+     *
+     * Reporting deliberately does **not** change a comment's moderation state — that would hide
+     * it, and hand residents a veto over each other — so a reported comment is indistinguishable
+     * from any other visible one unless the queue can ask this directly.
+     *
+     * Ordered by how many people objected, then by recency. Not because a count decides anything —
+     * nothing automatic happens at any threshold — but because it is the order a person triaging a
+     * morning's reports wants to read them in.
+     */
+    public function reportedComments(): Builder
+    {
+        /*
+         * `has()`, not `having('reports_count', '> 0')`.
+         *
+         * The latter reads better and breaks pagination: `ApiResponse::page` clones the query for
+         * its `count(*)`, which drops the select that `withCount` added while keeping the HAVING
+         * that depends on it — *"HAVING clause on a non-aggregate query"*, as a 500 on the
+         * moderation queue. `has()` compiles to a WHERE EXISTS, which survives the clone.
+         */
+        return NewsfeedComment::query()
+            ->has('reports')
+            ->withCount('reports')
+            ->orderByDesc('reports_count')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
     }
 
     /**

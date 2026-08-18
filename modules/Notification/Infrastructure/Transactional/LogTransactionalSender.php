@@ -36,21 +36,32 @@ final class LogTransactionalSender implements TransactionalSender
     public function __construct(private readonly Application $app)
     {
         /*
-         * TWO CONDITIONS, BOTH REQUIRED, AND THE SECOND IS THE ONE THAT MATTERS.
+         * An environment allow-list, and only that.
          *
-         * An environment allow-list alone is not enough: the names are chosen by whoever writes
-         * the `.env`, and a deployment that calls itself `integration` while serving real
-         * residents would slip straight through one. So this also requires `APP_DEBUG` — which
-         * `.env.integration` in this repository already documents as *"false everywhere except a
-         * developer machine"*, because the API error renderer changes behaviour on it.
+         * `testing` is deliberately NOT on it. The suite holds an invariant that a one-time code
+         * never reaches the log (`CredentialLeakageTest`), and this class breaks that by design —
+         * so the provider hands the testing environment a null sender no matter what the `.env`
+         * says, and a test wanting to see a message binds its own capture sender instead.
          *
-         * Anything serving a real resident has debug off, and therefore cannot bind this.
+         * A second condition on `APP_DEBUG` was also tried and removed. The reasoning — *anything
+         * serving a real resident has debug off* — is true and useless here: `phpunit.xml` forces
+         * `APP_DEBUG=false`, so it excluded `testing` and took out thirty-one unrelated
+         * authentication tests with a 500 before anything asserted on delivery.
+         *
+         * It bought nothing either. The threat is somebody copying a developer `.env` to a
+         * server, and that `.env` carries `APP_DEBUG=true` along with everything else. The name
+         * and the sender are chosen by the same person in the same file; a second field they also
+         * control is not a second opinion.
+         *
+         * So this stops an accident — a production `.env` that names a sender it should not — and
+         * nothing more. That is what an allow-list is for, and claiming more of it would be worse
+         * than claiming less.
          */
-        if (! $this->app->environment(['local', 'testing', 'integration']) || ! config('app.debug')) {
+        if (! $this->app->environment(['local', 'integration'])) {
             throw new LogicException(
-                'LogTransactionalSender writes one-time codes to the log and may only run on a '
-                .'developer machine (a local environment with APP_DEBUG on). Configure a real '
-                .'transactional sender for '.$this->app->environment().'.',
+                'LogTransactionalSender writes one-time codes to the log and may only run in a '
+                .'local or integration environment. Configure a real transactional sender for '
+                .$this->app->environment().'.',
             );
         }
     }

@@ -118,6 +118,7 @@ final class CitizenSurface
             'v1.newsfeed.comments.store',
             'v1.newsfeed.comments.update',
             'v1.newsfeed.comments.destroy',
+            'v1.newsfeed.comments.report',
             'v1.newsfeed.react',
             'v1.newsfeed.unreact',
             'v1.newsfeed.share',

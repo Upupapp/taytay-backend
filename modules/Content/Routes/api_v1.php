@@ -59,6 +59,16 @@ Route::middleware(['auth:sanctum', 'throttle:engagement'])->group(function (): v
 
     Route::patch('newsfeed-comments/{comment}', [EngagementController::class, 'editComment'])->name('v1.newsfeed.comments.update');
     Route::delete('newsfeed-comments/{comment}', [EngagementController::class, 'deleteComment'])->name('v1.newsfeed.comments.destroy');
+
+    /*
+     * REPORTING — required by both app stores for user-generated content (F26).
+     *
+     * A resident surface, not the staff one. `admin/newsfeed-comments/{comment}/moderation` acts
+     * on a comment; this only says that somebody objected. Throttled with the rest of engagement,
+     * because a report costs staff attention and an unthrottled one is a denial-of-service attack
+     * on a person rather than on a server.
+     */
+    Route::post('newsfeed-comments/{comment}/reports', [EngagementController::class, 'reportComment'])->name('v1.newsfeed.comments.report');
 });
 
 /*

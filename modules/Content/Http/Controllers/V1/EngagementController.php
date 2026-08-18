@@ -11,6 +11,7 @@ use Modules\AccessControl\Contracts\Permission;
 use Modules\Content\Application\EngagementService;
 use Modules\Content\Application\NewsfeedService;
 use Modules\Content\Domain\ModerationState;
+use Modules\Content\Domain\ReportReason;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedComment;
 use Modules\Content\Infrastructure\Eloquent\NewsfeedPost;
 use Modules\Shared\Application\ActorContext;
@@ -130,6 +131,47 @@ final class EngagementController
     }
 
     /**
+     * A resident reports a comment (F26).
+     *
+     * ---
+     *
+     * **THE ANSWER IS THE SAME EVERY TIME.** Reported now, reported by this person a minute ago,
+     * reported by nine other residents this morning: `202`, identical body. Anything that
+     * differed would publish other residents' actions to whoever presses the button — a count is
+     * an obvious leak, but so is a "you already reported this" that only appears the second time,
+     * because it makes the endpoint answer questions about state a reader is not entitled to.
+     *
+     * `202` rather than `201`: what has been accepted is that somebody objected. Whether anything
+     * happens to the comment is a person's decision, later, and a `201` pointing at a created
+     * report would invite a client to show the resident a record of it.
+     */
+    public function reportComment(Request $request, ActorContext $actor, string $comment): JsonResponse
+    {
+        $model = $this->commentOrFail($comment);
+
+        $validated = $request->validate([
+            // No `other`, and no free-text field anywhere in this request. See ReportReason.
+            'reason' => ['required', 'string', 'in:'.implode(',', ReportReason::values())],
+        ]);
+
+        $this->engagement->report($model, ReportReason::from($validated['reason']), $actor);
+
+        /*
+         * A status and nothing else. No resident-facing sentence, deliberately.
+         *
+         * Two reasons, and the second is the one that made this change. Clients compose their own
+         * confirmation copy — they have to, for language and for tone — so a sentence here would
+         * be dead text that eventually contradicts what the app actually says. And
+         * `NoShareRecipientDataTest` scans this controller for the token `message` in a contract
+         * key, because a `message` on an engagement endpoint is how a private message to another
+         * resident would arrive. It fired on this response body. The guard is right about the
+         * shape even though it was wrong about the intent, and weakening a privacy scan to fit a
+         * pleasantry is the wrong trade.
+         */
+        return ApiResponse::item(['status' => 'accepted'], 202);
+    }
+
+    /**
      * Records a share. A counter, and nothing else.
      */
     public function share(Request $request, ActorContext $actor, string $post): JsonResponse
@@ -153,7 +195,18 @@ final class EngagementController
         $this->authorization->authorize($actor, Permission::NewsfeedModerate);
 
         $pagination = PaginationParams::fromRequest($request);
-        $query = $this->engagement->allComments();
+
+        /*
+         * `?reported=true` is how a moderator finds what residents objected to (F26).
+         *
+         * It has to be asked for explicitly, because reporting does not change a comment's
+         * moderation state — deliberately, since that state decides public visibility and a report
+         * must not remove a resident from the feed. Without this filter a reported comment looks
+         * exactly like every other visible one.
+         */
+        $query = $request->boolean('reported')
+            ? $this->engagement->reportedComments()
+            : $this->engagement->allComments();
 
         $state = $request->query('moderation_state');
 
@@ -265,6 +318,23 @@ final class EngagementController
             'moderation_reason' => $comment->moderation_reason,
             'moderated_by' => $comment->moderated_by,
             'moderated_at' => $comment->moderated_at?->toIso8601ZuluString(),
+            /*
+             * HOW MANY, AND WHY — NEVER WHO.
+             *
+             * A moderator needs to know that several people objected and what they objected to, so
+             * they can triage a morning's queue. They do not need the reporters' identities to
+             * decide whether a comment breaks the rules, and a staff screen listing who reported a
+             * neighbour is a list somebody eventually reads aloud at a barangay hall. Who reported
+             * is in the audit trail, where answering "who reported me" is a deliberate act with a
+             * record of its own.
+             *
+             * Absent rather than zero on the reader's projection: this key is added here, and
+             * `readerProjection` never sees it.
+             */
+            'report_count' => (int) ($comment->reports_count ?? 0),
+            'report_reasons' => $comment->relationLoaded('reports')
+                ? array_values(array_unique($comment->reports->pluck('reason.value')->all()))
+                : null,
         ];
     }
 

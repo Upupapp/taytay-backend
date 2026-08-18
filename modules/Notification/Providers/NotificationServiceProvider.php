@@ -66,6 +66,20 @@ final class NotificationServiceProvider extends ServiceProvider
     public function boot(): void
     {
         /*
+         * RESOLVED AT BOOT, ON PURPOSE, AND THE RESULT IS DISCARDED.
+         *
+         * A singleton that throws in its constructor is lazy: nothing notices until the first
+         * request that needs it, and for the transactional sender that request is somebody trying
+         * to sign in. A misconfigured deployment would then answer `500` on `POST auth/otp` and
+         * look like an application bug rather than a configuration one — which is exactly how it
+         * presented the first time, as thirty-one failing authentication tests.
+         *
+         * Touching it here turns that into a container that will not start, which is the failure
+         * this was always documented as having.
+         */
+        $this->app->make(TransactionalSender::class);
+
+        /*
          * Registered HERE, in the module that owns the notification, so Welfare stays ignorant of
          * who cares that a case moved. Removing this one line turns notifications off entirely
          * and changes nothing else in the system.

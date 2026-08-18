@@ -135,6 +135,13 @@ export type ContentPostStatus =
 |  'published'
 |  'archived';
 
+export type ContentReportReason =
+   'abusive'
+|  'harassment'
+|  'false-information'
+|  'spam'
+|  'personal-information';
+
 export type CredentialCredentialStatus =
    'issued'
 |  'active'

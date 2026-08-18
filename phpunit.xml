@@ -26,6 +26,20 @@
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_DEBUG" value="false"/>
+        <!--
+            The suite never writes a credential to a log, whatever .env says.
+
+            CredentialLeakageTest holds a flat invariant: a one-time code never reaches the log.
+            LogTransactionalSender breaks it by design, so a developer can exercise sign in.
+            Running the suite with a developer .env loaded (php artisan test env=integration)
+            turned that sender on, and the invariant caught it, correctly.
+
+            Pinned here rather than detected at runtime: the env flag overrides the APP_ENV above,
+            so neither the environment name nor runningUnitTests answers "is this the suite". A
+            test that needs to see what was sent binds its own capture sender, which is both safer
+            and a better test. See SignInCodeDeliveryTest.
+        -->
+        <env name="TRANSACTIONAL_SENDER" value="null"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
