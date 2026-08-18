@@ -536,3 +536,40 @@ a resident will read.
 
 Backend **912 passed, 6761 assertions**; Pint clean; artefacts regenerated after the route rename.
 Console **77 files, 1491 tests**, 22 checks, clean build.
+
+---
+
+## TAB 05 — L-11: the contract publishes no resource shapes
+
+Measured while preparing the console's per-resource mappers.
+
+`openapi.json` carries **221 paths and 56 schemas — and 52 of those schemas are enums.** The other
+four are `Error`, `Meta`, `PaginatedMeta` and `Pagination`. **No resource shape is published at
+all.** Every response documents `data` as an untyped object.
+
+A client generating from the document therefore receives the envelope, the error vocabulary and
+the enums, and nothing whatever about what comes back inside `data`. That contradicts the first
+acceptance criterion `ApiContractTest` states for itself — *"a frontend developer can build
+without reading backend code"* — because the field names live in private `*Projection()` methods
+inside controllers, and the only way to learn them is to open the PHP.
+
+**This is why TAB 05's remaining steps stop here rather than proceeding.** Writing twenty
+per-resource `snake_case` → domain mappers against a contract that does not describe the payloads
+would mean inventing the field names — which is precisely the failure step 1 caught 28 times when
+routes were inferred rather than measured. A mapper built on a guessed field name compiles,
+typechecks, and yields `undefined` at runtime; TypeScript cannot see it because the envelope is
+cast. That is divergence D7 all over again, reintroduced by the fix for it.
+
+**What was done instead.** `docs/api/wire-shapes.md` extracts the field names from the projection
+methods that build them — **59 projections, 565 fields**, measured rather than transcribed. The
+console's mappers can now be written against real names, and the four client teams have the
+vocabulary they need today.
+
+**What it does not do.** It is a document, not a contract: nothing fails a build when a projection
+changes. Publishing the shapes into `openapi.json` and `types.ts` is TAB 06's work — *"consume the
+generated types … a backend enum change then becomes a TypeScript error in the console rather than
+a runtime surprise"* — and the same argument applies with more force to field names than to enums.
+
+Recorded rather than fixed here for the same reason TAB 01 fixed the error vocabulary at its
+source and left the console's adapters to TAB 05: the generator is the right place, and it is the
+next command's scope.
