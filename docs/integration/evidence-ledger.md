@@ -917,3 +917,66 @@ reviewer may see (`L-21`), and referral destination as controlled vocabulary ver
 Every agreement is on a rule protecting a resident. Every disagreement is a policy question about
 how an office works. That is a good shape for a project to be in — the hard parts were understood
 the same way by two teams who never spoke.
+
+---
+
+## Newsfeed — the three rules about speaking outward, all held by the server
+
+A post was drafted, published, and then probed for every way back.
+
+### Publication is irreversible on both sides — `DL-124`
+
+The console's rule is `published → archived` and nothing else: *"no unpublish, no retract, no
+unsend: archiving removes a post from the feed going forward and reaches nobody who already read
+it."*
+
+Probed directly after publishing:
+
+| Attempt | Result |
+| --- | --- |
+| `published → draft` | **409** invalid state transition |
+| `published → scheduled` | **422** not an accepted value |
+| `published → unpublished` | **422** |
+| `published → retracted` | **422** |
+
+`available_transitions` came back as exactly `["archived"]`. **The console does not have to enforce
+this alone** — the server will not let a post be taken back either.
+
+### Alt text is required to publish an image — `DL-125`, and the API is the more careful of the two
+
+Posting media without it is refused:
+
+> `The alt text field is required when is decorative is not present.`
+
+The console's `PostImage.altText` is a **required string with no decorative concept**. The API
+distinguishes the two, which is the WCAG-correct position: an image carrying no meaning should have
+*empty* alt text, not an invented description of a divider.
+
+Recorded as a **small console gap** rather than a divergence. Nothing breaks — a required string is
+stricter, not wronger — but the console cannot express a distinction the API and WCAG both make,
+and a caseworker attaching a decorative rule line will be asked to describe it.
+
+### Reach is counts — `DL-126`
+
+*"No method anywhere that could answer which residents reacted, read or shared. A field held 'for
+later' is a field somebody displays."*
+
+The entire reaction surface is `POST /newsfeed/{post}/reaction` and
+`DELETE /newsfeed/{post}/reaction` — a resident acting on their own — and `admin/newsfeed-metrics`
+returns counts of **posts by status**, not reach by person. There is no listing route.
+
+The question is unanswerable at the API, exactly as the console leaves it unanswerable at the port.
+
+**Not asserted by a test, deliberately.** What it claims is the *absence of a route*, and the
+console repository holds no copy of the router to assert against — a test here could only compare a
+hand-written list to itself and pass forever. TAB 06's contract suite is where an absence on the API
+becomes checkable from this side. Until then it is a recorded observation, which is what it is.
+
+### Running tally of independent agreements
+
+Visit-observation attribution (`DL-85`) · referral lawful basis (`DL-82`) · all three search
+refusals (`DL-109`) · integer-centavo money, goods never valued (`DL-93`) · identity by finding
+rather than deletion (`DL-74`) · **publication irreversible (`DL-124`)** · **alt text required
+(`DL-125`)** · **reach is counts (`DL-126`)**.
+
+Eight rules, reached twice, by two teams who never spoke.
