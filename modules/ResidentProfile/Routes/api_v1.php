@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Modules\ResidentProfile\Http\Controllers\V1\BarangayDirectoryController;
+use Modules\ResidentProfile\Http\Controllers\V1\FamilyController;
 use Modules\ResidentProfile\Http\Controllers\V1\HouseholdController;
 use Modules\ResidentProfile\Http\Controllers\V1\KycController;
 use Modules\ResidentProfile\Http\Controllers\V1\MyProfileController;
@@ -104,6 +105,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     // that is the record staff have open when they need them.
     Route::get('admin/residents/{resident}/households', [HouseholdController::class, 'memberHistory'])->name('v1.admin.residents.households.index');
     Route::get('admin/residents/{resident}/relationships', [RelationshipController::class, 'index'])->name('v1.admin.residents.relationships.index');
+    // Plural: a person can belong to more than one family at once, and a grandmother counted
+    // with her own family and with her daughter's is the ordinary case here, not an anomaly.
+    Route::get('admin/residents/{resident}/families', [FamilyController::class, 'forResident'])->name('v1.admin.residents.families.index');
+    Route::get('admin/residents/{resident}/kinship-history', [FamilyController::class, 'kinshipHistory'])->name('v1.admin.residents.kinship-history');
     Route::post('admin/residents/{resident}/relationships', [RelationshipController::class, 'store'])->name('v1.admin.residents.relationships.store');
     Route::delete('admin/residents/{resident}/relationships/{relationship}', [RelationshipController::class, 'destroy'])->name('v1.admin.residents.relationships.destroy');
 
@@ -117,6 +122,17 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('admin/families/{family}/members', [HouseholdController::class, 'addFamilyMember'])->name('v1.admin.families.members.store');
     Route::delete('admin/families/{family}/members/{resident}', [HouseholdController::class, 'removeFamilyMember'])->name('v1.admin.families.members.destroy');
     Route::post('admin/families/{family}/head', [HouseholdController::class, 'changeFamilyHead'])->name('v1.admin.families.head');
+
+    /*
+     * The family READ side (TAB 07), closing four no-counterpart rows. Same aggregate as the
+     * writes above, same `resident.view` permission as households — a family is a group of
+     * residents, and a separate "family viewer" grant would be a way to enumerate residents
+     * without holding the permission that guards them.
+     *
+     * The literal segments are declared before `{family}` for the reason the comment above gives.
+     */
+    Route::get('admin/families', [FamilyController::class, 'index'])->name('v1.admin.families.index');
+    Route::get('admin/families/{family}', [FamilyController::class, 'show'])->name('v1.admin.families.show');
 
     Route::get('admin/households', [HouseholdController::class, 'index'])->name('v1.admin.households.index');
     Route::post('admin/households', [HouseholdController::class, 'store'])->name('v1.admin.households.store');

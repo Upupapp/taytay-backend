@@ -30,6 +30,9 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-18](#g-18) | No file-upload contract | medium | backend |
 | [G-19](#g-19) | Angular resident routes point at pre-TAB-08 paths | medium | Angular |
 | [G-20](#g-20) | Vulnerability weights are placeholders, not Taytay policy | high | LGU (MSWDO) |
+| [G-22](#g-22) | `family_memberships` has no role column; four of six roles unknowable | medium | backend + LGU |
+| [G-23](#g-23) | Naming a household head does not enrol them as a member | medium | backend |
+| [G-24](#g-24) | One family per resident here; the console's model is plural | high | LGU (MSWDO) |
 | [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
@@ -696,3 +699,57 @@ Worth recording, so nobody "fixes" them:
 * **PhilSys last-four only** (RA 11055) — consistent across the client and this contract.
 * **`CaseNoteVisibility`** already distinguishes `internal` from `shared-with-applicant`,
   which the backend adopts as its authorization discriminator.
+
+---
+
+### G-22
+**`family_memberships` records no role, so four of the console's six are unknowable.** `medium`
+
+The console's `FamilyMember.role` is `head | partner | child | dependant | elder | other-member`.
+This API can distinguish exactly two: the resident named by `families.head_resident_id`, and
+everybody else.
+
+TAB 07's family projection emits those two and **guesses none of the others**. Reporting a child as
+an "other member" is a gap; reporting an elder as a child because the code needed a value is a
+false statement about a family, in a record the office relies on when it decides who gets what.
+
+Closing it is a column and a write path, not a projection change — the data has never been
+captured, so no read can recover it.
+
+---
+
+### G-23
+**Naming somebody as household head does not enrol them as a member.** `medium`
+
+`POST /api/v1/admin/households` writes `households.head_resident_id` and creates no
+`household_memberships` row. The head is therefore a person the record says leads a household they
+do not, by the same record, live in.
+
+Found by TAB 07's fixtures, which could not add the head to a family — family membership requires
+household membership, and the head had none. That check is right; the gap is upstream of it.
+
+Not fixed here on purpose. It is a **write-path** change in a read-side TAB, and auto-enrolling on
+create is a decision with a migration behind it: every household created so far has the same shape,
+so a backfill has to decide what to do about heads who have since moved out.
+
+---
+
+### G-24
+**A resident may belong to one family here, and to several in the console.** `high`
+
+{@see HouseholdMembershipService} refuses a second open family membership, for a reason grounded in
+money: *"Two open family memberships would make them countable twice in per-family grants, which is
+the same double-payment problem as duplicate residents, one level down."*
+
+The console's port is explicitly plural — `familiesOf`, *"Plural: people overlap"* — and treats a
+grandmother counted with her own family and with her daughter's as the ordinary case rather than an
+anomaly.
+
+**Both positions are coherent and they cannot both be executed.** The API's is the stronger
+argument as stated, because it is about a payment going out twice; the console's is about not
+erasing how households in Taytay actually compose. This is the office's call, not engineering's.
+
+`GET /api/v1/admin/residents/{resident}/families` stays a **collection** meanwhile — the honest
+shape of the question — and returns at most one member, which is what the invariant allows.
+Returning a single object would bake the unratified answer into the wire format, and unbaking it
+later is a breaking change.
