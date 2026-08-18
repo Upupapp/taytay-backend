@@ -479,12 +479,75 @@ actor switch now happens after growth, alongside the others.
 
 ---
 
+## 13. Round seven: a different axis — response payload
+
+Six rounds all measured the same thing. This one measures bytes, which on this system is the same
+audit as data minimisation: an over-broad projection is a bandwidth cost *and* an Article 5.2
+defect, and the second matters more.
+
+| Endpoint | bytes per row |
+| --- | --- |
+| `GET /staff` | **1,362** |
+| `GET /events` | 814 |
+| `GET /services` | 319 |
+| `GET /newsfeed` | 267 |
+
+### `/events` is fat on purpose
+
+Ten of its fields are null on a typical event — `summary`, `map_url`, `contact_person`,
+`participant_instructions` and so on. That is a deliberate convention, stated in the code: *"Always
+emitted when there is a cover, so a client never has to decide what to do with a missing one."*
+Omitting nulls would shrink the page and make every client implement the same absent-key handling
+slightly differently. **Not a defect, and not changed.**
+
+### `/staff` sends the same permission list twenty-five times
+
+A page of 25 staff is **32,282 bytes, of which 25,625 (79%) is `authority.permissions`** — and the
+25 copies are byte-identical, because the permission set is a static function of the roles the row
+already carries.
+
+**Not fixed here, deliberately.** Removing a field is a breaking change under `CHANGELOG_API.md`,
+which reserves `/api/v2` for a change that genuinely needs it. Whether 25KB on a staff-only page
+justifies opening the first version migration is a contract decision, not an optimisation, and it
+is recorded here rather than taken.
+
+### The finding that mattered: `author_subject_id`
+
+Every comment on a public newsfeed thread carries its author's **stable account identifier**, to
+every reader.
+
+It has a real purpose — a client must know which comments are its own, to offer edit and delete.
+But it serves that purpose by disclosing *every* author's identifier, which lets any reader
+correlate one person's comments across the entire feed. On a welfare newsfeed, where people write
+about needing help, that is a profile assembled from a public endpoint. Article 5.2 asks for the
+minimum field the use case needs, and the use case needs a boolean.
+
+`is_mine` is that boolean, and it is **additive**, which the changelog permits into v1. The old
+field stays, because removing it is breaking — but the replacement now exists, so the removal can
+be scheduled deliberately instead of being rediscovered later.
+
+Both sides are tested: a reader sees `is_mine` true on their own comment and false on a stranger's,
+and the author sees it true on the comment they just posted.
+
+### What this round says about the sweep
+
+Two of the three findings could not be fixed without breaking the contract, and one was correct as
+written. That is a reasonable result for a first pass on a new axis, and a better one than
+manufacturing changes to show for the effort: **the payload is largely in good order, and the one
+real problem was a privacy defect rather than a performance one.**
+
+---
+
 ## Consequences
 
 * Fourteen endpoints now cost a fixed number of queries at any page size, each with a gate the
   build fails on, and every gate mutation-tested by reverting its fix.
 * **Every fix in this ADR is now backed by a measurement rather than an argument.** No endpoint
   is recorded at the weaker standard.
+* Two payload findings are recorded and NOT acted on, because both need a breaking change:
+  `authority.permissions` on `/staff`, and `author_subject_id` on public comment threads. Each has
+  a measurement and a replacement, so whoever opens `/api/v2` inherits the case rather than the
+  rediscovery.
 * Every gate asserts what its fixture produced, through one shared helper.
 * Three batch lookups exist alongside their single-row forms. A caller rendering a list must use
   the batch; the test is what enforces it.

@@ -63,6 +63,30 @@ value on a field the client already treats as open, a reworded `message`.
   A client showing "your recent exports" is unaffected. One that assumed it received the complete
   history was already relying on rows that expire.
 
+### Added
+
+* **`is_mine` on every comment** in `GET /api/v1/newsfeed/{post}/comments`,
+  `GET /api/v1/admin/newsfeed-comments`, and the comment write responses. True when the comment
+  belongs to the caller.
+
+  Use it to decide whether to offer edit and delete on a row. **Prefer it to comparing
+  `author_subject_id`**, which is the field it replaces.
+
+### Known disclosures, pending a breaking change
+
+Recorded here so they are scheduled rather than rediscovered. Neither can be fixed in v1, because
+removing a field is a breaking change under the policy above.
+
+* **`author_subject_id` on public comment threads** hands every reader the stable account
+  identifier of every author, which allows correlating one person's comments across the whole
+  feed — a profile assembled from a public endpoint, on a service where people write about needing
+  help (Article 5.2). `is_mine` above is the replacement and ships now; the field itself should be
+  removed in the first `/api/v2`.
+
+* **`authority.permissions` on `GET /api/v1/staff`** is 79% of a 25-row page (25,625 bytes of
+  32,282), in twenty-five byte-identical copies, and is a static function of the `roles` each row
+  already carries. A client can derive it. Candidate for removal in the first `/api/v2`.
+
 ### Fixed — performance, no contract change
 
 * Three list endpoints ran one or more extra queries **per row**. All now cost a fixed number of

@@ -76,7 +76,7 @@ final class EngagementController
 
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
-            fn (NewsfeedComment $comment): array => $this->readerProjection($comment, $parents),
+            fn (NewsfeedComment $comment): array => $this->readerProjection($comment, $parents, $actor->subjectId),
         );
     }
 
@@ -104,7 +104,7 @@ final class EngagementController
             $asOfficial,
         );
 
-        return ApiResponse::created($this->readerProjection($comment));
+        return ApiResponse::created($this->readerProjection($comment, null, $actor->subjectId));
     }
 
     public function editComment(Request $request, ActorContext $actor, string $comment): JsonResponse
@@ -115,6 +115,8 @@ final class EngagementController
 
         return ApiResponse::item($this->readerProjection(
             $this->engagement->editOwnComment($model, $validated['body'], $actor),
+            null,
+            $actor->subjectId,
         ));
     }
 
@@ -172,7 +174,7 @@ final class EngagementController
 
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
-            fn (NewsfeedComment $comment): array => $this->moderatorProjection($comment, $parents),
+            fn (NewsfeedComment $comment): array => $this->moderatorProjection($comment, $parents, $actor->subjectId),
         );
     }
 
@@ -187,12 +189,16 @@ final class EngagementController
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
-        return ApiResponse::item($this->moderatorProjection($this->engagement->moderate(
-            $model,
-            ModerationState::from($validated['moderation_state']),
-            $validated['reason'] ?? null,
-            $actor,
-        )));
+        return ApiResponse::item($this->moderatorProjection(
+            $this->engagement->moderate(
+                $model,
+                ModerationState::from($validated['moderation_state']),
+                $validated['reason'] ?? null,
+                $actor,
+            ),
+            null,
+            $actor->subjectId,
+        ));
     }
 
     // ── projections ───────────────────────────────────────────────────────────────────
@@ -210,14 +216,32 @@ final class EngagementController
      * @param  array<int, string>|null  $parents  parent uuid by primary key, resolved for the
      *                                            whole page, or null when rendering one comment
      */
-    private function readerProjection(NewsfeedComment $comment, ?array $parents = null): array
-    {
+    private function readerProjection(
+        NewsfeedComment $comment,
+        ?array $parents = null,
+        ?string $readerSubjectId = null,
+    ): array {
         return [
             'id' => $comment->uuid,
             'parent_id' => $this->parentUuid($comment, $parents),
             'body' => $comment->body,
             // Whether the office wrote it, which is the one thing a reader most needs to know.
             'is_official' => (bool) $comment->is_official,
+            /*
+             * WHOSE COMMENT THIS IS, AS A BOOLEAN.
+             *
+             * `author_subject_id` below discloses the author's stable account identifier to every
+             * reader of a public thread, which lets anybody correlate one person's comments across
+             * the whole feed — and combined with what people write on a welfare newsfeed, that is
+             * a profile. The only thing a client actually needs is whether to offer edit and
+             * delete on this row, which is a boolean (Article 5.2).
+             *
+             * `author_subject_id` is retained because removing a field is a breaking change
+             * (CHANGELOG_API.md). This is its replacement, and the changelog records the
+             * disclosure so the removal can be scheduled deliberately rather than forgotten.
+             */
+            'is_mine' => $readerSubjectId !== null
+                && (string) $comment->author_subject_id === $readerSubjectId,
             'author_subject_id' => $comment->author_subject_id,
             'created_at' => $comment->created_at?->toIso8601ZuluString(),
             // Shown so a reply is not silently rewritten under a reader who already answered it.
@@ -231,9 +255,12 @@ final class EngagementController
     /**
      * @param  array<int, string>|null  $parents
      */
-    private function moderatorProjection(NewsfeedComment $comment, ?array $parents = null): array
-    {
-        return $this->readerProjection($comment, $parents) + [
+    private function moderatorProjection(
+        NewsfeedComment $comment,
+        ?array $parents = null,
+        ?string $readerSubjectId = null,
+    ): array {
+        return $this->readerProjection($comment, $parents, $readerSubjectId) + [
             'moderation_state' => $comment->moderation_state->value,
             'moderation_reason' => $comment->moderation_reason,
             'moderated_by' => $comment->moderated_by,
