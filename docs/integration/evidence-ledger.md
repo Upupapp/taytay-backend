@@ -108,8 +108,8 @@ confirm it:
 | Location | Value | What it is |
 | --- | --- | --- |
 | `tests/Feature/Api/V1/CredentialLeakageTest.php:64` | `correct-horse-battery-staple` | the password posted by `a_password_never_reaches_the_log_or_the_response` |
-| `tests/Feature/Console/ReadinessCommandTest.php:98` | `postgres://***:***@…` | the **expected redacted** form |
-| `tests/Feature/Console/ReadinessCommandTest.php:99` | `postgres://lguids:hunter2@…` | its input, in `it_redacts_credentials_out_of_driver_errors` |
+| `tests/Feature/Console/ReadinessCommandTest.php:98` | a redacted Postgres DSN | the **expected** output |
+| `tests/Feature/Console/ReadinessCommandTest.php:99` | a Postgres DSN carrying a fake password | its input, in `it_redacts_credentials_out_of_driver_errors` |
 
 **Verdict: clean.** Every hit is a fixture inside a test that exists to prove credentials do
 *not* leak. **No live credential is present in this history, so nothing requires rotation on
@@ -167,3 +167,140 @@ Steps 1, 8 and 9 — scan, ledger, baseline — are complete.
 tested and measured by the integrator, its full history is proven clean of credentials, and the
 baseline is written down. It has never been run against PostgreSQL on this machine, and it
 remains public.
+
+---
+
+## TAB 01 — Contract reconciliation (backend half)
+
+| | |
+| --- | --- |
+| Date | 18 August 2026 |
+| HEAD at start | `d767759` |
+| Severity | P0 — six of the eight divergences |
+| Status | Backend steps 1–3 complete. Console half recorded in the console's ledger |
+
+### Precondition, and how it was met
+
+TAB 01 states its precondition as *"a running backend to observe, not merely a document to
+read."* No staging API exists and no PostgreSQL runs on this machine (TAB 00, *Open, not done*).
+The backend **is** runnable here, so every claim below was taken from the application itself —
+the router, the response builder, the paginator and real HTTP round-trips in the test suite —
+rather than from `conventions.md`. Where a live staging call is required, the acceptance
+criterion is recorded as deferred rather than claimed.
+
+### Step 1 — the published error vocabulary, fixed at its source
+
+`ApiResponse::error()` has always put `$code->value` on the wire. Both generators published
+`$code->name`. The wire was never wrong; the contract was.
+
+| File | Was | Now |
+| --- | --- | --- |
+| `modules/Shared/Support/OpenApiGenerator.php` | `static fn (ErrorCode $code): string => $code->name` | `=> $code->value` |
+| `modules/Shared/Console/GenerateTypesCommand.php` | `"'".$code->name."'"` | `"'".$code->value."'"` |
+
+Both artefacts regenerated and committed. `openapi.json` and `types.ts` now carry
+`VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN` — thirteen codes, matching
+`ErrorCode::httpStatus()` and the canonical table in `conventions.md` §4.
+
+### Step 2 — a gate that has been watched failing
+
+Added `ApiContractTest::every_error_code_the_api_emits_is_published_with_the_value_it_emits`.
+
+**Why the existing suite missed this for the life of the defect.** `ApiContractTest` already had
+`every_enum_value_a_client_can_observe_is_documented`, and it already drove *real* responses
+rather than re-reading the enums — but `observedEnumValues()` only ever exercises **successful**
+endpoints, so no error body was ever inspected. Meanwhile `lguids:openapi --check` and
+`lguids:types --check` compare the generated document to the committed one: they verify
+**currency, never correctness**, and they agree with each other whichever string the generator
+picks. Three green gates, none of which could see it.
+
+The new test is built so it cannot restate the bug:
+
+- **Half one — genuine HTTP round-trips.** `GET /api/v1/me` unauthenticated (401),
+  `POST /api/v1/auth/tokens` with an empty body (422), `DELETE /api/v1/health` (405), and an
+  authenticated `GET` of a random resident UUID (404). Each response's `error.code` is read from
+  the body and must appear in both published artefacts. This proves the renderer under test is
+  the one the router actually reaches.
+- **Half two — exhaustive.** Every `ErrorCode` case is rendered through `ApiResponse::error()`,
+  the single builder every endpoint is required to use, and the `code` is read back **out of the
+  rendered JSON**. The assertion never mentions `->name` or `->value`, so a generator that
+  regresses cannot agree with it.
+
+`types.ts` is parsed from the committed file rather than regenerated, because a consumer
+vendoring it reads exactly those bytes. TAB 06 turns that into a build-time guarantee.
+
+**Mutation transcript — the gate was proven red before it was trusted.** The defect was
+reintroduced in both generators and the artefacts regenerated, as a careless commit would:
+
+```
+mutation applied  → published now: BadRequest, Unauthenticated, Forbidden
+FAILED  ApiContractTest::every_error_code_the_api_emits_is_published_with_the_value_it_emits
+  The API returned `UNAUTHENTICATED` over HTTP and openapi.json does not publish it.
+  Published: BadRequest, Unauthenticated, Forbidden, NotFound, MethodNotAllowed, …
+  Failed asserting that an array contains 'UNAUTHENTICATED'.
+```
+
+The fix was then restored, the artefacts regenerated, and the test returned green
+(46 assertions).
+
+### Step 3 — the pagination contract, published rather than described
+
+Three defects, all closed:
+
+1. **The `Pagination` schema was referenced by nothing.** Zero `$ref`s. Every response declared
+   `meta` as a bare `{"type":"object"}`, so a client generating from `openapi.json` received an
+   opaque object and had to read prose to learn the shape — which is precisely how the console
+   came to invent `meta.pageSize`.
+2. **`has_more` was served but never published.** `Page::meta()` emits
+   `page, per_page, total, total_pages, has_more`; the schema listed four of the five, and
+   `types.ts` did the same.
+3. **Nothing distinguished a collection from a single resource.** Both were `data` + untyped
+   `meta`.
+
+Now: `Pagination` carries all five keys, all required, with the clamping rule stated
+(default 25, maximum 100, out-of-range clamped rather than rejected). A new `Meta` schema
+requires `request_id` and optionally holds `pagination`; `PaginatedMeta` composes it and makes
+`pagination` required. `responsesFor()` references `PaginatedMeta` when the annotation says
+`paginated`, `Meta` otherwise, and types `data` as an array for the paginated case.
+
+**257 references to `Meta`, 7 to `PaginatedMeta`** in the regenerated document, against zero
+before.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `php -d memory_limit=1G vendor/bin/phpunit` | **907 passed, 6742 assertions** (906 + the new gate) |
+| `vendor/bin/pint --test` | **passed** |
+| `lguids:openapi --check` / `lguids:types --check` | current |
+| Published error codes | `BAD_REQUEST … SERVICE_UNAVAILABLE`, 13 values, matching the wire |
+
+Pint also reformatted `docs/integration/tools/secret-scan.php`, committed in TAB 00 before Pint
+had seen it. The scanner was re-run afterwards to confirm the reformatting did not change its
+behaviour.
+
+**Ledger hygiene, noted for the standing pre-push gate:** the TAB 00 entry originally quoted the
+literal fixture strings it certified as synthetic, which made the scanner flag its own ledger.
+The quotations are now described rather than reproduced, so the gate stays low-noise.
+
+### Guardrails observed
+
+- **The backend was not bent to the console.** Nothing in the envelope, the pagination shape, the
+  error vocabulary or CORS was changed to make a console request succeed. The only backend
+  changes are: publish what is already served, and add a test.
+- `supports_credentials` untouched; CORS not widened; Sanctum stateful domains not enabled.
+- No domain model, controller, route or migration touched.
+
+### Deferred — needs a live environment
+
+- The acceptance criterion *"a single live call from the console to `GET /api/v1/health` and one
+  authenticated list endpoint returns parsed, correctly-paginated data in staging"* cannot be
+  met here: there is no staging API and no PostgreSQL. Carried forward.
+- A network trace of a successful paginated call, and before/after screenshots of a validation
+  failure, likewise.
+
+### Verdict
+
+**Backend half — complete.** The published contract now describes what this API actually serves;
+the defect that made every client's error handling dead code is fixed at its source; and the gate
+that catches its return has been watched failing.

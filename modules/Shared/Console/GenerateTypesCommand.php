@@ -70,7 +70,9 @@ final class GenerateTypesCommand extends Command
             '',
             'export interface ApiMeta {',
             '  request_id: string;',
-            '  pagination?: { page: number; per_page: number; total: number; total_pages: number };',
+            '  // Present on every collection response, absent on a single resource.',
+            '  // These five keys are what the wire carries; `has_more` was previously served but not published.',
+            '  pagination?: { page: number; per_page: number; total: number; total_pages: number; has_more: boolean };',
             '}',
             '',
             'export interface ApiResponse<T> {',
@@ -95,7 +97,9 @@ final class GenerateTypesCommand extends Command
             $lines[] = sprintf(
                 '  %s %s%s',
                 $index === 0 ? ' ' : '|',
-                "'".$code->name."'",
+                // The backing value, not the case name — see OpenApiGenerator::schemas().
+                // A client branching on the published union must match what the wire carries.
+                "'".$code->value."'",
                 $index === count(ErrorCode::cases()) - 1 ? ';' : '',
             );
         }

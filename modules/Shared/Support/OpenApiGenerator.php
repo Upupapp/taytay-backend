@@ -185,8 +185,20 @@ final class OpenApiGenerator
                         'properties' => [
                             'code' => [
                                 'type' => 'string',
+                                /*
+                                 * THE BACKING VALUE, NOT THE CASE NAME.
+                                 *
+                                 * `ApiResponse::error()` puts `$code->value` on the wire —
+                                 * `VALIDATION_FAILED` — so publishing `$code->name`
+                                 * (`ValidationFailed`) described an API that has never existed.
+                                 * Every client that did what this document instructs, and
+                                 * branched on `code`, matched nothing and silently never fired.
+                                 *
+                                 * The domain enums thirty lines below always used `->value`.
+                                 * ErrorCode was the sole exception, in both generators.
+                                 */
                                 'enum' => array_map(
-                                    static fn (ErrorCode $code): string => $code->name,
+                                    static fn (ErrorCode $code): string => $code->value,
                                     ErrorCode::cases(),
                                 ),
                                 'description' => 'Stable and machine-readable. Branch on this.',
@@ -198,14 +210,42 @@ final class OpenApiGenerator
                     ],
                 ],
             ],
+            /*
+             * THE PAGINATION CONTRACT, PUBLISHED RATHER THAN DESCRIBED IN PROSE.
+             *
+             * These five keys are exactly what `Page::meta()` builds and `ApiResponse::page()`
+             * puts under `meta.pagination`. `has_more` was served but never published, and the
+             * schema itself was referenced by nothing — `meta` was a bare `{"type":"object"}`,
+             * so a client generating from this document received an opaque object and had to
+             * read conventions.md §3 to learn the shape. That is how a consumer ends up
+             * inventing `meta.pageSize` and discovering the truth at runtime.
+             */
             'Pagination' => [
                 'type' => 'object',
+                'required' => ['page', 'per_page', 'total', 'total_pages', 'has_more'],
                 'properties' => [
-                    'page' => ['type' => 'integer', 'minimum' => 1],
-                    'per_page' => ['type' => 'integer'],
+                    'page' => ['type' => 'integer', 'minimum' => 1, 'description' => '1-based. A page beyond the end returns 200 with an empty data array.'],
+                    'per_page' => ['type' => 'integer', 'description' => 'Default 25, maximum 100. Out-of-range values are clamped, never rejected.'],
                     'total' => ['type' => 'integer'],
                     'total_pages' => ['type' => 'integer'],
+                    'has_more' => ['type' => 'boolean'],
                 ],
+            ],
+            'Meta' => [
+                'type' => 'object',
+                'required' => ['request_id'],
+                'properties' => [
+                    'request_id' => ['type' => 'string', 'description' => 'Matches the X-Request-Id response header. Show it in a failure notice so a caseworker can quote it.'],
+                    'pagination' => ['$ref' => '#/components/schemas/Pagination'],
+                ],
+                'description' => 'Additive. Clients must tolerate new keys.',
+            ],
+            'PaginatedMeta' => [
+                'allOf' => [
+                    ['$ref' => '#/components/schemas/Meta'],
+                    ['type' => 'object', 'required' => ['pagination']],
+                ],
+                'description' => 'The meta of a collection response. Collections are always paginated.',
             ],
         ];
 
@@ -355,14 +395,27 @@ final class OpenApiGenerator
     {
         $success = (string) ($note['status'] ?? ($method === 'POST' ? '201' : ($method === 'DELETE' ? '200' : '200')));
 
+        $paginated = ($note['paginated'] ?? false) === true;
+
         $responses = [
             $success => [
                 'description' => $note['returns'] ?? 'Success.',
                 'content' => ['application/json' => ['schema' => [
                     'type' => 'object',
+                    'required' => ['data', 'meta'],
                     'properties' => [
-                        'data' => ['description' => $note['returns'] ?? 'The resource.'],
-                        'meta' => ['type' => 'object'],
+                        'data' => $paginated
+                            ? ['type' => 'array', 'items' => ['description' => $note['returns'] ?? 'A member of the collection.']]
+                            : ['description' => $note['returns'] ?? 'The resource.'],
+                        /*
+                         * A REFERENCE, NOT A BARE OBJECT. A consumer generating from this
+                         * document now receives `meta.request_id` and, on a paginated
+                         * endpoint, a required `meta.pagination` — rather than an untyped
+                         * object it has to guess at.
+                         */
+                        'meta' => ['$ref' => $paginated
+                            ? '#/components/schemas/PaginatedMeta'
+                            : '#/components/schemas/Meta'],
                     ],
                 ]]],
             ],

@@ -7,7 +7,10 @@ namespace Tests\Feature\Api\V1;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Modules\Shared\Exceptions\ErrorCode;
+use Modules\Shared\Http\ApiResponse;
 use Modules\Shared\Support\CitizenSurface;
 use Modules\Shared\Support\OpenApiGenerator;
 use PHPUnit\Framework\Attributes\Test;
@@ -107,6 +110,138 @@ final class ApiContractTest extends KycTestCase
             'from a backed enum in Domain/ or Contracts/, the generator picks it up automatically —',
             'if it does not, the value is a bare string somewhere and that is the real finding.',
         ]));
+    }
+
+    // ── criterion 3, for the error vocabulary specifically ───────────────────────────
+
+    #[Test]
+    public function every_error_code_the_api_emits_is_published_with_the_value_it_emits(): void
+    {
+        /*
+         * WHY THIS TEST EXISTS, AND WHY IT IS SEPARATE FROM THE ONE ABOVE.
+         *
+         * `every_enum_value_a_client_can_observe_is_documented` already compares the document to
+         * real responses — but it only ever drives **successful** ones, so no error body was ever
+         * inspected. Both generators published the PHP case name (`ValidationFailed`) while the
+         * wire has always carried the backing value (`VALIDATION_FAILED`), and CI stayed green
+         * for the whole life of the defect: `lguids:openapi --check` and `lguids:types --check`
+         * compare the generated document to the committed one, so they verify **currency, never
+         * correctness**, and they agree with each other whichever string the generator picks.
+         *
+         * Every client that did what conventions.md §4 instructs — "clients branch on this" —
+         * matched nothing, ever, and its error handling silently never fired.
+         *
+         * So the observed side of this assertion never mentions `->value` or `->name`. It reads
+         * `error.code` out of response bodies produced by the same renderer production uses. A
+         * generator that goes back to `->name` makes this test red; a test written against
+         * `ErrorCode::cases()` would have restated the bug instead of catching it.
+         */
+        $published = $this->publishedErrorCodes();
+        $union = $this->publishedTypeScriptErrorCodes();
+
+        // Half one: genuine HTTP round-trips, which prove the renderer under test is the one the
+        // router actually reaches. These four need no fixture beyond a token.
+        $overTheWire = [];
+
+        $overTheWire[] = $this->getJson('/api/v1/me')
+            ->assertUnauthorized()->json('error.code');
+
+        $overTheWire[] = $this->postJson('/api/v1/auth/tokens', [])
+            ->assertStatus(422)->json('error.code');
+
+        $overTheWire[] = $this->deleteJson('/api/v1/health')
+            ->assertStatus(405)->json('error.code');
+
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+        $overTheWire[] = $this->getJson('/api/v1/admin/residents/'.Str::uuid()->toString())
+            ->assertNotFound()->json('error.code');
+
+        foreach ($overTheWire as $code) {
+            $this->assertIsString($code, 'An error response carried no `error.code` at all.');
+            $this->assertContains($code, $published, sprintf(
+                'The API returned `%s` over HTTP and openapi.json does not publish it. Published: %s',
+                $code,
+                implode(', ', $published),
+            ));
+            $this->assertContains($code, $union, sprintf(
+                'The API returned `%s` over HTTP and types.ts does not declare it.',
+                $code,
+            ));
+        }
+
+        // Half two: exhaustive. The four above are the codes a test can provoke cheaply; the
+        // remaining nine are reachable only from conditions a feature test cannot stage (a dead
+        // dependency, a 500, an over-large upload). Rendering each through `ApiResponse::error()`
+        // — the single builder every endpoint is required to use — reads the same wire the
+        // router would have written, without asserting anything about how the enum spells itself.
+        $emitted = [];
+
+        foreach (ErrorCode::cases() as $case) {
+            $body = json_decode(ApiResponse::error($case)->getContent() ?: '', true);
+
+            $this->assertIsArray($body);
+            $this->assertIsString($body['error']['code'] ?? null);
+
+            $emitted[] = $body['error']['code'];
+        }
+
+        sort($emitted);
+        sort($published);
+        sort($union);
+
+        $this->assertSame($emitted, $published, implode("\n", [
+            'openapi.json does not publish the error vocabulary the API emits.',
+            '',
+            '  emitted on the wire: '.implode(', ', $emitted),
+            '  published:           '.implode(', ', $published),
+            '',
+            'A client instructed to branch on `code` would match nothing. Check that',
+            'OpenApiGenerator::schemas() maps ErrorCode with ->value, not ->name.',
+        ]));
+
+        $this->assertSame($emitted, $union, implode("\n", [
+            'docs/api/types.ts does not declare the error vocabulary the API emits.',
+            '',
+            '  emitted on the wire: '.implode(', ', $emitted),
+            '  declared:            '.implode(', ', $union),
+            '',
+            'Check GenerateTypesCommand::render() — the union must be built from ->value.',
+        ]));
+    }
+
+    /**
+     * The error codes the committed OpenAPI document publishes.
+     *
+     * @return list<string>
+     */
+    private function publishedErrorCodes(): array
+    {
+        $enum = $this->document()['components']['schemas']['Error']['properties']['error']['properties']['code']['enum'] ?? null;
+
+        $this->assertIsArray($enum, 'openapi.json publishes no error code enum at all.');
+
+        return array_map(strval(...), $enum);
+    }
+
+    /**
+     * The error codes the committed TypeScript contract declares.
+     *
+     * Parsed from the emitted file rather than regenerated, because a consumer vendoring
+     * `types.ts` reads exactly these bytes — TAB 06 turns that into a build-time guarantee.
+     *
+     * @return list<string>
+     */
+    private function publishedTypeScriptErrorCodes(): array
+    {
+        $source = (string) file_get_contents(base_path('docs/api/types.ts'));
+
+        $this->assertMatchesRegularExpression('/export type ApiErrorCode =/', $source);
+
+        $union = (string) preg_replace('/.*export type ApiErrorCode =(.*?);.*/s', '$1', $source);
+
+        preg_match_all("/'([^']+)'/", $union, $matches);
+
+        return $matches[1];
     }
 
     // ── criterion 1: the document describes the whole surface ────────────────────────

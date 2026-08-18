@@ -11,7 +11,9 @@
 
 export interface ApiMeta {
   request_id: string;
-  pagination?: { page: number; per_page: number; total: number; total_pages: number };
+  // Present on every collection response, absent on a single resource.
+  // These five keys are what the wire carries; `has_more` was previously served but not published.
+  pagination?: { page: number; per_page: number; total: number; total_pages: number; has_more: boolean };
 }
 
 export interface ApiResponse<T> {
@@ -30,19 +32,19 @@ export interface ApiError {
 }
 
 export type ApiErrorCode =
-    'BadRequest'
-  | 'Unauthenticated'
-  | 'Forbidden'
-  | 'NotFound'
-  | 'MethodNotAllowed'
-  | 'Conflict'
-  | 'InvalidStateTransition'
-  | 'ValidationFailed'
-  | 'RateLimited'
-  | 'PayloadTooLarge'
-  | 'UnsupportedMediaType'
-  | 'ServerError'
-  | 'ServiceUnavailable';
+    'BAD_REQUEST'
+  | 'UNAUTHENTICATED'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'METHOD_NOT_ALLOWED'
+  | 'CONFLICT'
+  | 'INVALID_STATE_TRANSITION'
+  | 'VALIDATION_FAILED'
+  | 'RATE_LIMITED'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'UNSUPPORTED_MEDIA_TYPE'
+  | 'SERVER_ERROR'
+  | 'SERVICE_UNAVAILABLE';
 
 export type AccessControlPermission =
    'kyc.review'
