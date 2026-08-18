@@ -152,7 +152,7 @@ final class OpenApiGenerator
                     'description' => $note['description'] ?? null,
                     'security' => $requiresAuth ? [['bearer' => []]] : [],
                     'parameters' => $this->parametersFor($route, $note),
-                    'responses' => $this->responsesFor($method, $note),
+                    'responses' => $this->responsesFor($method, $note, $route),
                     /*
                      * The permission, published. A frontend that knows which permission an endpoint
                      * costs can hide a button the server would refuse — while remembering that
@@ -267,6 +267,120 @@ final class OpenApiGenerator
         ksort($schemas);
 
         return $schemas;
+    }
+
+    /**
+     * The field names a route's payload actually carries.
+     *
+     * **WHY THIS IS READ OUT OF THE CONTROLLER.** Until TAB 05 this document
+     * published 221 paths and 56 schemas, of which 52 were enums — and *no
+     * resource shape at all*. Every response declared `data` as an untyped
+     * object, so a client generating from this document received the envelope,
+     * the error vocabulary and the enums, and nothing whatever about what comes
+     * back inside `data`.
+     *
+     * That contradicted the first criterion this document is tested against —
+     * "a frontend developer can build without reading backend code" — because
+     * the field names lived in private `*Projection()` methods and the only way
+     * to learn them was to open the PHP. Four client teams were each reading
+     * this repository to find out what a resident looks like.
+     *
+     * So the names come from the same methods that build the payload, for the
+     * same reason the enums come from `cases()`: a shape this document cannot
+     * describe wrongly is better than one somebody remembers to update.
+     *
+     * **Names, not types.** The projections build plain arrays, so this reports
+     * which keys are emitted and leaves each value untyped. That is a real
+     * limit and an honest one — a wrong type published with confidence would be
+     * worse than an absent one, and it is exactly what a hand-written schema
+     * drifts into.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function payloadShape(Route $route): ?array
+    {
+        $action = $route->getActionName();
+
+        if (! str_contains($action, '@')) {
+            return null;
+        }
+
+        [$class, $method] = explode('@', $action);
+        $file = str_replace('\\', '/', $class);
+        $file = preg_replace('#^Modules/#', 'modules/', $file).'.php';
+
+        if (! is_file($file)) {
+            return null;
+        }
+
+        $source = (string) file_get_contents($file);
+
+        if (preg_match('/function '.preg_quote($method, '/').'\s*\([\s\S]*?\n    \}/', $source, $body) !== 1) {
+            return null;
+        }
+
+        // The projection this action hands to ApiResponse. A method that shapes
+        // its payload inline rather than through one is left undescribed rather
+        // than half-described.
+        if (preg_match('/\$this->(\w*[Pp]rojection\w*)\(/', $body[0], $call) !== 1) {
+            return null;
+        }
+
+        $keys = $this->projectionKeys($source, $call[1], 0);
+
+        if ($keys === []) {
+            return null;
+        }
+
+        $properties = [];
+
+        foreach ($keys as $key) {
+            $properties[$key] = new \stdClass;
+        }
+
+        return ['type' => 'object', 'properties' => $properties];
+    }
+
+    /**
+     * The keys one projection emits, including the ones it inherits.
+     *
+     * A detail projection is routinely built as `listProjection($x) + [ ... ]`,
+     * so reading only the literal keys in its own body publishes the *extras*
+     * and silently drops the base — a payload described as ten fields when it
+     * carries twenty-one. A confidently partial shape is worse than an absent
+     * one, because a client trusts it and meets the missing half at runtime.
+     *
+     * Depth-limited rather than cycle-detected: these compose one or two deep in
+     * practice, and a generator that can loop forever on a malformed input is a
+     * generator that hangs CI.
+     *
+     * @return list<string>
+     */
+    private function projectionKeys(string $source, string $method, int $depth): array
+    {
+        if ($depth > 3) {
+            return [];
+        }
+
+        if (preg_match('/function '.preg_quote($method, '/').'\s*\([\s\S]*?\n    \}/', $source, $body) !== 1) {
+            return [];
+        }
+
+        $inherited = [];
+
+        preg_match_all('/\$this->(\w*[Pp]rojection\w*)\(/', $body[0], $calls);
+
+        foreach ($calls[1] as $inheritedMethod) {
+            if ($inheritedMethod === $method) {
+                continue;
+            }
+
+            $inherited = array_merge($inherited, $this->projectionKeys($source, $inheritedMethod, $depth + 1));
+        }
+
+        preg_match_all("/^\s{12}'([a-z0-9_]+)' =>/m", $body[0], $own);
+
+        return array_values(array_unique(array_merge($inherited, $own[1])));
     }
 
     /**
@@ -391,8 +505,10 @@ final class OpenApiGenerator
      * @param  array<string, mixed>  $note
      * @return array<string, mixed>
      */
-    private function responsesFor(string $method, array $note): array
+    private function responsesFor(string $method, array $note, ?Route $route = null): array
     {
+        $shape = $route !== null ? $this->payloadShape($route) : null;
+
         $success = (string) ($note['status'] ?? ($method === 'POST' ? '201' : ($method === 'DELETE' ? '200' : '200')));
 
         $paginated = ($note['paginated'] ?? false) === true;
@@ -405,8 +521,8 @@ final class OpenApiGenerator
                     'required' => ['data', 'meta'],
                     'properties' => [
                         'data' => $paginated
-                            ? ['type' => 'array', 'items' => ['description' => $note['returns'] ?? 'A member of the collection.']]
-                            : ['description' => $note['returns'] ?? 'The resource.'],
+                            ? ['type' => 'array', 'items' => $shape ?? ['description' => $note['returns'] ?? 'A member of the collection.']]
+                            : ($shape ?? ['description' => $note['returns'] ?? 'The resource.']),
                         /*
                          * A REFERENCE, NOT A BARE OBJECT. A consumer generating from this
                          * document now receives `meta.request_id` and, on a paginated

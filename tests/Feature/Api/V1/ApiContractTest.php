@@ -244,6 +244,65 @@ final class ApiContractTest extends KycTestCase
         return $matches[1];
     }
 
+    #[Test]
+    public function a_client_can_learn_what_a_payload_contains_without_reading_php(): void
+    {
+        /*
+         * CRITERION 1, ASSERTED FOR THE FIRST TIME.
+         *
+         * This class has always claimed "a frontend developer can build without reading backend
+         * code", and until TAB 05 nothing checked the part that matters most. The document
+         * published 221 paths and 56 schemas, 52 of them enums, and **not one resource shape**:
+         * every response declared `data` as an untyped object. Four client teams were each opening
+         * this repository to find out what a resident looks like.
+         *
+         * The shapes are now read from the same `*Projection()` methods that build the payload —
+         * the same reasoning as reading enums from `cases()`. This test is what stops a response
+         * quietly going back to being undescribed.
+         */
+        $document = $this->document();
+        $described = 0;
+
+        foreach ($document['paths'] as $operations) {
+            foreach ($operations as $operation) {
+                foreach ($operation['responses'] ?? [] as $response) {
+                    $data = $response['content']['application/json']['schema']['properties']['data'] ?? null;
+
+                    if ($data === null) {
+                        continue;
+                    }
+
+                    if (isset(($data['items'] ?? $data)['properties'])) {
+                        $described++;
+                    }
+                }
+            }
+        }
+
+        $this->assertGreaterThan(150, $described, implode("\n", [
+            'Almost no response describes what it returns.',
+            '',
+            'A client generating from this document would receive the envelope, the error',
+            'vocabulary and the enums, and nothing about what comes back inside `data` — which is',
+            'the whole of criterion 1. Check OpenApiGenerator::payloadShape().',
+        ]));
+    }
+
+    #[Test]
+    public function a_described_payload_carries_the_fields_it_inherits(): void
+    {
+        /*
+         * A detail projection is routinely `listProjection($x) + [ … ]`. Reading only its own
+         * literal keys publishes the extras and drops the base — a payload described as ten
+         * fields when it carries twenty-one. A confidently partial shape is worse than an absent
+         * one, because a client trusts it and meets the missing half at runtime.
+         */
+        $detail = $this->document()['paths']['/admin/assistance-requests/{case}']['get']['responses']['200']['content']['application/json']['schema']['properties']['data']['properties'] ?? [];
+
+        $this->assertArrayHasKey('case_number', $detail, 'The inherited list fields were dropped.');
+        $this->assertArrayHasKey('available_transitions', $detail, 'The detail-only fields were dropped.');
+    }
+
     // ── criterion 1: the document describes the whole surface ────────────────────────
 
     #[Test]

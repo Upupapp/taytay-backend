@@ -573,3 +573,36 @@ a runtime surprise"* — and the same argument applies with more force to field 
 Recorded rather than fixed here for the same reason TAB 01 fixed the error vocabulary at its
 source and left the console's adapters to TAB 05: the generator is the right place, and it is the
 next command's scope.
+
+### L-11 closed at its source — the contract now describes its payloads
+
+Rather than leave `wire-shapes.md` as the answer, `OpenApiGenerator::payloadShape()` reads the
+field names out of the same `*Projection()` methods that build the response — the same reasoning
+that has always read enums from `cases()`: a shape the document cannot describe wrongly is better
+than one somebody remembers to update.
+
+**171 of 263 responses now describe their payload — 2,266 field declarations, against zero
+before.** The remaining 92 shape their payload inline rather than through a projection, and are
+left *undescribed rather than half-described*.
+
+**One correction the first version needed.** A detail projection is routinely
+`listProjection($x) + [ … ]`, and reading only its own literal keys published the extras and
+dropped the base: `GET /admin/assistance-requests/{case}` came out as **10 fields when it carries
+21**. A confidently partial shape is worse than an absent one — a client trusts it and meets the
+missing half at runtime. `projectionKeys()` now resolves inherited keys, depth-limited rather than
+cycle-detected, because a generator that can loop forever on malformed input is one that hangs CI.
+
+**Names, not types.** The projections build plain arrays, so each value is published untyped. That
+limit is deliberate and stated: a wrong type published with confidence would be worse than an
+absent one.
+
+Two gates added, and mutation-tested (blanking the extraction turns the first red):
+
+- `a_client_can_learn_what_a_payload_contains_without_reading_php` — criterion 1 asserted for the
+  first time in this class's life.
+- `a_described_payload_carries_the_fields_it_inherits` — the partial-shape regression specifically.
+
+**912 → 914 tests, all passing.** Pint clean, artefacts current.
+
+This is what unblocks TAB 05's remaining mapper work: the console can now write per-resource
+mappers against **published** field names rather than invented ones.
