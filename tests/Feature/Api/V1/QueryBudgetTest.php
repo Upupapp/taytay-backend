@@ -212,7 +212,7 @@ final class QueryBudgetTest extends KycTestCase
         Sanctum::actingAs($this->reviewer('lgu_admin'));
         $case = $this->caseWithRequirements();
 
-        $url = "/api/v1/admin/cases/{$case}/requirements";
+        $url = "/api/v1/admin/assistance-requests/{$case}/requirements";
 
         $small = $this->measure($url, fn () => $this->recordOneDocument($case), 1);
         $large = $this->measure($url, fn () => $this->recordOneDocument($case), 6);
@@ -259,7 +259,7 @@ final class QueryBudgetTest extends KycTestCase
         Sanctum::actingAs($this->reviewer('lgu_admin'));
         $case = $this->caseWithRequirements();
 
-        $url = "/api/v1/admin/cases/{$case}/document-requests";
+        $url = "/api/v1/admin/assistance-requests/{$case}/document-requests";
 
         $small = $this->measure($url, fn () => $this->openDocumentRequest($case), 1);
         $large = $this->measure($url, fn () => $this->openDocumentRequest($case), 6);
@@ -296,7 +296,7 @@ final class QueryBudgetTest extends KycTestCase
         Sanctum::actingAs($this->reviewer('lgu_admin'));
 
         $case = $this->caseForEligibility();
-        $url = "/api/v1/admin/cases/{$case}/eligibility-checks";
+        $url = "/api/v1/admin/assistance-requests/{$case}/eligibility-checks";
 
         $small = $this->measure($url, fn () => $this->runEligibilityCheck($case), 1);
         $large = $this->measure($url, fn () => $this->runEligibilityCheck($case), 6);
@@ -595,7 +595,7 @@ final class QueryBudgetTest extends KycTestCase
 
     private function runEligibilityCheck(string $case): void
     {
-        $this->postJson("/api/v1/admin/cases/{$case}/eligibility-checks", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/eligibility-checks", [
             'program_id' => (string) $this->eligibilityProgram()->uuid,
         ])->assertCreated();
     }
@@ -678,7 +678,7 @@ final class QueryBudgetTest extends KycTestCase
             'applicability' => RequirementApplicability::Applies,
         ]);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$slot->uuid}/document-requests", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$slot->uuid}/document-requests", [
             'channel' => 'in-person',
             'message' => 'Please bring your barangay certificate.',
         ])->assertCreated();

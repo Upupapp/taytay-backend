@@ -57,7 +57,7 @@ final class CaseDocumentTest extends KycTestCase
          * declared MIME type, contents that are neither. Both clients check this before
          * uploading as a courtesy; this is the boundary.
          */
-        $response = $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $response = $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent('id.jpg', '<?php echo "not an image";'),
         ]);
@@ -71,7 +71,7 @@ final class CaseDocumentTest extends KycTestCase
     {
         [$case, $requirement] = $this->caseWithRequirement();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent(
                 'big.pdf',
@@ -91,7 +91,7 @@ final class CaseDocumentTest extends KycTestCase
 
         // A PDF wearing a .jpg name, in a directory that would traverse if it were ever used
         // to build a path.
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent('../../etc/passwd.jpg', '%PDF-1.4 real pdf'),
         ])->assertCreated();
@@ -139,7 +139,7 @@ final class CaseDocumentTest extends KycTestCase
         [$case, $requirement] = $this->caseWithRequirement();
         $version = $this->recordScan($case, $requirement);
 
-        $body = $this->getJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents")
+        $body = $this->getJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents")
             ->assertOk()->content();
 
         $key = (string) StoredFile::query()->firstOrFail()->storage_key;
@@ -167,7 +167,7 @@ final class CaseDocumentTest extends KycTestCase
         $version = $this->recordScan($case, $requirement);
 
         $handle = $this->postJson(
-            "/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents/{$version}/access",
+            "/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents/{$version}/access",
         )->assertOk()->json('data.handle');
 
         // A second staff member, with every permission the first one has.
@@ -187,7 +187,7 @@ final class CaseDocumentTest extends KycTestCase
         $version = $this->recordScan($case, $requirement);
 
         $handle = $this->postJson(
-            "/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents/{$version}/access",
+            "/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents/{$version}/access",
         )->assertOk()->json('data.handle');
 
         $this->get("/api/v1/documents/{$handle}")->assertOk();
@@ -203,7 +203,7 @@ final class CaseDocumentTest extends KycTestCase
         $version = $this->recordScan($case, $requirement);
 
         $handle = $this->postJson(
-            "/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents/{$version}/access",
+            "/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents/{$version}/access",
         )->assertOk()->json('data.handle');
 
         $this->travel(5)->minutes();
@@ -224,7 +224,7 @@ final class CaseDocumentTest extends KycTestCase
          * uuid would open from any case the caller can reach. That is the guessed-id path the
          * criterion is about, one level up from the handle.
          */
-        $this->postJson("/api/v1/admin/cases/{$caseB}/requirements/{$requirementB}/documents/{$versionA}/access")
+        $this->postJson("/api/v1/admin/assistance-requests/{$caseB}/requirements/{$requirementB}/documents/{$versionA}/access")
             ->assertNotFound();
     }
 
@@ -235,7 +235,7 @@ final class CaseDocumentTest extends KycTestCase
         $version = $this->recordScan($case, $requirement);
 
         $handle = $this->postJson(
-            "/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents/{$version}/access",
+            "/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents/{$version}/access",
         )->assertOk()->json('data.handle');
 
         $this->get("/api/v1/documents/{$handle}")->assertOk();
@@ -255,7 +255,7 @@ final class CaseDocumentTest extends KycTestCase
         $version = $this->recordScan($case, $requirement);
 
         $handle = $this->postJson(
-            "/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents/{$version}/access",
+            "/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents/{$version}/access",
         )->assertOk()->json('data.handle');
 
         $response = $this->get("/api/v1/documents/{$handle}")->assertOk();
@@ -277,13 +277,13 @@ final class CaseDocumentTest extends KycTestCase
 
         $first = $this->recordScan($case, $requirement, 'first.pdf');
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent('second.pdf', '%PDF-1.4 second'),
             'replaces_because' => 'The first scan was unreadable.',
         ])->assertCreated()->assertJsonPath('data.version', 2);
 
-        $versions = $this->getJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents")
+        $versions = $this->getJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents")
             ->assertOk()->json('data.versions');
 
         $this->assertCount(2, $versions);
@@ -311,7 +311,7 @@ final class CaseDocumentTest extends KycTestCase
 
         // An unexplained supersession leaves a version nobody can account for — worse than no
         // history, because it looks like history.
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent('second.pdf', '%PDF-1.4 second'),
         ])->assertStatus(422);
@@ -322,7 +322,7 @@ final class CaseDocumentTest extends KycTestCase
     {
         [$case, $requirement] = $this->caseWithRequirement();
         $this->recordScan($case, $requirement);
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent('second.pdf', '%PDF-1.4 second'),
             'replaces_because' => 'Unreadable.',
@@ -330,7 +330,7 @@ final class CaseDocumentTest extends KycTestCase
 
         // Verifying the old one would put an accepted stamp on a document the office has already
         // replaced, and the requirement would then be satisfied by evidence nobody is using.
-        $versions = $this->getJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents")
+        $versions = $this->getJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents")
             ->json('data.versions');
 
         $this->assertNotNull($versions[0]['superseded_at']);
@@ -344,7 +344,7 @@ final class CaseDocumentTest extends KycTestCase
     {
         [$case, $requirement] = $this->caseWithRequirement();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'external-verification',
             'document_number' => '1234-5678-9012-3456',
         ])->assertCreated()->assertJsonPath('data.document_number', '••••3456');
@@ -364,7 +364,7 @@ final class CaseDocumentTest extends KycTestCase
     {
         [$case, $requirement] = $this->caseWithRequirement();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent('id.jpg', "\xFF\xD8\xFFrest"),
             'document_number' => '1234-5678-9012-3456',
@@ -381,12 +381,12 @@ final class CaseDocumentTest extends KycTestCase
         [$case, $requirement] = $this->caseWithRequirement();
 
         // Claims the office holds a copy it does not.
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'external-verification',
             'file' => UploadedFile::fake()->createWithContent('id.jpg', "\xFF\xD8\xFFrest"),
         ])->assertStatus(422);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
         ])->assertStatus(422);
     }
@@ -401,7 +401,7 @@ final class CaseDocumentTest extends KycTestCase
         Sanctum::actingAs($this->reviewer('lgu_staff'));
 
         // Taking papers at the counter is the job.
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent('cert.pdf', '%PDF-1.4 x'),
         ])->assertCreated();
@@ -410,7 +410,7 @@ final class CaseDocumentTest extends KycTestCase
          * Judging it sufficient is not. A verified requirement is what advances a case toward
          * money, so it is a second pair of eyes by construction.
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/verification", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/verification", [
             'status' => 'verified',
         ])->assertForbidden();
     }
@@ -423,11 +423,11 @@ final class CaseDocumentTest extends KycTestCase
 
         // The applicant has to be told what to bring instead, and an unexplained rejection
         // cannot be told apart from a mistake.
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/verification", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/verification", [
             'status' => 'rejected',
         ])->assertStatus(422);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/verification", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/verification", [
             'status' => 'rejected',
             'note' => 'The certificate names a different person.',
         ])->assertOk()->assertJsonPath('data.verification_status', 'rejected');
@@ -439,18 +439,18 @@ final class CaseDocumentTest extends KycTestCase
         [$case, $requirement] = $this->caseWithRequirement();
         $this->recordScan($case, $requirement);
 
-        $body = $this->getJson("/api/v1/admin/cases/{$case}/requirements")->assertOk()->json('data');
+        $body = $this->getJson("/api/v1/admin/assistance-requests/{$case}/requirements")->assertOk()->json('data');
 
         // Treating receipt as satisfaction would let a case reach approval on papers nobody
         // read.
         $this->assertFalse($body['requirements'][0]['is_satisfied']);
         $this->assertSame(1, $body['outstanding_count']);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/verification", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/verification", [
             'status' => 'verified',
         ])->assertOk();
 
-        $after = $this->getJson("/api/v1/admin/cases/{$case}/requirements")->assertOk()->json('data');
+        $after = $this->getJson("/api/v1/admin/assistance-requests/{$case}/requirements")->assertOk()->json('data');
         $this->assertTrue($after['requirements'][0]['is_satisfied']);
         $this->assertSame(0, $after['outstanding_count']);
     }
@@ -467,7 +467,7 @@ final class CaseDocumentTest extends KycTestCase
          * not a line that arrived with a feature (gap G-26).
          */
         $this->postJson(
-            "/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents/{$version}/access",
+            "/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents/{$version}/access",
             ['for_sharing' => true],
         )->assertForbidden();
     }
@@ -475,7 +475,7 @@ final class CaseDocumentTest extends KycTestCase
     #[Test]
     public function document_routes_require_authentication(): void
     {
-        $this->getJson('/api/v1/admin/cases/'.Str::uuid7().'/requirements')->assertUnauthorized();
+        $this->getJson('/api/v1/admin/assistance-requests/'.Str::uuid7().'/requirements')->assertUnauthorized();
         $this->getJson('/api/v1/documents/'.Str::uuid7())->assertUnauthorized();
     }
 
@@ -499,7 +499,7 @@ final class CaseDocumentTest extends KycTestCase
             'narrative' => 'Assistance needed.',
         ])->assertCreated()->json('data.case_id');
 
-        $requirements = $this->postJson("/api/v1/admin/cases/{$case}/requirements", [
+        $requirements = $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements", [
             'program_id' => (string) $program->uuid,
         ])->assertCreated()->json('data.requirements');
 
@@ -508,7 +508,7 @@ final class CaseDocumentTest extends KycTestCase
 
     private function recordScan(string $case, string $requirement, string $name = 'cert.pdf'): string
     {
-        return $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/documents", [
+        return $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents", [
             'source' => 'scanned',
             'file' => UploadedFile::fake()->createWithContent($name, '%PDF-1.4 contents'),
         ])->assertCreated()->json('data.id');

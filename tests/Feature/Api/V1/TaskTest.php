@@ -160,7 +160,7 @@ final class TaskTest extends KycTestCase
         $this->assertSame(1, count($this->getJson('/api/v1/tasks')->assertOk()->json('data')));
 
         // …and still cannot open what it points at. The task holds a pointer, not a key.
-        $this->getJson("/api/v1/admin/cases/{$case}")->assertNotFound();
+        $this->getJson("/api/v1/admin/assistance-requests/{$case}")->assertNotFound();
     }
 
     // ── criterion 1: the queues ───────────────────────────────────────────────────────

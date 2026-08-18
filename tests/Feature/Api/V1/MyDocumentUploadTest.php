@@ -136,11 +136,11 @@ final class MyDocumentUploadTest extends KycTestCase
         ])->assertCreated();
 
         // The staff endpoints hold no citizen path at all.
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/verification", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/verification", [
             'status' => 'verified',
         ])->assertForbidden();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/applicability", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/applicability", [
             'applicability' => 'does-not-apply',
             'reason' => 'I do not have one.',
         ])->assertForbidden();
@@ -157,7 +157,7 @@ final class MyDocumentUploadTest extends KycTestCase
         ])->assertCreated();
 
         Sanctum::actingAs($this->reviewer('lgu_admin'));
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/verification", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/verification", [
             'status' => 'verified',
             'note' => 'Checked against the barangay register by J. Cruz.',
         ])->assertOk();
@@ -190,7 +190,7 @@ final class MyDocumentUploadTest extends KycTestCase
         ])->assertCreated();
 
         Sanctum::actingAs($this->reviewer('lgu_admin'));
-        $this->postJson("/api/v1/admin/cases/{$case}/requirements/{$requirement}/verification", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/verification", [
             'status' => 'rejected',
             'note' => 'The certificate names a different person.',
         ])->assertOk();
@@ -256,7 +256,7 @@ final class MyDocumentUploadTest extends KycTestCase
             'narrative' => 'Assistance needed.',
         ])->assertCreated()->json('data.case_id');
 
-        $requirements = $this->postJson("/api/v1/admin/cases/{$case}/requirements", [
+        $requirements = $this->postJson("/api/v1/admin/assistance-requests/{$case}/requirements", [
             'program_id' => (string) $this->program()->uuid,
         ])->assertCreated()->json('data.requirements');
 

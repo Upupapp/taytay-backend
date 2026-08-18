@@ -458,3 +458,81 @@ in TAB 07. Recorded in the reconciliation table rather than added as dead vocabu
 | `php -d memory_limit=1G vendor/bin/phpunit` | **912 passed, 6761 assertions** |
 | `vendor/bin/pint --test` | passed |
 | `lguids:openapi --check` / `lguids:types --check` | regenerated and current |
+
+---
+
+## TAB 04 — The case collision (decision recorded; option-specific build outstanding)
+
+| | |
+| --- | --- |
+| Date | 18 August 2026 |
+| HEAD at start | `4eead78` |
+| Decision record | [ADR 0044](../adr/0044-what-a-case-is.md), cross-referenced in the console |
+
+### The decision
+
+**Option A — two entities.** A case is the office's continuing involvement with a household; an
+assistance request is one intervention inside it. **Supersede, not merge**, for duplicate identity.
+
+Recorded as *accepted in principle, pending MSWDO ratification*: the working session the command
+asks for has not happened, and the ADR says so rather than implying a mandate. Deciding early is
+made safe by building only what is true under **all three** options.
+
+### L-07 — the two case vocabularies overlap on exactly one state
+
+Measured: `assessment` appears in both the console's 7-state case catalog and the 13-state
+assistance lifecycle, and nothing else does.
+
+**That is worse than disjoint sets.** A `CaseRepository` pointed at the assistance route would
+render that one status correctly and blank the other twelve — and a screen that is *partly* right
+invites the conclusion that the data is incomplete rather than that the wiring is wrong. It is the
+"looks like success when wrong" failure with a plausible cover story. Pinned by test at exactly
+one; a second coincidence must be a decision, not two teams reaching for the same English word.
+
+### Implemented — safe under every option
+
+**`admin/cases` → `admin/assistance-requests`, all 30 routes.** Not part of the choice:
+
+- **ADR 0007 §2 already specifies** `POST /assistance-requests/{id}/transitions`. The
+  implementation had drifted to `admin/cases` — recorded by the sweep as F-23. This is conformance
+  to an accepted decision, not a new one.
+- Under A, `welfare_cases` *is* the assistance request and a new entity becomes the case; under B
+  there is only the request; under C this rename is the work. The current entity is the assistance
+  request in all three.
+
+912 tests pass unchanged. `me/cases` is deliberately **not** renamed: it is consumed by a shipped
+Flutter client, `/api/v1` is stable, and ADR 0007 §3 already projects a citizen vocabulary. That
+rename belongs to `/api/v2`.
+
+### Step 4 — the four status vocabularies, measured
+
+| Vocabulary | Console | Backend | Result |
+| --- | --- | --- | --- |
+| Assistance request | 13 | 13 | identical |
+| Referral | 8 | 8 | **identical** |
+| Field visit | 5 | 5 | **identical** |
+| Enrolment | 3 | 3 | **identical** |
+| Release / disbursement | **9** | **6** | **3 shared — diverges** |
+
+Three of the four needed no reconciliation at all. The fourth is a real divergence and not a naming
+slip: the console distinguishes `unclaimed` from `deferred` because `DL-94` holds that **deferred
+is the office's failing and unclaimed is nobody's**. Mapping `unclaimed` onto the API's `failed`
+would blame a household for the office's missing countersignature, and the record would read that
+way to every worker afterwards. The console also has no catalog entry for `ready`, `failed` or
+`cancelled`, so a release in any of them would render blank today.
+
+TAB 08 owns it. Pinned by test so the gap cannot widen in the meantime, and so nobody wires the two
+together believing they match.
+
+### Outstanding — waits on ratification
+
+The continuing-involvement module (migration, entity, endpoints, authorization, tests,
+`continues_case_id`, append-only event log); the six permission keys TAB 03 held back; and the
+citizen-facing projection — `welfare_case_events.is_citizen_visible` / `citizen_message` against a
+console `CaseEvent` that has no such concept, so a caseworker cannot yet tell which of their notes
+a resident will read.
+
+### Verification
+
+Backend **912 passed, 6761 assertions**; Pint clean; artefacts regenerated after the route rename.
+Console **77 files, 1491 tests**, 22 checks, clean build.

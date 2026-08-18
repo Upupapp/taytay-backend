@@ -24,7 +24,7 @@ use Modules\Welfare\Http\Controllers\V1\SafeguardingController;
  *
  * Two audiences, one lifecycle. The `/me/cases` routes resolve the resident from the
  * authenticated account, so an applicant can only ever reach their own and there is no
- * identifier to tamper with. The `/admin/cases` routes each require an explicit permission,
+ * identifier to tamper with. The `/admin/assistance-requests` routes each require an explicit permission,
  * and the transition endpoint resolves its permission from the *target state* rather than
  * from the route (ADR 0007 §2).
  *
@@ -44,21 +44,21 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('me/assistance-history', [MyCaseController::class, 'history'])->name('v1.me.assistance-history');
 
     // ── the staff queue and case file ─────────────────────────────────────────────────
-    Route::get('admin/cases', [CaseController::class, 'index'])->name('v1.admin.cases.index');
-    Route::post('admin/cases', [CaseController::class, 'store'])->name('v1.admin.cases.store');
-    Route::get('admin/cases/{case}', [CaseController::class, 'show'])->name('v1.admin.cases.show');
-    Route::get('admin/cases/{case}/history', [CaseController::class, 'history'])->name('v1.admin.cases.history');
+    Route::get('admin/assistance-requests', [CaseController::class, 'index'])->name('v1.admin.assistance-requests.index');
+    Route::post('admin/assistance-requests', [CaseController::class, 'store'])->name('v1.admin.assistance-requests.store');
+    Route::get('admin/assistance-requests/{case}', [CaseController::class, 'show'])->name('v1.admin.assistance-requests.show');
+    Route::get('admin/assistance-requests/{case}/history', [CaseController::class, 'history'])->name('v1.admin.assistance-requests.history');
 
     /*
      * THE ONE LIFECYCLE ENDPOINT. Nine verbs would be nine places the transition map could be
      * forgotten, and the tenth added in a hurry would be the one that skipped it.
      */
-    Route::post('admin/cases/{case}/transitions', [CaseController::class, 'transition'])->name('v1.admin.cases.transitions');
+    Route::post('admin/assistance-requests/{case}/transitions', [CaseController::class, 'transition'])->name('v1.admin.assistance-requests.transitions');
 
-    Route::post('admin/cases/{case}/priority', [CaseController::class, 'changePriority'])->name('v1.admin.cases.priority');
-    Route::post('admin/cases/{case}/assignment', [CaseController::class, 'assign'])->name('v1.admin.cases.assign');
-    Route::delete('admin/cases/{case}/assignment', [CaseController::class, 'unassign'])->name('v1.admin.cases.unassign');
-    Route::post('admin/cases/{case}/archive', [CaseController::class, 'archive'])->name('v1.admin.cases.archive');
+    Route::post('admin/assistance-requests/{case}/priority', [CaseController::class, 'changePriority'])->name('v1.admin.assistance-requests.priority');
+    Route::post('admin/assistance-requests/{case}/assignment', [CaseController::class, 'assign'])->name('v1.admin.assistance-requests.assign');
+    Route::delete('admin/assistance-requests/{case}/assignment', [CaseController::class, 'unassign'])->name('v1.admin.assistance-requests.unassign');
+    Route::post('admin/assistance-requests/{case}/archive', [CaseController::class, 'archive'])->name('v1.admin.assistance-requests.archive');
 
     /*
      * ── the applicant's own drafts and submission ─────────────────────────────────────
@@ -84,11 +84,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('admin/assessment-templates', [AssessmentController::class, 'templates'])->name('v1.admin.assessment-templates.index');
     Route::post('admin/assistance-intakes', [AssessmentController::class, 'storeIntake'])->name('v1.admin.assistance-intakes.store');
 
-    Route::get('admin/cases/{case}/assessment', [AssessmentController::class, 'show'])->name('v1.admin.cases.assessment.show');
-    Route::post('admin/cases/{case}/assessment', [AssessmentController::class, 'open'])->name('v1.admin.cases.assessment.open');
-    Route::patch('admin/cases/{case}/assessment', [AssessmentController::class, 'answer'])->name('v1.admin.cases.assessment.answer');
-    Route::post('admin/cases/{case}/assessment/complete', [AssessmentController::class, 'complete'])->name('v1.admin.cases.assessment.complete');
-    Route::get('admin/cases/{case}/prior-cases', [AssessmentController::class, 'history'])->name('v1.admin.cases.prior-cases');
+    Route::get('admin/assistance-requests/{case}/assessment', [AssessmentController::class, 'show'])->name('v1.admin.assistance-requests.assessment.show');
+    Route::post('admin/assistance-requests/{case}/assessment', [AssessmentController::class, 'open'])->name('v1.admin.assistance-requests.assessment.open');
+    Route::patch('admin/assistance-requests/{case}/assessment', [AssessmentController::class, 'answer'])->name('v1.admin.assistance-requests.assessment.answer');
+    Route::post('admin/assistance-requests/{case}/assessment/complete', [AssessmentController::class, 'complete'])->name('v1.admin.assistance-requests.assessment.complete');
+    Route::get('admin/assistance-requests/{case}/prior-cases', [AssessmentController::class, 'history'])->name('v1.admin.assistance-requests.prior-cases');
 
     /*
      * ── eligibility guidance against a case ───────────────────────────────────────────
@@ -100,8 +100,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * Running a check writes an append-only row pinning the guidance version, which is the
      * audit requirement this TAB had to meet.
      */
-    Route::get('admin/cases/{case}/eligibility-checks', [CaseEligibilityController::class, 'index'])->name('v1.admin.cases.eligibility.index');
-    Route::post('admin/cases/{case}/eligibility-checks', [CaseEligibilityController::class, 'store'])->name('v1.admin.cases.eligibility.store');
+    Route::get('admin/assistance-requests/{case}/eligibility-checks', [CaseEligibilityController::class, 'index'])->name('v1.admin.assistance-requests.eligibility.index');
+    Route::post('admin/assistance-requests/{case}/eligibility-checks', [CaseEligibilityController::class, 'store'])->name('v1.admin.assistance-requests.eligibility.store');
 
     /*
      * ── programme rolls and assistance history ────────────────────────────────────────
@@ -130,17 +130,17 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * Recording a document and accepting one are separate permissions: the clerk who took the
      * paper at the counter is not thereby the person who judged it sufficient.
      */
-    Route::get('admin/cases/{case}/requirements', [CaseRequirementController::class, 'index'])->name('v1.admin.cases.requirements.index');
-    Route::post('admin/cases/{case}/requirements', [CaseRequirementController::class, 'attachTemplate'])->name('v1.admin.cases.requirements.attach');
-    Route::post('admin/cases/{case}/requirements/{requirement}/documents', [CaseRequirementController::class, 'recordDocument'])->name('v1.admin.cases.requirements.documents.store');
-    Route::get('admin/cases/{case}/requirements/{requirement}/documents', [CaseRequirementController::class, 'history'])->name('v1.admin.cases.requirements.documents.history');
-    Route::post('admin/cases/{case}/requirements/{requirement}/verification', [CaseRequirementController::class, 'verify'])->name('v1.admin.cases.requirements.verify');
-    Route::post('admin/cases/{case}/requirements/{requirement}/applicability', [CaseRequirementController::class, 'decideApplicability'])->name('v1.admin.cases.requirements.applicability');
-    Route::post('admin/cases/{case}/requirements/{requirement}/documents/{version}/access', [CaseRequirementController::class, 'openDocument'])->name('v1.admin.cases.requirements.documents.access');
+    Route::get('admin/assistance-requests/{case}/requirements', [CaseRequirementController::class, 'index'])->name('v1.admin.assistance-requests.requirements.index');
+    Route::post('admin/assistance-requests/{case}/requirements', [CaseRequirementController::class, 'attachTemplate'])->name('v1.admin.assistance-requests.requirements.attach');
+    Route::post('admin/assistance-requests/{case}/requirements/{requirement}/documents', [CaseRequirementController::class, 'recordDocument'])->name('v1.admin.assistance-requests.requirements.documents.store');
+    Route::get('admin/assistance-requests/{case}/requirements/{requirement}/documents', [CaseRequirementController::class, 'history'])->name('v1.admin.assistance-requests.requirements.documents.history');
+    Route::post('admin/assistance-requests/{case}/requirements/{requirement}/verification', [CaseRequirementController::class, 'verify'])->name('v1.admin.assistance-requests.requirements.verify');
+    Route::post('admin/assistance-requests/{case}/requirements/{requirement}/applicability', [CaseRequirementController::class, 'decideApplicability'])->name('v1.admin.assistance-requests.requirements.applicability');
+    Route::post('admin/assistance-requests/{case}/requirements/{requirement}/documents/{version}/access', [CaseRequirementController::class, 'openDocument'])->name('v1.admin.assistance-requests.requirements.documents.access');
 
-    Route::get('admin/cases/{case}/document-requests', [CaseRequirementController::class, 'listRequests'])->name('v1.admin.cases.document-requests.index');
-    Route::post('admin/cases/{case}/requirements/{requirement}/document-requests', [CaseRequirementController::class, 'requestDocument'])->name('v1.admin.cases.document-requests.store');
-    Route::post('admin/cases/{case}/document-requests/{documentRequest}/withdraw', [CaseRequirementController::class, 'withdrawRequest'])->name('v1.admin.cases.document-requests.withdraw');
+    Route::get('admin/assistance-requests/{case}/document-requests', [CaseRequirementController::class, 'listRequests'])->name('v1.admin.assistance-requests.document-requests.index');
+    Route::post('admin/assistance-requests/{case}/requirements/{requirement}/document-requests', [CaseRequirementController::class, 'requestDocument'])->name('v1.admin.assistance-requests.document-requests.store');
+    Route::post('admin/assistance-requests/{case}/document-requests/{documentRequest}/withdraw', [CaseRequirementController::class, 'withdrawRequest'])->name('v1.admin.assistance-requests.document-requests.withdraw');
 
     /*
      * ── the applicant supplying what their own case needs ─────────────────────────────
@@ -223,9 +223,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * only the body is removed, and removed by the application rather than hidden by a client. A
      * caseworker who cannot see that three restricted entries exist reads the file as complete.
      */
-    Route::get('admin/cases/{case}/notes', [CaseNoteController::class, 'index'])->name('v1.admin.cases.notes.index');
-    Route::post('admin/cases/{case}/notes', [CaseNoteController::class, 'store'])->name('v1.admin.cases.notes.store');
-    Route::post('admin/cases/{case}/notes/{note}/withdrawal', [CaseNoteController::class, 'withdraw'])->name('v1.admin.cases.notes.withdraw');
+    Route::get('admin/assistance-requests/{case}/notes', [CaseNoteController::class, 'index'])->name('v1.admin.assistance-requests.notes.index');
+    Route::post('admin/assistance-requests/{case}/notes', [CaseNoteController::class, 'store'])->name('v1.admin.assistance-requests.notes.store');
+    Route::post('admin/assistance-requests/{case}/notes/{note}/withdrawal', [CaseNoteController::class, 'withdraw'])->name('v1.admin.assistance-requests.notes.withdraw');
 
     /*
      * ── safeguarding ──────────────────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
      */
     Route::get('admin/releases', [ReleaseController::class, 'index'])->name('v1.admin.releases.index');
     Route::get('admin/releases/{release}', [ReleaseController::class, 'show'])->name('v1.admin.releases.show');
-    Route::post('admin/cases/{case}/releases', [ReleaseController::class, 'store'])->name('v1.admin.cases.releases.store');
+    Route::post('admin/assistance-requests/{case}/releases', [ReleaseController::class, 'store'])->name('v1.admin.assistance-requests.releases.store');
 
     // The one operation that moves money. `request.release`, held by `disbursing_officer` and by
     // nobody who can approve a case.

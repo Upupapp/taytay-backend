@@ -223,7 +223,7 @@ final class ApiSecurityTest extends KycTestCase
          * permission split existed.
          */
         Sanctum::actingAs($this->reviewer('disbursing_officer'));
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'intake-review'])->assertForbidden();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'intake-review'])->assertForbidden();
 
         Sanctum::actingAs($this->reviewer('lgu_admin'));
         $this->postJson('/api/v1/admin/releases/00000000-0000-0000-0000-000000000000/confirmation')
@@ -353,7 +353,7 @@ final class ApiSecurityTest extends KycTestCase
          * an endpoint that accepted `status` alongside `priority` would be a second, unaudited
          * path through the state machine.
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/priority", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/priority", [
             'priority' => 'high',
             'status' => 'approved',
             'approved_by' => 'somebody',
@@ -530,7 +530,7 @@ final class ApiSecurityTest extends KycTestCase
     private function endpointsAboveFrontLineStaff(): array
     {
         return [
-            'move a case through the lifecycle' => ['POST', '/api/v1/admin/cases/'.$this->openCase().'/transitions', ['to' => 'intake-review']],
+            'move a case through the lifecycle' => ['POST', '/api/v1/admin/assistance-requests/'.$this->openCase().'/transitions', ['to' => 'intake-review']],
             'export person-level data' => ['POST', '/api/v1/admin/exports', ['report' => 'release-manifest', 'format' => 'csv']],
             'provision staff' => ['POST', '/api/v1/staff', ['email' => 'new.clerk@example.test', 'display_name' => 'New Clerk']],
             'read the audit trail' => ['GET', '/api/v1/admin/audit-entries', []],

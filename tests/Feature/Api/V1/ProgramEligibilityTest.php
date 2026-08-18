@@ -557,7 +557,7 @@ final class ProgramEligibilityTest extends KycTestCase
      */
     private function runCheck(string $case, Program $program): array
     {
-        return $this->postJson("/api/v1/admin/cases/{$case}/eligibility-checks", [
+        return $this->postJson("/api/v1/admin/assistance-requests/{$case}/eligibility-checks", [
             'program_id' => (string) $program->refresh()->uuid,
         ])->assertCreated()->json('data');
     }

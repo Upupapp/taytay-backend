@@ -39,7 +39,7 @@ final class WelfareCaseTest extends KycTestCase
         $case = $this->openCase();
 
         // draft cannot jump to approved. The transition map is the authority.
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'INVALID_STATE_TRANSITION');
     }
@@ -60,7 +60,7 @@ final class WelfareCaseTest extends KycTestCase
          * 409, not 403: if permission were checked first, a caller could watch which error
          * comes back and map who holds what from outside (contract matrix §5).
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'released'])
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'released'])
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'INVALID_STATE_TRANSITION');
     }
@@ -74,7 +74,7 @@ final class WelfareCaseTest extends KycTestCase
         // per-case separation-of-duties rule tested below.
         Sanctum::actingAs($this->staff());
 
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])
             ->assertForbidden();
     }
 
@@ -86,10 +86,10 @@ final class WelfareCaseTest extends KycTestCase
 
         // An unexplained rejection is indistinguishable after the fact from an arbitrary one,
         // and it is the applicant who bears that.
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'rejected'])
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'rejected'])
             ->assertStatus(422);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", [
             'to' => 'rejected',
             'reason' => 'Income exceeds the AICS threshold; referred to livelihood programme.',
         ])->assertOk()->assertJsonPath('data.status', 'rejected');
@@ -104,7 +104,7 @@ final class WelfareCaseTest extends KycTestCase
         $admin = $this->admin();
         Sanctum::actingAs($admin);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", [
             'to' => 'returned',
             'reason' => 'Barangay certificate missing.',
         ])->assertOk();
@@ -126,12 +126,12 @@ final class WelfareCaseTest extends KycTestCase
         $case = $this->caseAt('intake-review');
         Sanctum::actingAs($this->admin());
 
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", [
             'to' => 'rejected',
             'reason' => 'Duplicate request.',
         ])->assertOk();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'assessment'])
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'assessment'])
             ->assertStatus(409);
     }
 
@@ -141,7 +141,7 @@ final class WelfareCaseTest extends KycTestCase
         $case = $this->caseAt('intake-review');
         Sanctum::actingAs($this->admin());
 
-        $available = $this->getJson("/api/v1/admin/cases/{$case}")
+        $available = $this->getJson("/api/v1/admin/assistance-requests/{$case}")
             ->assertOk()->json('data.available_transitions');
 
         // The client renders what it is told rather than deciding for itself (ADR 0007 §4).
@@ -163,18 +163,18 @@ final class WelfareCaseTest extends KycTestCase
         $this->grantRole($both, 'lgu_admin');
         Sanctum::actingAs($both);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'endorsed'])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'endorsed'])->assertOk();
 
         /*
          * Approving one's own recommendation is the single-signature path that every audit of
          * a benefits programme looks for first. Enforced per case AND actor, not per role.
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])
             ->assertForbidden();
 
         // A different approver is fine.
         Sanctum::actingAs($this->admin());
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])->assertOk();
     }
 
     #[Test]
@@ -206,11 +206,11 @@ final class WelfareCaseTest extends KycTestCase
         $first = Account::factory()->staff()->create();
         $second = Account::factory()->staff()->create();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/assignment", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assignment", [
             'assignee_subject_id' => (string) $first->uuid,
         ])->assertOk();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/assignment", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assignment", [
             'assignee_subject_id' => (string) $second->uuid,
             'team' => 'MSWDO field unit',
         ])->assertOk()->assertJsonPath('data.assigned_to', (string) $second->uuid);
@@ -233,8 +233,8 @@ final class WelfareCaseTest extends KycTestCase
         $model = WelfareCase::query()->where('uuid', $case)->firstOrFail();
         $worker = Account::factory()->staff()->create();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/assignment", ['assignee_subject_id' => (string) $worker->uuid])->assertOk();
-        $this->postJson("/api/v1/admin/cases/{$case}/assignment", ['assignee_subject_id' => (string) $worker->uuid])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assignment", ['assignee_subject_id' => (string) $worker->uuid])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assignment", ['assignee_subject_id' => (string) $worker->uuid])->assertOk();
 
         $this->assertSame(1, CaseAssignment::query()->where('welfare_case_id', $model->id)->count());
     }
@@ -245,13 +245,13 @@ final class WelfareCaseTest extends KycTestCase
         Sanctum::actingAs($this->admin());
 
         $case = $this->caseAt('intake-review');
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", [
             'to' => 'cancelled',
             'reason' => 'Applicant withdrew at the counter.',
         ])->assertOk();
 
         // Otherwise "my cases" fills with work that will never happen.
-        $this->postJson("/api/v1/admin/cases/{$case}/assignment", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assignment", [
             'assignee_subject_id' => (string) Account::factory()->staff()->create()->uuid,
         ])->assertStatus(409);
     }
@@ -266,10 +266,10 @@ final class WelfareCaseTest extends KycTestCase
         $case = $this->openCase();
 
         // Moving somebody ahead of everyone else waiting needs a name against it.
-        $this->postJson("/api/v1/admin/cases/{$case}/priority", ['priority' => 'urgent'])
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/priority", ['priority' => 'urgent'])
             ->assertStatus(422);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/priority", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/priority", [
             'priority' => 'urgent',
             'reason' => 'No shelter tonight; two infants in the household.',
         ])->assertOk()->assertJsonPath('data.priority', 'urgent');
@@ -302,7 +302,7 @@ final class WelfareCaseTest extends KycTestCase
          * would make an unapproved ordering consequential, and would do it invisibly
          * (ADR 0016 §4).
          */
-        $payload = $this->getJson("/api/v1/admin/cases/{$case}")->assertOk()->json('data');
+        $payload = $this->getJson("/api/v1/admin/assistance-requests/{$case}")->assertOk()->json('data');
 
         $this->assertSame('normal', $payload['priority']);
         // Nor is a snapshot embedded in the case file, which would make it read as case data
@@ -327,7 +327,7 @@ final class WelfareCaseTest extends KycTestCase
 
         // Endorsement is the social worker's, not the admin's.
         Sanctum::actingAs($this->staff());
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'endorsed'])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'endorsed'])->assertOk();
 
         // `assessment` and `endorsed` both read as `under-review`: which desk holds the file
         // would let the applicant infer the handling social worker.
@@ -347,7 +347,7 @@ final class WelfareCaseTest extends KycTestCase
 
         $internal = 'Claimant account inconsistent with neighbour statements; possible double claim.';
 
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", [
             'to' => 'rejected',
             'reason' => $internal,
             'applicant_message' => 'We were unable to approve this request at this time.',
@@ -369,7 +369,7 @@ final class WelfareCaseTest extends KycTestCase
 
         $case = $this->caseAt('intake-review', $resident);
         Sanctum::actingAs($this->admin());
-        $this->postJson("/api/v1/admin/cases/{$case}/priority", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/priority", [
             'priority' => 'urgent',
             'reason' => 'Internal triage note.',
         ])->assertOk();
@@ -392,7 +392,7 @@ final class WelfareCaseTest extends KycTestCase
         Sanctum::actingAs($this->admin());
 
         // A staff-only event: priority changes carry no citizen message.
-        $this->postJson("/api/v1/admin/cases/{$case}/priority", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/priority", [
             'priority' => 'high',
         ])->assertOk();
 
@@ -454,9 +454,9 @@ final class WelfareCaseTest extends KycTestCase
 
         // Knowing a protection case exists for a named person is most of the disclosure, so
         // this is 404 rather than 403, and it is absent from the list and the count.
-        $this->getJson("/api/v1/admin/cases/{$case}")->assertNotFound();
+        $this->getJson("/api/v1/admin/assistance-requests/{$case}")->assertNotFound();
 
-        $this->getJson('/api/v1/admin/cases')
+        $this->getJson('/api/v1/admin/assistance-requests')
             ->assertOk()
             ->assertJsonCount(0, 'data')
             ->assertJsonPath('meta.pagination.total', 0);
@@ -470,7 +470,7 @@ final class WelfareCaseTest extends KycTestCase
         $resident = $this->existingResident(['first_name' => 'Pro', 'middle_name' => null, 'last_name' => 'Tected']);
 
         // Opening a protection case is itself a protection decision.
-        $this->postJson('/api/v1/admin/cases', [
+        $this->postJson('/api/v1/admin/assistance-requests', [
             'resident_id' => (string) $resident->uuid,
             'type' => 'protective',
         ])->assertForbidden();
@@ -493,17 +493,17 @@ final class WelfareCaseTest extends KycTestCase
         $this->grantRole($clerk, 'lgu_admin', $this->barangayId());
         Sanctum::actingAs($clerk);
 
-        $this->getJson("/api/v1/admin/cases/{$case}")
+        $this->getJson("/api/v1/admin/assistance-requests/{$case}")
             ->assertNotFound()
             ->assertJsonPath('error.code', 'NOT_FOUND');
 
-        $this->getJson('/api/v1/admin/cases')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/admin/assistance-requests')->assertOk()->assertJsonCount(0, 'data');
     }
 
     #[Test]
     public function case_routes_require_authentication(): void
     {
-        $this->getJson('/api/v1/admin/cases')->assertUnauthorized();
+        $this->getJson('/api/v1/admin/assistance-requests')->assertUnauthorized();
         $this->getJson('/api/v1/me/cases')->assertUnauthorized();
     }
 
@@ -513,8 +513,8 @@ final class WelfareCaseTest extends KycTestCase
         [$account] = $this->activeCitizenWithResident();
         Sanctum::actingAs($account);
 
-        $this->getJson('/api/v1/admin/cases')->assertForbidden();
-        $this->postJson('/api/v1/admin/cases', [])->assertForbidden();
+        $this->getJson('/api/v1/admin/assistance-requests')->assertForbidden();
+        $this->postJson('/api/v1/admin/assistance-requests', [])->assertForbidden();
     }
 
     #[Test]
@@ -525,7 +525,7 @@ final class WelfareCaseTest extends KycTestCase
 
         $case = $this->openCase();
 
-        $this->getJson("/api/v1/admin/cases/{$case}")->assertOk();
+        $this->getJson("/api/v1/admin/assistance-requests/{$case}")->assertOk();
 
         $this->assertDatabaseHas('audit_entries', [
             'action' => 'case.viewed',
@@ -561,7 +561,7 @@ final class WelfareCaseTest extends KycTestCase
             'birth_date' => '1988-02-'.str_pad((string) (($n % 28) + 1), 2, '0', STR_PAD_LEFT),
         ]);
 
-        return $this->postJson('/api/v1/admin/cases', [
+        return $this->postJson('/api/v1/admin/assistance-requests', [
             'resident_id' => (string) $resident->uuid,
             'type' => $type,
         ])->assertCreated()->json('data.id');
@@ -592,7 +592,7 @@ final class WelfareCaseTest extends KycTestCase
         ][$status] ?? [];
 
         foreach ($path as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         return $case;

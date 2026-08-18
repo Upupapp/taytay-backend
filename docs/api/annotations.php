@@ -80,7 +80,7 @@ return [
         'description' => 'Accepts `Idempotency-Key`. A retry on a weak connection must not open a second case for one household.',
         'returns' => 'The intake record, and the case it opened.',
     ],
-    'v1.admin.cases.transitions' => [
+    'v1.admin.assistance-requests.transitions' => [
         'summary' => 'Move a case through its lifecycle',
         'description' => 'The permission is resolved from the **target** state, so endorse and approve can be held by different people (ADR 0016 §6). An illegal transition answers `409` before authorization is consulted.',
         'permission' => 'from the target state',

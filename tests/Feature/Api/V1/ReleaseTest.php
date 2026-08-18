@@ -127,7 +127,7 @@ final class ReleaseTest extends KycTestCase
          * Allowing one against a case still under assessment would let money be scheduled before
          * anybody decided it should be.
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/releases", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'cash',
             'amount_centavos' => 500000,
             'release_mode' => 'cash-pickup',
@@ -184,7 +184,7 @@ final class ReleaseTest extends KycTestCase
 
         $case = $this->approvedCase();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/releases", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'cash',
             'release_mode' => 'cash-pickup',
         ])->assertStatus(422);
@@ -194,14 +194,14 @@ final class ReleaseTest extends KycTestCase
          * figure against a family that received rice — which then appears in every total as
          * though cash had been handed over.
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/releases", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'in-kind',
             'in_kind_description' => 'One family food pack',
             'amount_centavos' => 50000,
             'release_mode' => 'in-kind-pickup',
         ])->assertStatus(422);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/releases", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'in-kind',
             'in_kind_description' => 'One family food pack',
             'release_mode' => 'in-kind-pickup',
@@ -284,7 +284,7 @@ final class ReleaseTest extends KycTestCase
         $case = $this->caseFor($this->client());
 
         foreach (['intake-review', 'assessment', 'endorsed'] as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         Sanctum::actingAs($this->disburser());
@@ -296,7 +296,7 @@ final class ReleaseTest extends KycTestCase
          * But a disbursing officer who could also approve would be a single signature between an
          * empty case file and money leaving the building.
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])->assertForbidden();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])->assertForbidden();
         $this->postJson('/api/v1/admin/enrollments', [])->assertForbidden();
     }
 
@@ -555,11 +555,11 @@ final class ReleaseTest extends KycTestCase
         $case = $this->caseFor($this->client());
 
         foreach (['intake-review', 'assessment', 'endorsed'] as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         Sanctum::actingAs($approver);
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])->assertOk();
 
         return $case;
     }
@@ -569,7 +569,7 @@ final class ReleaseTest extends KycTestCase
      */
     private function prepare(string $case, array $overrides = []): string
     {
-        return $this->postJson("/api/v1/admin/cases/{$case}/releases", array_filter($overrides + [
+        return $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", array_filter($overrides + [
             'kind' => 'cash',
             'amount_centavos' => 500000,
             'release_mode' => 'cash-pickup',

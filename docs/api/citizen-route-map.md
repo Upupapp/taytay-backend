@@ -38,7 +38,7 @@ The four where a lost response causes real harm — a duplicate that a person th
 
 * `POST /api/v1/me/assistance/drafts/{draft}/submit` — two case files for one household
 * `POST /api/v1/events/{event}/registration` — two seats held by one person
-* `POST /api/v1/admin/cases/{case}/assessment` (staff)
+* `POST /api/v1/admin/assistance-requests/{case}/assessment` (staff)
 * `POST /api/v1/admin/releases/{release}/confirmation` (staff) — money
 
 Registration is additionally safe **without** a key: the service returns the place already held,

@@ -103,7 +103,7 @@ final class SearchTest extends KycTestCase
     {
         Sanctum::actingAs($this->admin());
 
-        $case = $this->postJson('/api/v1/admin/cases', [
+        $case = $this->postJson('/api/v1/admin/assistance-requests', [
             'resident_id' => (string) $this->client()->uuid,
             'type' => 'protective',
         ])->assertCreated()->json('data.reference');
@@ -129,7 +129,7 @@ final class SearchTest extends KycTestCase
         $resident = $this->client();
         $case = $this->caseFor($resident);
 
-        $this->postJson("/api/v1/admin/cases/{$case}/notes", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/notes", [
             'body' => 'Agreed a safety plan; shelter contacted on her behalf.',
             'sensitivity' => 'protected',
         ])->assertCreated();

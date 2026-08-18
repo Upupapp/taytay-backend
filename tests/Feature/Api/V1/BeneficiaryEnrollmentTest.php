@@ -628,10 +628,10 @@ final class BeneficiaryEnrollmentTest extends KycTestCase
         Sanctum::actingAs($this->staff());
 
         foreach (['intake-review', 'assessment', 'endorsed'] as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         Sanctum::actingAs($this->admin());
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])->assertOk();
     }
 }

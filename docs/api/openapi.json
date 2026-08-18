@@ -149,6 +149,2151 @@
                 }
             }
         },
+        "/admin/assistance-requests": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.index",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests index",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "v1.admin.assistance-requests.store",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests store",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.show",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests show",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/archive": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.archive",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests archive",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/assessment": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.assessment.show",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests assessment show",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "v1.admin.assistance-requests.assessment.open",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests assessment open",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "v1.admin.assistance-requests.assessment.answer",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests assessment answer",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/assessment/complete": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.assessment.complete",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests assessment complete",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/assignment": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.assign",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests assign",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "v1.admin.assistance-requests.unassign",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests unassign",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/document-requests": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.document-requests.index",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests document requests index",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/document-requests/{documentRequest}/withdraw": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.document-requests.withdraw",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests document requests withdraw",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "documentRequest",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/eligibility-checks": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.eligibility.index",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests eligibility index",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "v1.admin.assistance-requests.eligibility.store",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests eligibility store",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/history": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.history",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests history",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/notes": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.notes.index",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests notes index",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "v1.admin.assistance-requests.notes.store",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests notes store",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/notes/{note}/withdrawal": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.notes.withdraw",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests notes withdraw",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "note",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/prior-cases": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.prior-cases",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests prior cases",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/priority": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.priority",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests priority",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/releases": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.releases.store",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests releases store",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/requirements": {
+            "get": {
+                "operationId": "v1.admin.assistance-requests.requirements.index",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests requirements index",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
+            "post": {
+                "operationId": "v1.admin.assistance-requests.requirements.attach",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests requirements attach",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/requirements/{requirement}/applicability": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.requirements.applicability",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests requirements applicability",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "requirement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/requirements/{requirement}/document-requests": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.document-requests.store",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests document requests store",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "requirement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/requirements/{requirement}/documents": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.requirements.documents.store",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests requirements documents store",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "requirement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
+            "get": {
+                "operationId": "v1.admin.assistance-requests.requirements.documents.history",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests requirements documents history",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "requirement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/requirements/{requirement}/documents/{version}/access": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.requirements.documents.access",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests requirements documents access",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "requirement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/requirements/{requirement}/verification": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.requirements.verify",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin assistance requests requirements verify",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "requirement",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/assistance-requests/{case}/transitions": {
+            "post": {
+                "operationId": "v1.admin.assistance-requests.transitions",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Move a case through its lifecycle",
+                "description": "The permission is resolved from the **target** state, so endorse and approve can be held by different people (ADR 0016 §6). An illegal transition answers `409` before authorization is consulted.",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                },
+                "x-permission": "from the target state"
+            }
+        },
         "/admin/audit-entries": {
             "get": {
                 "operationId": "v1.admin.audit.index",
@@ -394,2151 +2539,6 @@
                         "$ref": "#/components/responses/ServerError"
                     }
                 }
-            }
-        },
-        "/admin/cases": {
-            "get": {
-                "operationId": "v1.admin.cases.index",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases index",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            },
-            "post": {
-                "operationId": "v1.admin.cases.store",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases store",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}": {
-            "get": {
-                "operationId": "v1.admin.cases.show",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases show",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/archive": {
-            "post": {
-                "operationId": "v1.admin.cases.archive",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases archive",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/assessment": {
-            "get": {
-                "operationId": "v1.admin.cases.assessment.show",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases assessment show",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            },
-            "post": {
-                "operationId": "v1.admin.cases.assessment.open",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases assessment open",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            },
-            "patch": {
-                "operationId": "v1.admin.cases.assessment.answer",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases assessment answer",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/assessment/complete": {
-            "post": {
-                "operationId": "v1.admin.cases.assessment.complete",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases assessment complete",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/assignment": {
-            "post": {
-                "operationId": "v1.admin.cases.assign",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases assign",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            },
-            "delete": {
-                "operationId": "v1.admin.cases.unassign",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases unassign",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/document-requests": {
-            "get": {
-                "operationId": "v1.admin.cases.document-requests.index",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases document requests index",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/document-requests/{documentRequest}/withdraw": {
-            "post": {
-                "operationId": "v1.admin.cases.document-requests.withdraw",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases document requests withdraw",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "documentRequest",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/eligibility-checks": {
-            "get": {
-                "operationId": "v1.admin.cases.eligibility.index",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases eligibility index",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            },
-            "post": {
-                "operationId": "v1.admin.cases.eligibility.store",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases eligibility store",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/history": {
-            "get": {
-                "operationId": "v1.admin.cases.history",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases history",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/notes": {
-            "get": {
-                "operationId": "v1.admin.cases.notes.index",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases notes index",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            },
-            "post": {
-                "operationId": "v1.admin.cases.notes.store",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases notes store",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/notes/{note}/withdrawal": {
-            "post": {
-                "operationId": "v1.admin.cases.notes.withdraw",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases notes withdraw",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "note",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/prior-cases": {
-            "get": {
-                "operationId": "v1.admin.cases.prior-cases",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases prior cases",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/priority": {
-            "post": {
-                "operationId": "v1.admin.cases.priority",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases priority",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/releases": {
-            "post": {
-                "operationId": "v1.admin.cases.releases.store",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases releases store",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/requirements": {
-            "get": {
-                "operationId": "v1.admin.cases.requirements.index",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases requirements index",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            },
-            "post": {
-                "operationId": "v1.admin.cases.requirements.attach",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases requirements attach",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/requirements/{requirement}/applicability": {
-            "post": {
-                "operationId": "v1.admin.cases.requirements.applicability",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases requirements applicability",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "requirement",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/requirements/{requirement}/document-requests": {
-            "post": {
-                "operationId": "v1.admin.cases.document-requests.store",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases document requests store",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "requirement",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/requirements/{requirement}/documents": {
-            "post": {
-                "operationId": "v1.admin.cases.requirements.documents.store",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases requirements documents store",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "requirement",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            },
-            "get": {
-                "operationId": "v1.admin.cases.requirements.documents.history",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases requirements documents history",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "requirement",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/requirements/{requirement}/documents/{version}/access": {
-            "post": {
-                "operationId": "v1.admin.cases.requirements.documents.access",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases requirements documents access",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "requirement",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "version",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/requirements/{requirement}/verification": {
-            "post": {
-                "operationId": "v1.admin.cases.requirements.verify",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Admin cases requirements verify",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    },
-                    {
-                        "name": "requirement",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                }
-            }
-        },
-        "/admin/cases/{case}/transitions": {
-            "post": {
-                "operationId": "v1.admin.cases.transitions",
-                "tags": [
-                    "staff"
-                ],
-                "summary": "Move a case through its lifecycle",
-                "description": "The permission is resolved from the **target** state, so endorse and approve can be held by different people (ADR 0016 §6). An illegal transition answers `409` before authorization is consulted.",
-                "security": [
-                    {
-                        "bearer": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "name": "case",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "A UUID, unless the endpoint says otherwise."
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Success.",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "data",
-                                        "meta"
-                                    ],
-                                    "properties": {
-                                        "data": {
-                                            "description": "The resource."
-                                        },
-                                        "meta": {
-                                            "$ref": "#/components/schemas/Meta"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/Unauthenticated"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/NotFound"
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationFailed"
-                    },
-                    "409": {
-                        "$ref": "#/components/responses/Conflict"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/RateLimited"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/ServerError"
-                    }
-                },
-                "x-permission": "from the target state"
             }
         },
         "/admin/credentials": {

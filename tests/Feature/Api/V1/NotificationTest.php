@@ -65,7 +65,7 @@ final class NotificationTest extends KycTestCase
 
         // A transition that fails on its last check writes nothing — including no notification,
         // because the dispatch is bound to the commit that never happened.
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])
             ->assertStatus(409);
 
         $this->assertSame(0, Notification::query()
@@ -265,11 +265,11 @@ final class NotificationTest extends KycTestCase
         $case = $this->caseFor($resident);
 
         foreach (['intake-review', 'assessment', 'endorsed'] as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         Sanctum::actingAs($this->admin());
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", [
             'to' => 'rejected',
             'reason' => 'Household income exceeds the threshold; suspect undeclared earnings.',
         ])->assertOk();
@@ -294,7 +294,7 @@ final class NotificationTest extends KycTestCase
         $case = $this->caseFor($resident);
 
         foreach (['intake-review', 'assessment', 'endorsed'] as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         /*
@@ -357,11 +357,11 @@ final class NotificationTest extends KycTestCase
         $case = $this->caseFor($resident);
 
         foreach (['intake-review', 'assessment', 'endorsed'] as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         Sanctum::actingAs($this->admin());
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])->assertOk();
 
         return $case;
     }
@@ -371,7 +371,7 @@ final class NotificationTest extends KycTestCase
         $case = $this->driveCaseToApproved($resident);
 
         Sanctum::actingAs($this->admin());
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'scheduled'])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'scheduled'])->assertOk();
 
         return $case;
     }

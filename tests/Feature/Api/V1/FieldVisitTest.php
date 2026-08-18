@@ -107,7 +107,7 @@ final class FieldVisitTest extends KycTestCase
         $case = $this->caseWithNotes();
 
         Sanctum::actingAs($this->staff());
-        $body = $this->getJson("/api/v1/admin/cases/{$case}/notes")->assertOk()->json('data');
+        $body = $this->getJson("/api/v1/admin/assistance-requests/{$case}/notes")->assertOk()->json('data');
 
         $this->assertCount(2, $body['notes']);
 
@@ -136,7 +136,7 @@ final class FieldVisitTest extends KycTestCase
         $case = $this->caseWithNotes();
 
         Sanctum::actingAs($this->staff());
-        $raw = $this->getJson("/api/v1/admin/cases/{$case}/notes")->assertOk()->content();
+        $raw = $this->getJson("/api/v1/admin/assistance-requests/{$case}/notes")->assertOk()->content();
 
         // Removed by the application, not hidden by a client. A payload that never contained the
         // paragraph cannot leak it, and no future change to a template can undo that.
@@ -150,7 +150,7 @@ final class FieldVisitTest extends KycTestCase
         $case = $this->caseWithNotes();
 
         Sanctum::actingAs($this->admin());
-        $body = $this->getJson("/api/v1/admin/cases/{$case}/notes")->assertOk()->json('data');
+        $body = $this->getJson("/api/v1/admin/assistance-requests/{$case}/notes")->assertOk()->json('data');
 
         $this->assertSame(0, $body['withheld_count']);
         $this->assertStringContainsString('safety plan', (string) $body['notes'][0]['body']);
@@ -167,12 +167,12 @@ final class FieldVisitTest extends KycTestCase
          * something beyond review rather than beyond disclosure — the opposite of what the tier
          * is for.
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/notes", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/notes", [
             'body' => 'Something only I can see.',
             'sensitivity' => 'protected',
         ])->assertForbidden();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/notes", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/notes", [
             'body' => 'Visited the household this morning.',
         ])->assertCreated()->assertJsonPath('data.sensitivity', 'routine');
     }
@@ -184,23 +184,23 @@ final class FieldVisitTest extends KycTestCase
         Sanctum::actingAs($author);
 
         $case = $this->caseFor($this->client());
-        $note = $this->postJson("/api/v1/admin/cases/{$case}/notes", [
+        $note = $this->postJson("/api/v1/admin/assistance-requests/{$case}/notes", [
             'body' => 'Recorded the wrong household by mistake.',
         ])->assertCreated()->json('data.id');
 
         // A record of what one worker believed at a moment is not another worker's to retract.
         Sanctum::actingAs($this->admin());
-        $this->postJson("/api/v1/admin/cases/{$case}/notes/{$note}/withdrawal", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/notes/{$note}/withdrawal", [
             'reason' => 'Wrong household.',
         ])->assertForbidden();
 
         Sanctum::actingAs($author);
-        $this->postJson("/api/v1/admin/cases/{$case}/notes/{$note}/withdrawal", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/notes/{$note}/withdrawal", [
             'reason' => 'Wrong household.',
         ])->assertOk()->assertJsonPath('data.is_withdrawn', true);
 
         // The fact that something was written and retracted is itself part of the record.
-        $remaining = $this->getJson("/api/v1/admin/cases/{$case}/notes")->assertOk()->json('data.notes');
+        $remaining = $this->getJson("/api/v1/admin/assistance-requests/{$case}/notes")->assertOk()->json('data.notes');
         $this->assertCount(1, $remaining);
         $this->assertSame('Wrong household.', $remaining[0]['withdrawn_reason']);
     }
@@ -218,7 +218,7 @@ final class FieldVisitTest extends KycTestCase
 
         foreach ([
             '/api/v1/admin/visits',
-            '/api/v1/admin/cases',
+            '/api/v1/admin/assistance-requests',
             '/api/v1/admin/residents',
         ] as $list) {
             $body = $this->getJson($list)->assertOk()->content();
@@ -261,7 +261,7 @@ final class FieldVisitTest extends KycTestCase
         Sanctum::actingAs($this->staff());
         $case = $this->caseFor($resident);
 
-        $body = $this->getJson("/api/v1/admin/cases/{$case}/notes")->assertOk()->json('data');
+        $body = $this->getJson("/api/v1/admin/assistance-requests/{$case}/notes")->assertOk()->json('data');
 
         // Existence on a DETAIL view, so somebody opening the file does not read it as complete.
         $this->assertTrue($body['has_safeguarding_concern']);
@@ -610,11 +610,11 @@ final class FieldVisitTest extends KycTestCase
 
         $case = $this->caseFor($this->client());
 
-        $this->postJson("/api/v1/admin/cases/{$case}/notes", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/notes", [
             'body' => 'Visited the household this morning; roof repair discussed.',
         ])->assertCreated();
 
-        $this->postJson("/api/v1/admin/cases/{$case}/notes", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/notes", [
             'body' => 'Agreed a safety plan; shelter contacted on her behalf.',
             'sensitivity' => 'protected',
         ])->assertCreated();

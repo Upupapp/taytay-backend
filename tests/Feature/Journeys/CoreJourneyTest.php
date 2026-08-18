@@ -125,18 +125,18 @@ final class CoreJourneyTest extends KycTestCase
         Sanctum::actingAs($staff);
 
         foreach (['intake-review', 'assessment', 'endorsed'] as $target) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $target])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $target])->assertOk();
         }
 
         // The approving authority. A different person, by design.
         Sanctum::actingAs($admin);
 
         foreach (['approved', 'scheduled'] as $target) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $target])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $target])->assertOk();
         }
 
         // ── the money ──
-        $releaseId = (string) $this->postJson("/api/v1/admin/cases/{$case}/releases", [
+        $releaseId = (string) $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'cash',
             // INTEGER CENTAVOS: five thousand pesos. Never a decimal — a peso figure that has been
             // through a float is a peso figure nobody can reconcile (ADR 0023 §1).
@@ -206,7 +206,7 @@ final class CoreJourneyTest extends KycTestCase
 
         // The denial half of the journey. An applicant who could approve their own request is the
         // whole system's failure in one call.
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])->assertForbidden();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])->assertForbidden();
 
         $this->assertNotSame('approved', (string) DB::table('welfare_cases')->where('uuid', $case)->value('status'));
     }

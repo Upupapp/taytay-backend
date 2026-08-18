@@ -134,13 +134,13 @@ final class ObservabilityTest extends KycTestCase
          */
         $scrubbed = (new RedactSensitiveData)->scrub([
             'action' => 'case.approved',
-            'route' => 'admin/cases/{case}/transitions',
+            'route' => 'admin/assistance-requests/{case}/transitions',
             'duration_ms' => 42,
             'status' => 200,
         ]);
 
         $this->assertSame('case.approved', $scrubbed['action']);
-        $this->assertSame('admin/cases/{case}/transitions', $scrubbed['route']);
+        $this->assertSame('admin/assistance-requests/{case}/transitions', $scrubbed['route']);
         $this->assertSame(42, $scrubbed['duration_ms']);
     }
 

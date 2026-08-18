@@ -191,7 +191,7 @@ final class ReportingTest extends KycTestCase
 
         // An approved case with a prepared but unreleased payment.
         $case = $this->approvedCase();
-        $this->postJson("/api/v1/admin/cases/{$case}/releases", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'cash',
             'amount_centavos' => 500000,
             'release_mode' => 'cash-pickup',
@@ -491,11 +491,11 @@ final class ReportingTest extends KycTestCase
         $case = $this->caseFor($this->client());
 
         foreach (['intake-review', 'assessment', 'endorsed'] as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         Sanctum::actingAs($this->admin());
-        $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => 'approved'])->assertOk();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])->assertOk();
 
         return $case;
     }

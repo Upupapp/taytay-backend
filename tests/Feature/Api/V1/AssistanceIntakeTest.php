@@ -312,10 +312,10 @@ final class AssistanceIntakeTest extends KycTestCase
         $case = $this->caseInAssessment();
 
         Sanctum::actingAs($this->staff());
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
         $this->answerAll($case);
 
-        $payload = $this->postJson("/api/v1/admin/cases/{$case}/assessment/complete", [
+        $payload = $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment/complete", [
             'recommendation' => 'recommend-approve',
             'findings' => 'Household verified; no other assistance in the last year.',
         ])->assertOk()->json('data');
@@ -339,10 +339,10 @@ final class AssistanceIntakeTest extends KycTestCase
         $case = $this->caseInAssessment();
 
         Sanctum::actingAs($this->staff());
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
         $this->answerAll($case);
 
-        $payload = $this->postJson("/api/v1/admin/cases/{$case}/assessment/complete", [
+        $payload = $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment/complete", [
             'recommendation' => 'recommend-deny',
             'reason' => 'Income above threshold and no dependants recorded.',
         ])->assertOk()->json('data');
@@ -358,12 +358,12 @@ final class AssistanceIntakeTest extends KycTestCase
         $case = $this->caseInAssessment();
 
         Sanctum::actingAs($this->staff());
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
         $this->answerAll($case);
 
         // The applicant will be told a decision followed from this. "The assessor recommended
         // refusal" with no basis is not something anybody can appeal or a supervisor review.
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment/complete", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment/complete", [
             'recommendation' => 'recommend-deny',
         ])->assertStatus(422);
     }
@@ -374,14 +374,14 @@ final class AssistanceIntakeTest extends KycTestCase
         $case = $this->caseInAssessment();
 
         Sanctum::actingAs($this->staff());
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
 
         /*
          * Months later, an assessment missing its required answers reads exactly like one
          * where the assessor concluded "none" or "no risk". The difference matters when
          * somebody is asking why a case was refused.
          */
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment/complete", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment/complete", [
             'recommendation' => 'recommend-approve',
         ])->assertStatus(422);
     }
@@ -392,7 +392,7 @@ final class AssistanceIntakeTest extends KycTestCase
         $case = $this->caseInAssessment();
 
         Sanctum::actingAs($this->staff());
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
 
         // A later edit to the form must not appear to have altered what this assessment asked.
         config(['assessment.templates.aics-general.version' => '2099.01.1']);
@@ -409,15 +409,15 @@ final class AssistanceIntakeTest extends KycTestCase
         $case = $this->caseInAssessment();
 
         Sanctum::actingAs($this->staff());
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
         $this->answerAll($case);
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment/complete", [
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment/complete", [
             'recommendation' => 'recommend-approve',
         ])->assertOk();
 
         // Completed findings are evidence. Editing them would change what an approver was
         // shown when they decided.
-        $this->patchJson("/api/v1/admin/cases/{$case}/assessment", [
+        $this->patchJson("/api/v1/admin/assistance-requests/{$case}/assessment", [
             'answers' => ['presenting_problem' => 'rewritten after the fact'],
         ])->assertNotFound();
     }
@@ -428,9 +428,9 @@ final class AssistanceIntakeTest extends KycTestCase
         $case = $this->caseInAssessment();
 
         Sanctum::actingAs($this->staff());
-        $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])->assertCreated();
 
-        $this->patchJson("/api/v1/admin/cases/{$case}/assessment", [
+        $this->patchJson("/api/v1/admin/assistance-requests/{$case}/assessment", [
             'answers' => ['immediate_risk' => 'catastrophic'],
         ])->assertStatus(422);
     }
@@ -441,9 +441,9 @@ final class AssistanceIntakeTest extends KycTestCase
         $case = $this->caseInAssessment();
 
         Sanctum::actingAs($this->staff());
-        $a = $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])
+        $a = $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])
             ->assertCreated()->json('data.id');
-        $b = $this->postJson("/api/v1/admin/cases/{$case}/assessment", ['template_code' => 'aics-general'])
+        $b = $this->postJson("/api/v1/admin/assistance-requests/{$case}/assessment", ['template_code' => 'aics-general'])
             ->assertCreated()->json('data.id');
 
         // Two open assessments are two competing sets of findings, and nothing says which the
@@ -473,7 +473,7 @@ final class AssistanceIntakeTest extends KycTestCase
             'narrative' => 'Another private account.',
         ])->assertCreated()->json('data.case_id');
 
-        $body = $this->getJson("/api/v1/admin/cases/{$second}/prior-cases")->assertOk()->getContent();
+        $body = $this->getJson("/api/v1/admin/assistance-requests/{$second}/prior-cases")->assertOk()->getContent();
 
         // An assessor needs to know this person has come twice. Reading what they said each
         // time is a separate, separately audited decision.
@@ -569,7 +569,7 @@ final class AssistanceIntakeTest extends KycTestCase
         ])->assertCreated()->json('data.case_id');
 
         foreach (['intake-review', 'assessment'] as $step) {
-            $this->postJson("/api/v1/admin/cases/{$case}/transitions", ['to' => $step])->assertOk();
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])->assertOk();
         }
 
         return $case;
@@ -577,7 +577,7 @@ final class AssistanceIntakeTest extends KycTestCase
 
     private function answerAll(string $case): void
     {
-        $this->patchJson("/api/v1/admin/cases/{$case}/assessment", [
+        $this->patchJson("/api/v1/admin/assistance-requests/{$case}/assessment", [
             'answers' => [
                 'household_income_bracket' => 'below-5000',
                 'income_earners' => '1',
