@@ -37,6 +37,8 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-26](#g-26) | No published contract for pending duplicate pairs, so no alert for them | medium | backend |
 | [G-27](#g-27) | The console defines 14 reports; 7 have a server-side implementation | medium | backend |
 | [G-28](#g-28) | ~~A requirement could be created once and never amended~~ → **fixed in TAB 07** | — | — |
+| [G-29](#g-29) | The intake advisory's windows are convention, not DSWD or MSWDO policy | medium | LGU (MSWDO) |
+| [G-30](#g-30) | A post records when it was archived and not why | low | backend |
 | [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
@@ -828,3 +830,35 @@ Both found while building the read side, which is the argument for building read
 now **appends** a version rather than updating one, because a request approved in March under the
 old wording has to stay explicable in December — the same rule the console records as `DL-77` for
 document versions.
+
+---
+
+### G-29
+**The intake advisory's two windows are conventions nobody has approved.** `medium`
+
+90 days for a repeat grant under the same programme, 12 months for any assistance. They match the
+console's constants exactly — which is the point of moving the computation rather than reinventing
+it — but neither came from a DSWD issuance or an MSWDO policy.
+
+They are named constants on `IntakeAdvisory`, and the response says
+`"basis": "convention-pending-confirmation"` so a screen can say so too rather than presenting a
+convention as policy the office adopted.
+
+Worth confirming precisely **because the advisory does not block**. A window that is too short adds
+a caution to a legitimate repeat request and asks an encoder for a sentence; a window that is too
+long stays silent on a pattern somebody should have seen. Neither refuses anybody, so this is a
+question about usefulness rather than about entitlement — which is why it can wait for a working
+session rather than blocking one.
+
+---
+
+### G-30
+**A post records when it was archived and not why.** `low`
+
+`newsfeed_posts` has `archived_at` and no reason column, so `GET admin/newsfeed/{post}/history`
+returns the removal with `detail: null`. The one question worth asking about a post that was taken
+down is the one its history cannot answer.
+
+Closing it is a column and a required field on the archive transition. Left open here because
+adding a required field to an existing write is a contract change, and TAB 07 is a read-side TAB.
+The event side already does this correctly — `cancellation_reason` is recorded and returned.

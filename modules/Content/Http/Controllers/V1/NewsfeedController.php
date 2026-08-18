@@ -112,6 +112,80 @@ final class NewsfeedController
     }
 
     /**
+     * What happened to a post, and when (TAB 07).
+     *
+     * ── WHY NOT JUST POINT THE CONSOLE AT THE AUDIT TRAIL ────────────────────────────
+     *
+     * Every act here already writes to it, and `GET admin/audit-entries/for-entity` already
+     * exists — so the obvious answer was to map this row to that endpoint and build nothing.
+     *
+     * It does not work, for a reason worth recording: `audit.view` is deliberately withheld from
+     * everybody except the Data Protection Officer, because the auditee must not be the auditor.
+     * A newsfeed manager reading the lifecycle of **their own post** would have needed the
+     * permission that lets them read the trail of every approval in the office.
+     *
+     * So this returns the post's **own** lifecycle from its own dated columns, under the module's
+     * own permission. It is not a window into the trail, and it cannot become one.
+     *
+     * ── AND WHY A POST NEEDS A HISTORY AT ALL ────────────────────────────────────────
+     *
+     * A post goes outward and nothing brings it back. Archiving removes it from the feed going
+     * forward and reaches nobody who already read it. The history is the only evidence of what
+     * residents were actually shown and for how long — without it, *"we took it down"* is a claim
+     * with nothing behind it.
+     */
+    public function history(Request $request, ActorContext $actor, string $post): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::NewsfeedManage);
+
+        $model = $this->postOrFail($post);
+
+        $events = [];
+
+        $events[] = [
+            'kind' => 'created',
+            'occurred_at' => $model->created_at?->toIso8601ZuluString(),
+            'detail' => null,
+        ];
+
+        if ($model->publish_at !== null) {
+            $events[] = [
+                'kind' => 'scheduled',
+                'occurred_at' => $model->publish_at->toIso8601ZuluString(),
+                'detail' => null,
+            ];
+        }
+
+        if ($model->published_at !== null) {
+            $events[] = [
+                'kind' => 'published',
+                'occurred_at' => $model->published_at->toIso8601ZuluString(),
+                'detail' => null,
+            ];
+        }
+
+        if ($model->archived_at !== null) {
+            $events[] = [
+                'kind' => 'archived',
+                'occurred_at' => $model->archived_at->toIso8601ZuluString(),
+                /*
+                 * NULL, AND THAT IS A GAP RATHER THAN A DESIGN. `newsfeed_posts` records when a
+                 * post was archived and not why — so the one question worth asking about a removed
+                 * post is the one this history cannot answer. Recorded as G-30; closing it is a
+                 * column and a required field on the archive transition, not a projection change.
+                 */
+                'detail' => null,
+            ];
+        }
+
+        $events = array_values(array_filter($events, static fn (array $e): bool => $e['occurred_at'] !== null));
+
+        usort($events, static fn (array $a, array $b): int => $b['occurred_at'] <=> $a['occurred_at']);
+
+        return ApiResponse::page(Page::fromArray($events, PaginationParams::fromRequest($request)));
+    }
+
+    /**
      * Schedule, publish now, return to draft, archive.
      */
     public function transition(Request $request, ActorContext $actor, string $post): JsonResponse

@@ -63,6 +63,15 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('admin/assistance-requests', [CaseController::class, 'store'])->name('v1.admin.assistance-requests.store');
     Route::get('admin/assistance-requests/{case}', [CaseController::class, 'show'])->name('v1.admin.assistance-requests.show');
     Route::get('admin/assistance-requests/{case}/history', [CaseController::class, 'history'])->name('v1.admin.assistance-requests.history');
+    /*
+     * The intake advisory (TAB 07). Evidence for an encoder, computed here rather than in a
+     * browser — a rule that shapes how an applicant is treated, living where the client can
+     * see it, change it or fail to run it, is not a rule the office can say it applied.
+     *
+     * It advises and never decides: no score, no eligible, no recommendation, and neither
+     * tone blocks.
+     */
+    Route::get('admin/assistance-requests/{case}/advisory', [CaseController::class, 'advisory'])->name('v1.admin.assistance-requests.advisory');
 
     /*
      * THE ONE LIFECYCLE ENDPOINT. Nine verbs would be nine places the transition map could be

@@ -32,6 +32,13 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::patch('admin/newsfeed/{post}', [NewsfeedController::class, 'update'])->name('v1.admin.newsfeed.update');
 
     // Schedule / publish / draft / archive. The permission comes from the TARGET state.
+    /*
+     * What happened to a post, and when (TAB 07). Read from the post's own dated columns under
+     * `newsfeed.manage`, NOT from the audit trail: `audit.view` is withheld from everybody but
+     * the DPO, so a manager reading their own post's lifecycle would otherwise have needed the
+     * permission that opens every approval in the office.
+     */
+    Route::get('admin/newsfeed/{post}/history', [NewsfeedController::class, 'history'])->name('v1.admin.newsfeed.history');
     Route::post('admin/newsfeed/{post}/status', [NewsfeedController::class, 'transition'])->name('v1.admin.newsfeed.status');
     Route::post('admin/newsfeed/{post}/pin', [NewsfeedController::class, 'setPinned'])->name('v1.admin.newsfeed.pin');
     Route::post('admin/newsfeed/{post}/media', [NewsfeedController::class, 'attachMedia'])->name('v1.admin.newsfeed.media');

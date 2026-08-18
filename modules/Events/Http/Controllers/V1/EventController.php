@@ -155,6 +155,42 @@ final class EventController
     }
 
     /**
+     * What happened to an event, and when (TAB 07).
+     *
+     * Built from the event's own dated columns, under `event.manage`, for the same reason the
+     * newsfeed history is: every act here already writes to the audit trail, and `audit.view` is
+     * deliberately withheld from everybody but the Data Protection Officer. An events officer
+     * reading the lifecycle of their own event would otherwise have needed the permission that
+     * opens the trail of every approval in the office.
+     *
+     * **Cancellation carries its reason and cancellation is one-way.** An event that is back on is
+     * a new event naming the old one, so this history is the whole story of this event and does
+     * not need to describe a revival that cannot happen.
+     */
+    public function history(Request $request, ActorContext $actor, string $event): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::EventManage);
+
+        $model = $this->eventOrFail($event);
+
+        $events = array_values(array_filter([
+            ['kind' => 'created', 'occurred_at' => $model->created_at?->toIso8601ZuluString(), 'detail' => null],
+            ['kind' => 'published', 'occurred_at' => $model->published_at?->toIso8601ZuluString(), 'detail' => null],
+            [
+                'kind' => 'cancelled',
+                'occurred_at' => $model->cancelled_at?->toIso8601ZuluString(),
+                // Recorded at the point of cancellation and shown here. People arranged their day
+                // around this; "cancelled" with no reason is the version that wastes the trip.
+                'detail' => $model->cancellation_reason,
+            ],
+        ], static fn (array $e): bool => $e['occurred_at'] !== null));
+
+        usort($events, static fn (array $a, array $b): int => $b['occurred_at'] <=> $a['occurred_at']);
+
+        return ApiResponse::page(Page::fromArray($events, PaginationParams::fromRequest($request)));
+    }
+
+    /**
      * The registration summary the console shows on an event.
      */
     public function registrationSummary(Request $request, ActorContext $actor, string $event): JsonResponse

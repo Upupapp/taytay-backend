@@ -48,6 +48,15 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('admin/events/{event}/duplicate', [EventController::class, 'duplicate'])
         ->name('v1.admin.events.duplicate');
 
+    // The event's own lifecycle (TAB 07), for the same reason as the newsfeed history.
+    Route::get('admin/events/{event}/history', [EventController::class, 'history'])->name('v1.admin.events.history');
+
+    /*
+     * `EventRepository.metrics` maps HERE rather than to a new endpoint (TAB 07 triage). This
+     * already returns counts, capacity, waitlist depth and attendance, and nothing that could
+     * answer *which* residents — which is exactly what the metrics row asked for. A second
+     * endpoint would have been a second answer to one question.
+     */
     Route::get('admin/events/{event}/registration-summary', [EventController::class, 'registrationSummary'])
         ->name('v1.admin.events.registration-summary');
 });

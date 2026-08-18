@@ -17,6 +17,7 @@ use Modules\Shared\Http\ApiResponse;
 use Modules\Welfare\Application\CaseAssignmentService;
 use Modules\Welfare\Application\CaseService;
 use Modules\Welfare\Application\CaseTimeline;
+use Modules\Welfare\Application\IntakeAdvisory;
 use Modules\Welfare\Application\WelfareAudit;
 use Modules\Welfare\Domain\CasePriority;
 use Modules\Welfare\Domain\CaseStatus;
@@ -42,6 +43,7 @@ use Modules\Welfare\Infrastructure\Eloquent\WelfareCase;
 final class CaseController
 {
     public function __construct(
+        private readonly IntakeAdvisory $advisories,
         private readonly CaseService $cases,
         private readonly CaseAssignmentService $assignments,
         private readonly CaseTimeline $timeline,
@@ -246,6 +248,33 @@ final class CaseController
         $model = $this->caseOrFail($actor, $case);
 
         return ApiResponse::item($this->detailProjection($this->cases->archive($model, $actor)));
+    }
+
+    /**
+     * The intake advisory for a request (TAB 07).
+     *
+     * **Evidence, never a decision.** No score, no total, no `eligible`, no recommendation — see
+     * {@see IntakeAdvisory} for why the shape has nowhere to put one. Two tones, and neither
+     * blocks: a caution asks the encoder for a sentence before filing and the sentence is kept.
+     *
+     * Computed here rather than in the console, which is the change TAB 07 makes. A rule that
+     * shapes how an applicant is treated, living where the client can see it, change it or fail to
+     * run it, is not a rule the office can say it applied.
+     *
+     * `request.view` — the same permission as reading the request it is about. It discloses
+     * nothing the case file does not, and gating it higher would mean the encoder who has to act
+     * on it cannot see it.
+     */
+    public function advisory(Request $request, ActorContext $actor, string $case): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::RequestView);
+
+        $model = $this->caseOrFail($actor, $case);
+
+        return ApiResponse::item($this->advisories->forResident(
+            (string) $model->resident_id,
+            $model->program_id === null ? null : (string) $model->program_id,
+        ));
     }
 
     /**
