@@ -361,6 +361,9 @@ final class CitizenLeakScanTest extends KycTestCase
         return [
             '/api/v1/health',
             '/api/v1/app/bootstrap',
+            // Read before a resident has an account, so it is scanned like every
+            // other citizen read rather than trusted because it looks harmless.
+            '/api/v1/barangays',
             '/api/v1/me',
             '/api/v1/me/profile',
             '/api/v1/me/household',

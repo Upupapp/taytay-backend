@@ -7,9 +7,9 @@ namespace Modules\ResidentProfile\Http\Controllers\V1;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Modules\Shared\Application\Pagination\Page;
+use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Http\ApiResponse;
-use Modules\Shared\Http\Page;
-use Modules\Shared\Http\PaginationParams;
 
 /**
  * The municipality's barangays, for a resident filling in an address.

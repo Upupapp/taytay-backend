@@ -7,6 +7,7 @@ namespace Modules\ResidentProfile\Http\Controllers\V1;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\ResidentProfile\Application\KycCaseService;
@@ -56,11 +57,31 @@ final class KycController
             'suffix' => ['nullable', 'string', 'max:16'],
             'birth_date' => ['required', 'date', 'before:today'],
             'sex' => ['required', 'string', 'in:female,male'],
-            'barangay_id' => ['required', 'integer', 'exists:barangays,id'],
+            /*
+             * EITHER, AND A CLIENT SHOULD SEND THE CODE.
+             *
+             * `barangay_id` is the auto-increment primary key, which Article 4
+             * says must never be exposed to a client — and until `GET barangays`
+             * existed, no route published any barangay identifier at all, so an
+             * applicant was required to supply one they could not obtain. That
+             * made this endpoint, and with it the whole Verified tier,
+             * unreachable from any client.
+             *
+             * The directory publishes the UUID and the stable `code` slug.
+             * `barangay_code` is accepted here so a resident can send back what
+             * they were given, and the integer stays accepted because the admin
+             * console sends it today. Expand now, contract when that console
+             * moves — Article 6.
+             */
+            'barangay_id' => ['required_without:barangay_code', 'integer', 'exists:barangays,id'],
+            'barangay_code' => ['required_without:barangay_id', 'string', 'max:64', 'exists:barangays,code'],
             'street_address' => ['required', 'string', 'max:191'],
         ]);
 
-        $case = $this->cases->register((string) $actor->subjectId, $validated);
+        $case = $this->cases->register(
+            (string) $actor->subjectId,
+            $this->withResolvedBarangay($validated),
+        );
 
         return ApiResponse::item($this->applicantProjection($case), 201);
     }
@@ -317,6 +338,35 @@ final class KycController
                 ],
             ];
         })->all();
+    }
+
+    /**
+     * Turns a client-facing barangay `code` into the internal key, and drops it.
+     *
+     * The rest of the module stores `barangay_id`, so the translation happens
+     * here at the adapter rather than being pushed inward — a controller may
+     * shape a command, and this is that. `barangay_code` never reaches the
+     * application service, so there is no second identifier for the domain to
+     * disagree with itself about.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function withResolvedBarangay(array $validated): array
+    {
+        $code = $validated['barangay_code'] ?? null;
+        unset($validated['barangay_code']);
+
+        if ($code === null) {
+            return $validated;
+        }
+
+        // Validated as `exists:barangays,code` above, so this cannot miss.
+        $validated['barangay_id'] = (int) DB::table('barangays')
+            ->where('code', $code)
+            ->value('id');
+
+        return $validated;
     }
 
     private function ownCaseOrFail(ActorContext $actor): KycCase

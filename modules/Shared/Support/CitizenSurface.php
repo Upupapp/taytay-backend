@@ -38,6 +38,16 @@ final class CitizenSurface
             // ── platform ──
             'v1.health',
             'v1.app.bootstrap',
+            /*
+             * The barangay directory. A resident reaches it before they have an
+             * account, because `me/kyc` asks for a barangay and the first thing
+             * onboarding asks for is an address.
+             *
+             * Declared here so the leak scan covers it: the projection is name,
+             * code, UUID and PSGC code, and nothing about anybody — and the way
+             * it stays that way is being scanned rather than being remembered.
+             */
+            'v1.barangays.index',
 
             // ── account, session, device ──
             'v1.auth.otp.request',
