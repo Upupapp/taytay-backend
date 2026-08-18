@@ -168,7 +168,7 @@ mobile client already does this correctly.
 ### G-09
 **The backend permission catalog holds 2 of about 31 permissions.** `high`
 
-`Modules\AccessControl\Contracts\Permission` has `services.view_unpublished` and
+`Modules\AccessControl\Contracts\Permission` has `services.view-unpublished` and
 `services.manage`. The admin console references 31 across 7 roles.
 
 Deliberately **not** added in TAB 02: permissions without the endpoints they guard, and
@@ -553,9 +553,9 @@ Opened by TAB 20: **G-33** — **the FCM transport is not wired.** The push adap
 Opened by TAB 19: **G-32** — `tasks.team` is a label rather than a foreign key. Taytay's MSWDO has no formal team structure in this system, and inventing a table to hold a string would be one nobody maintains. If team structure is formalised, that is a new table and a migration from the label. Owner: LGU, then this backend.
 
 Opened by TAB 17: **G-30** — **there is no protection-officer role.** Six permissions now sit with
-`lgu_admin` that should not: `vulnerability.view.protected`, `document.view.sensitive`,
+`lgu_admin` that should not: `vulnerability.view.protected`, `document.view-sensitive`,
 `case-note.view-protected`, `safeguarding.view`, `safeguarding.manage`, and
-`referral.disclose.protected`. Each was placed there with the same note, and the accumulation is
+`referral.disclose-protected`. Each was placed there with the same note, and the accumulation is
 now the finding: reading a survivor's safety plan is not an administrative convenience. When the
 role exists, all six move and the MSWDO head keeps none of them. Owner: LGU (to name the role),
 then this backend.

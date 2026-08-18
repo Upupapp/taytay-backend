@@ -164,7 +164,7 @@ final class ResidentDirectory
      *    outright — a criterion reading `vawc-survivor` would leak protection status to everyone
      *    who can see a guidance result (ADR 0015 §4);
      *  * disclosure values are read by a **named human** who has stated a reason and holds
-     *    `referral.disclose.protected`, and sector membership is frequently the entire point of
+     *    `referral.disclose-protected`, and sector membership is frequently the entire point of
      *    the referral. Withholding it from a referral to the Women and Children Protection Desk
      *    would produce a sheet that cannot be acted on.
      *

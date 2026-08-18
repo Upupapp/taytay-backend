@@ -75,7 +75,7 @@ final class ReferralDisclosure
     /**
      * Adds one field to what will be released.
      *
-     * @param  bool  $mayDiscloseProtected  Whether the caller holds `referral.disclose.protected`.
+     * @param  bool  $mayDiscloseProtected  Whether the caller holds `referral.disclose-protected`.
      *                                      Passed in rather than resolved here so authorization
      *                                      stays in one place, at the controller.
      */

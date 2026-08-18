@@ -397,3 +397,64 @@ open risk to buy convenience. Sequenced after TAB 13, with the leading design re
   session at cutover. That is correct, and it is a support event — enrolment must be run **before**
   go-live, not discovered on the first morning.
 - **TAB 13/15:** the idle timeout.
+
+---
+
+## TAB 03 — Authorization convergence (backend half)
+
+| | |
+| --- | --- |
+| Date | 18 August 2026 |
+| HEAD at start | `cc2ae05` |
+
+### The renames
+
+Six keys reached the canonical form — one kebab-case `resource.action`, two segments. None changes
+what is granted.
+
+`resident.link_review` → `resident.link-review` · `vulnerability.view_protected` →
+`vulnerability.view-protected` · `services.view_unpublished` → `services.view-unpublished` ·
+`document.view.sensitive` → `document.view-sensitive` · `referral.disclose.protected` →
+`referral.disclose-protected` · `report.export.person-level` → `report.export-person-level`
+
+**No data migration was needed, and that was checked rather than assumed.** Role→permission
+mapping lives in `Role::permissions()` — code, not rows; `role_assignments` stores role names
+only. The one place permission strings are persisted is
+`report_exports.permission_context.permissions`, and those are **deliberately not rewritten**: the
+column is a snapshot taken at export time, whose own comment says *"snapshotted, not looked up
+later"*, because a person-level export produced last March must stay explicable in terms of what
+was true then. Rewriting an audit snapshot to match a later vocabulary would be falsifying it.
+
+Accepted ADRs were **not** edited. They record decisions as they were made; the old spellings stand
+in them, and this entry plus the reconciliation table are the mapping.
+
+### `PermissionVocabularyTest` — the gate
+
+Three assertions: every key is kebab `resource.action`; no two keys differ only by punctuation
+(`document.view_sensitive` beside `document.view-sensitive` reads as a second grant and enforces a
+different one); and every role grants only keys that exist — a rename that missed a role definition
+would leave that role silently short, and the symptom would look like a broken screen.
+
+Mutation-tested: restoring `resident.link_review` turns the first red.
+
+### Data scope — reconciled, and it already agreed
+
+`role_assignments.scope_type` is a check-constrained enum of `all-barangays`, `own-barangay`,
+`assigned-cases`. The console's `DataScope` is the same three strings. TAB 03 step 9 is therefore
+**vocabulary-complete**; what remains is behavioural — proving `ScopeResolver` and the console's
+scope agree in effect, which needs a running API.
+
+### Not done here
+
+The backend does **not** yet gain the console's finer keys (the newsfeed, event and disbursement
+splits, and `document.view-full-number`). A permission with no enforcement point behind it is
+decoration — which is exactly what L-05 was — so those land with the endpoints that enforce them,
+in TAB 07. Recorded in the reconciliation table rather than added as dead vocabulary.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `php -d memory_limit=1G vendor/bin/phpunit` | **912 passed, 6761 assertions** |
+| `vendor/bin/pint --test` | passed |
+| `lguids:openapi --check` / `lguids:types --check` | regenerated and current |

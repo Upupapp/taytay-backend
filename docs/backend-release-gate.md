@@ -113,7 +113,7 @@ Ordered by what they would cost if they went wrong.
 | --- | --- | --- |
 | **Single API node** (if deployed that way) | Total outage on one host failure. The master command permits it for an initial deployment **if documented as a conscious trade-off** — this is that documentation | LGU budget |
 | **A queue with no worker** | Silent. Nothing errors; the only symptom is a resident who never got a message. Workers must consume **all six** queue names | Deployment |
-| **Six protection permissions parked on `lgu_admin`** | `vulnerability.view_protected`, `document.view-sensitive`, `case-note.view-protected`, `safeguarding.view/manage`, `referral.disclose-protected` sit with the MSWDO head because no protection-officer role exists. Reading a survivor's safety plan is not an administrative convenience (**G-30**) | LGU |
+| **Six protection permissions parked on `lgu_admin`** | `vulnerability.view-protected`, `document.view-sensitive`, `case-note.view-protected`, `safeguarding.view/manage`, `referral.disclose-protected` sit with the MSWDO head because no protection-officer role exists. Reading a survivor's safety plan is not an administrative convenience (**G-30**) | LGU |
 | **No alerting** | The metrics endpoint exposes queue depth, failed jobs and auth anomalies. Nothing polls them (**G-51**) | Deployment |
 | **`document.share` held by nobody** | The outward-sharing path is built and refused. The first holder should be a decision on the record (**G-32**) | LGU |
 | **Image derivation is inline** | A post with ten images is slow to publish (**G-45**) | Backend, when volume is known |

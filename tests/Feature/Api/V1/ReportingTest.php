@@ -401,7 +401,7 @@ final class ReportingTest extends KycTestCase
          * somebody who has since moved offices must still be explicable, and their current
          * permissions are not the answer.
          */
-        $this->assertContains('report.export.person-level', $row->permission_context['permissions']);
+        $this->assertContains('report.export-person-level', $row->permission_context['permissions']);
         $this->assertArrayHasKey('scope', $row->permission_context);
         $this->assertSame('some-batch', $row->filters['batch_id']);
     }

@@ -67,7 +67,7 @@ enum Permission: string
      * open in the citizen app. Getting it wrong is a data breach performed by the system
      * itself, so it is not folded into general resident management.
      */
-    case ResidentLinkReview = 'resident.link_review';
+    case ResidentLinkReview = 'resident.link-review';
 
     /**
      * Create and edit households and families, move members between them, name heads and
@@ -147,7 +147,7 @@ enum Permission: string
      * belongs to a dedicated protection officer, and the LGU should move it to one before
      * production.
      */
-    case VulnerabilityViewProtected = 'vulnerability.view_protected';
+    case VulnerabilityViewProtected = 'vulnerability.view-protected';
 
     /** Issue or revoke a digital ID credential. */
     case CredentialManage = 'credential.manage';
@@ -188,7 +188,7 @@ enum Permission: string
      * `request.view.sensitive` can read that such a document exists; opening the image is a
      * further step and a further audit entry.
      */
-    case DocumentViewSensitive = 'document.view.sensitive';
+    case DocumentViewSensitive = 'document.view-sensitive';
 
     /**
      * Issue a copy of a document for use outside the office.
@@ -229,7 +229,7 @@ enum Permission: string
      * a second decision rather than one more checkbox on a form somebody is working through
      * quickly.
      */
-    case ReferralDiscloseProtected = 'referral.disclose.protected';
+    case ReferralDiscloseProtected = 'referral.disclose-protected';
 
     /** Maintain the service provider directory. */
     case ProviderManage = 'provider.manage';
@@ -290,7 +290,7 @@ enum Permission: string
      * is on a laptop none of this system's authorization applies to it any more — no scope, no
      * audit, no revocation (ADR 0026 §3).
      */
-    case ReportExportPersonLevel = 'report.export.person-level';
+    case ReportExportPersonLevel = 'report.export-person-level';
 
     /**
      * Publish a saved view to the whole office.
@@ -388,7 +388,7 @@ enum Permission: string
      * A LIST OF NAMES OF PEOPLE WHO SIGNED UP FOR A WELFARE EVENT, which is a fact about their
      * household's circumstances however public the event itself is. It is a person-level export
      * under ADR 0026 §3 — 24-hour retention, its own audit action — and it costs a permission
-     * distinct from `report.export.person-level` because the two lists concern different offices
+     * distinct from `report.export-person-level` because the two lists concern different offices
      * and folding them together would mean anyone who could print a payout manifest could also
      * print the feeding-programme roll (ADR 0031 §6).
      */
@@ -407,7 +407,7 @@ enum Permission: string
     case ProgramManage = 'program.manage';
 
     /** See catalog entries that are not published to citizens (drafts, retired). */
-    case ServicesViewUnpublished = 'services.view_unpublished';
+    case ServicesViewUnpublished = 'services.view-unpublished';
 
     /** Create, edit and publish catalog entries. */
     case ServicesManage = 'services.manage';

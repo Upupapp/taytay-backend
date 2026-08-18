@@ -20,7 +20,7 @@ use Tests\TestCase;
  * way a decompiled mobile build or an intercepting proxy would. All of them must fail.
  *
  * The draft catalog entry is the canary: it is visible only to an actor holding the
- * server-resolved `services.view_unpublished` permission.
+ * server-resolved `services.view-unpublished` permission.
  */
 final class ClientChannelIsNotAuthorityTest extends TestCase
 {
@@ -46,7 +46,7 @@ final class ClientChannelIsNotAuthorityTest extends TestCase
             'X-Client-Channel' => 'admin-console',
             'X-Client-Role' => 'lgu_admin',
             'X-User-Role' => 'lgu_admin',
-            'X-Permissions' => 'services.view_unpublished,services.manage',
+            'X-Permissions' => 'services.view-unpublished,services.manage',
             'X-Is-Admin' => 'true',
         ]);
 
@@ -58,7 +58,7 @@ final class ClientChannelIsNotAuthorityTest extends TestCase
     public function spoofed_query_parameters_grant_nothing(): void
     {
         $response = $this->getJson(
-            '/api/v1/services?is_admin=1&role=lgu_admin&permissions[]=services.view_unpublished&status=draft'
+            '/api/v1/services?is_admin=1&role=lgu_admin&permissions[]=services.view-unpublished&status=draft'
         );
 
         $response->assertOk()->assertJsonCount(self::PUBLISHED_SERVICE_COUNT, 'data');

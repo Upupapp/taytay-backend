@@ -123,7 +123,7 @@ final class ReportController
 
         /*
          * The permission comes from the REPORT, not the route. A person-level export costs
-         * `report.export.person-level`; an aggregate costs `report.view`. One endpoint, two
+         * `report.export-person-level`; an aggregate costs `report.view`. One endpoint, two
          * prices, decided by what is actually being copied out of the database.
          */
         $this->authorization->authorize($actor, $report->requiredPermission());

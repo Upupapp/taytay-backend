@@ -32,7 +32,7 @@ use Modules\Welfare\Infrastructure\Eloquent\WelfareCase;
  *  * `referral.view` — read the queue and the directory.
  *  * `referral.manage` — draft, record what the receiving office reports, close out.
  *  * `referral.send` — **transmit**. The one irreversible act, and therefore its own decision.
- *  * `referral.disclose.protected` — release a home address, sector membership or assistance
+ *  * `referral.disclose-protected` — release a home address, sector membership or assistance
  *    history.
  *
  * Plus `document.share` to attach a file, which is not a fifth permission but the *same* one

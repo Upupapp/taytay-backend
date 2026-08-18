@@ -147,7 +147,7 @@ The same application service serves every channel; only the *actor* and the
 
 | Use case | `citizen-web` / `citizen-mobile` | `admin-console` | `verifier-device` |
 | --- | --- | --- | --- |
-| List services | published services, channel-filtered | all services incl. drafts (`services.view_unpublished`) | n/a |
+| List services | published services, channel-filtered | all services incl. drafts (`services.view-unpublished`) | n/a |
 | View a resident | own record only | scoped by office/jurisdiction + audited | n/a |
 | ID application | submit, track own | review, approve, reject | n/a |
 | Verify a credential | show own QR | n/a | validity + minimal display fields only |

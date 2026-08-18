@@ -49,7 +49,7 @@ enum SharedField: string
      * the law. A home address is the field that matters most in a protection case — it is the
      * one an abuser needs. Assistance history describes a family's circumstances over years.
      *
-     * These require `referral.disclose.protected` in addition to the ordinary permission, so
+     * These require `referral.disclose-protected` in addition to the ordinary permission, so
      * releasing them is a second, separately-held decision rather than one more checkbox on a
      * form somebody is working through quickly.
      */

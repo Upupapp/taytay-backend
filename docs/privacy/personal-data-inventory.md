@@ -36,7 +36,7 @@ where files are involved, and otherwise describes the category plainly.
 | --- | --- | --- | --- | --- | --- |
 | `Identity` | account, email, mobile number, password hash, MFA secrets, device registrations, session tokens | credentials + contact details | `public-task` | `account` | own token; `staff.manage` to provision |
 | `ResidentProfile` | name, birth date, sex, civil status, address, barangay, PhilSys/government identifiers, aliases, household and family membership, kinship, vulnerability observations | **the core personal record** | `public-task` (`resident_registry`) | `resident` | `resident.view`, scoped by barangay |
-| `ResidentProfile` (protection tier) | safeguarding factors — VAWC, CICL, child-at-risk, trafficking | **the most sensitive data in the system** | `legal-obligation` | `safeguarding` | `vulnerability.view_protected` |
+| `ResidentProfile` (protection tier) | safeguarding factors — VAWC, CICL, child-at-risk, trafficking | **the most sensitive data in the system** | `legal-obligation` | `safeguarding` | `vulnerability.view-protected` |
 | `Credential` | issued LGU ID records, card artifacts, QR signing material | identity credential | `public-task` (`credential_issuance`) | `resident` | `credential.manage`; own via `me/credential` |
 | `Welfare` | case files, intake narratives, assessments, the running record, referrals and their disclosures, field visits, safeguarding concerns | **case narrative — the office's judgements about a household** | `legal-obligation` (`welfare_assistance`) | `welfare_case` | `request.view` (+ `request.view-sensitive`, `case-note.view-protected`) |
 | `Welfare` (releases) | amounts in centavos, scheduled and confirmed handovers, acknowledgement details | financial | `legal-obligation` | `release` | `request.release` |
@@ -45,7 +45,7 @@ where files are involved, and otherwise describes the category plainly.
 | `Notification` | delivery receipts, push tokens, per-person channel preferences | contact routing | `public-task` | `notification` | own token |
 | `Content` | resident comments, reactions, share counts, moderation decisions | citizen speech | `public-task` | — | own; `newsfeed.moderate` |
 | `Events` | event registrations, waitlist position, attendance | **attendance at a welfare event reveals need** | `public-task` | — | own; `event.manage` |
-| `Reporting` | export requests, the permission context snapshotted at request time, produced files | **a person-level export is a copy of a caseload** | `legal-obligation` (`audit_and_accountability`) | `export` (**24h**) | `report.export.person-level`, `event.export-registrants` |
+| `Reporting` | export requests, the permission context snapshotted at request time, produced files | **a person-level export is a copy of a caseload** | `legal-obligation` (`audit_and_accountability`) | `export` (**24h**) | `report.export-person-level`, `event.export-registrants` |
 | `Audit` | who did what to which record, when, with which correlation id | **an act log, never the data acted upon** | `legal-obligation` | `audit` | `audit.view` — held only by `data_protection_officer` |
 | `Audit` (governance) | privacy-notice acknowledgements, consent grants and withdrawals, legal holds | governance metadata | `legal-obligation` | `audit` | own; `privacy.manage` |
 
@@ -158,7 +158,7 @@ this document exists to put in front of the DPO:
    somebody holds it, **nobody in this system can read the audit trail** — including the MSWDO
    head, deliberately (ADR 0034 §7).
 5. **Decide whether the six permissions parked on `lgu_admin` should move to a protection officer**
-   (gap G-30): `vulnerability.view_protected`, `document.view-sensitive`,
+   (gap G-30): `vulnerability.view-protected`, `document.view-sensitive`,
    `case-note.view-protected`, `safeguarding.view`, `safeguarding.manage`, and
    `referral.disclose-protected`.
 6. **Publish the first privacy notice.** The system ships with none, because a repository that

@@ -36,7 +36,7 @@ use Modules\Welfare\Infrastructure\Eloquent\WelfareCase;
  *
  *  * `document.manage` — record a document. Front-line staff; taking papers is the job.
  *  * `document.verify` — accept or refuse one. Deliberately not the clerk who received it.
- *  * `document.view.sensitive` — open a safeguarding image, beyond knowing it exists.
+ *  * `document.view-sensitive` — open a safeguarding image, beyond knowing it exists.
  *  * `document.share` — issue a copy that leaves the office. Held by nobody yet, on purpose.
  */
 final class CaseRequirementController

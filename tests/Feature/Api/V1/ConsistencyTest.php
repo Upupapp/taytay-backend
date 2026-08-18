@@ -95,7 +95,7 @@ final class ConsistencyTest extends KycTestCase
         /*
          * An endpoint that returns *something* to anonymous callers and *more* to authenticated
          * ones would otherwise serve the second answer to the first — the catalogue endpoints do
-         * exactly that, narrowing to published for a caller without `services.view_unpublished`.
+         * exactly that, narrowing to published for a caller without `services.view-unpublished`.
          */
         $this->assertNotSame(
             CacheKey::public('services.list'),

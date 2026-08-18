@@ -10,7 +10,7 @@ use Modules\Reporting\Http\Controllers\V1\ReportController;
  *
  * AGGREGATE-FIRST. One dashboard endpoint returning counts, and an export lifecycle where the
  * permission is decided by the report rather than the route — a person-level export costs
- * `report.export.person-level`, an aggregate costs `report.view` (ADR 0026 §3).
+ * `report.export-person-level`, an aggregate costs `report.view` (ADR 0026 §3).
  *
  * There is no per-caseworker report and no grouping by caseworker anywhere. Filtering to one
  * named worker is permitted; a leaderboard is not (ADR 0026 §4).

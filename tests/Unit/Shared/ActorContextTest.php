@@ -29,19 +29,19 @@ final class ActorContextTest extends TestCase
         $actor = ActorContext::authenticated(
             'subject-1',
             ['lgu_staff', 'lgu_staff'],
-            ['services.view_unpublished', 'services.view_unpublished'],
+            ['services.view-unpublished', 'services.view-unpublished'],
         );
 
         $this->assertSame(['lgu_staff'], $actor->roles);
-        $this->assertSame(['services.view_unpublished'], $actor->permissions);
+        $this->assertSame(['services.view-unpublished'], $actor->permissions);
     }
 
     #[Test]
     public function permission_checks_are_exact_matches(): void
     {
-        $actor = ActorContext::authenticated('subject-1', [], ['services.view_unpublished']);
+        $actor = ActorContext::authenticated('subject-1', [], ['services.view-unpublished']);
 
-        $this->assertTrue($actor->hasPermission('services.view_unpublished'));
+        $this->assertTrue($actor->hasPermission('services.view-unpublished'));
         $this->assertFalse($actor->hasPermission('services.view'));
         $this->assertFalse($actor->hasPermission('SERVICES.VIEW_UNPUBLISHED'));
         $this->assertFalse($actor->hasPermission('services.manage'));
@@ -63,7 +63,7 @@ final class ActorContextTest extends TestCase
     #[Test]
     public function the_audit_projection_carries_no_personal_data(): void
     {
-        $actor = ActorContext::authenticated('subject-1', ['lgu_staff'], ['services.view_unpublished'], ClientChannel::AdminConsole);
+        $actor = ActorContext::authenticated('subject-1', ['lgu_staff'], ['services.view-unpublished'], ClientChannel::AdminConsole);
 
         $this->assertSame(
             [

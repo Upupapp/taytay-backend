@@ -31,7 +31,7 @@ Full text: [`../api/conventions.md`](../api/conventions.md).
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Mobile splash, uptime probe, NodeBalancer | `GET /api/v1/health` | public | — | — | — | `{service,status,api_version}` | none — must never expose env, versions or config | `implemented` |
 | Citizen service catalog | `GET /api/v1/services` | public | — | — | `?category=&channel=&page=&per_page=` | published catalog entries | public reference data | `implemented` |
-| Admin service catalog | `GET /api/v1/admin/services` | bearer | `services.view_unpublished` widens the result | all-barangays | as above | adds `draft`/`retired` entries | operational | `implemented` |
+| Admin service catalog | `GET /api/v1/admin/services` | bearer | `services.view-unpublished` widens the result | all-barangays | as above | adds `draft`/`retired` entries | operational | `implemented` |
 
 The two catalog routes share one controller and one application service; the `/admin`
 prefix confers nothing. This is the reference pattern every row below follows.
@@ -357,9 +357,9 @@ verified name or birth date.
 
 | Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Link review | `GET /api/v1/admin/residents/{resident}/account-links` | bearer | `resident.link_review` | role scope | — | active and revoked links | who linked whom, when and on what authority | `implemented` |
-| Attach an account | `POST /api/v1/admin/residents/{resident}/account-links` | bearer | `resident.link_review` | role scope | `{account_id}` | `201` link | refuses a staff account, and refuses an account already linked elsewhere (`409`) rather than silently repointing it | `implemented` |
-| Withdraw a link | `DELETE /api/v1/admin/residents/{resident}/account-links/{link}` | bearer | `resident.link_review` | role scope | `{reason}` | revoked link | the row is **kept and marked revoked** — "this account could once act for that resident" is what a privacy complaint asks about | `implemented` |
+| Link review | `GET /api/v1/admin/residents/{resident}/account-links` | bearer | `resident.link-review` | role scope | — | active and revoked links | who linked whom, when and on what authority | `implemented` |
+| Attach an account | `POST /api/v1/admin/residents/{resident}/account-links` | bearer | `resident.link-review` | role scope | `{account_id}` | `201` link | refuses a staff account, and refuses an account already linked elsewhere (`409`) rather than silently repointing it | `implemented` |
+| Withdraw a link | `DELETE /api/v1/admin/residents/{resident}/account-links/{link}` | bearer | `resident.link-review` | role scope | `{reason}` | revoked link | the row is **kept and marked revoked** — "this account could once act for that resident" is what a privacy complaint asks about | `implemented` |
 
 ### Staff — duplicates and merge
 
@@ -458,16 +458,16 @@ severity, multiplier and points, plus the ruleset version — because a total on
 be explained to the resident it is about.
 
 **Safeguarding factors** (`vawc-survivor`, `cicl`, `child-at-risk`, `trafficking-survivor`)
-carry weight 0 and require `vulnerability.view_protected`. Without that permission the
+carry weight 0 and require `vulnerability.view-protected`. Without that permission the
 response is **identical to that of a resident who has none** — no count, no placeholder — the
 factor is absent from the list, contributes nothing to the score, is missing from the
 published catalog, and a guessed factor id returns `404`, never `403`.
 
 | Screen / caller | Endpoint | Auth | Permission | Scope | Request | Response | Sensitivity | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Published ruleset | `GET /api/v1/admin/vulnerability/ruleset` | bearer | `vulnerability.view` | — | — | weights, multipliers, bands, factor catalog, `decision_support_only`, `status` | catalog **filtered** — safeguarding categories are absent without `vulnerability.view_protected`, or the catalog itself becomes the disclosure | `implemented` |
+| Published ruleset | `GET /api/v1/admin/vulnerability/ruleset` | bearer | `vulnerability.view` | — | — | weights, multipliers, bands, factor catalog, `decision_support_only`, `status` | catalog **filtered** — safeguarding categories are absent without `vulnerability.view-protected`, or the catalog itself becomes the disclosure | `implemented` |
 | Resident snapshot | `GET /api/v1/admin/residents/{resident}/vulnerability` | bearer | `vulnerability.view` | role scope | — | `score`, `band`, `ruleset`, `contributions[]`, `uncapped_subtotal`, `dependant_count`, factors by level | **audited read**; combines the resident's own factors, their current household's factors, and dependants derived from kinship — never re-tagged | `implemented` |
-| Record a factor | `POST /api/v1/admin/residents/{resident}/vulnerability-factors` | bearer | `vulnerability.manage` | role scope | `{factor_code,status?,severity?,source?,note?,effective_from?}` | `201` factor | idempotent per open factor; a household-level code is refused (`400`); a **safeguarding code additionally requires `vulnerability.view_protected`** | `implemented` |
+| Record a factor | `POST /api/v1/admin/residents/{resident}/vulnerability-factors` | bearer | `vulnerability.manage` | role scope | `{factor_code,status?,severity?,source?,note?,effective_from?}` | `201` factor | idempotent per open factor; a household-level code is refused (`400`); a **safeguarding code additionally requires `vulnerability.view-protected`** | `implemented` |
 | Confirm / refute | `POST /api/v1/admin/residents/{resident}/vulnerability-factors/{factor}/review` | bearer | `vulnerability.manage` | role scope | `{status,note?}` | factor | a refuted factor is **kept and stops counting** — deleting it means the claim gets re-raised forever | `implemented` |
 | End a factor | `DELETE /api/v1/admin/residents/{resident}/vulnerability-factors/{factor}` | bearer | `vulnerability.manage` | role scope | `{end_reason}` | closed factor | effective-dated close, never a delete — "pregnant" is not permanent | `implemented` |
 | Household snapshot | `GET /api/v1/admin/households/{household}/vulnerability` | bearer | `vulnerability.view` | role scope | — | same shape, household factors only | audited read | `implemented` |
@@ -728,7 +728,7 @@ in December. Guarded by `DocumentHistoryIsAppendOnlyTest`.
 | Version history | `GET /api/v1/admin/cases/{case}/requirements/{requirement}/documents` | bearer | `request.view` | case barangay | — | every version ever presented | superseded versions included, with reason and their own file — that is the point | `implemented` |
 | Accept / refuse | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/verification` | bearer | `document.verify` | case barangay | `{status,note?}` | version | **not `document.manage`** — the clerk who took the paper is not the one who judged it; a rejection **must** say why (`422`); a superseded version is `409` | `implemented` |
 | Rule a conditional requirement | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/applicability` | bearer | `document.verify` | case barangay | `{applicability,reason}` | requirement | reason **mandatory in both directions** — ruling a document out is the step that can waive a safeguard | `implemented` |
-| Open a document | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/documents/{version}/access` | bearer | `request.view` (+`document.view.sensitive`, +`document.share`) | case barangay | `{for_sharing?}` | single-use handle + expiry | version must sit in **this** requirement's slot, else `404`; sharing additionally needs a permission **nobody holds yet** | `implemented` |
+| Open a document | `POST /api/v1/admin/cases/{case}/requirements/{requirement}/documents/{version}/access` | bearer | `request.view` (+`document.view-sensitive`, +`document.share`) | case barangay | `{for_sharing?}` | single-use handle + expiry | version must sit in **this** requirement's slot, else `404`; sharing additionally needs a permission **nobody holds yet** | `implemented` |
 | Download | `GET /api/v1/documents/{handle}` | bearer | — (the grant *is* the decision) | issued-to only | — | the bytes | single-use, 120s, bound to the account; `no-store`, `nosniff`, `DENY`, attachment | `implemented` |
 
 ### Staff — asking the applicant for something
@@ -800,7 +800,7 @@ nothing can be taken back. That shapes the whole surface. Full reasoning: ADR 00
 | Draft | `POST /api/v1/admin/referrals` | bearer | `referral.manage` | client's barangay | `{resident_id,case_id?,provider_id?,destination_name?,urgency?,service_requested,reason}` | `201` referral | **`resident_id` is mandatory**; a case is optional but must belong to the same client (`409`); destination is **snapshotted**, never read through | `implemented` |
 | Edit | `PATCH /api/v1/admin/referrals/{referral}` | bearer | `referral.manage` | via case | partial | referral | `409` once sent — corrections afterwards are notes | `implemented` |
 | Record the lawful basis | `POST /api/v1/admin/referrals/{referral}/authority` | bearer | `referral.manage` | via case | `{basis,note}` | referral | RA 10173. Note **mandatory**, and each basis needs a different fact — a vital-interest referral noting "client agreed" contradicts its own basis | `implemented` |
-| Release a field | `POST /api/v1/admin/referrals/{referral}/shared-fields` | bearer | `referral.manage` (+`referral.disclose.protected`) | via case | `{field,because}` | the plan | `because` **mandatory**; address / sector membership / assistance history need the second permission | `implemented` |
+| Release a field | `POST /api/v1/admin/referrals/{referral}/shared-fields` | bearer | `referral.manage` (+`referral.disclose-protected`) | via case | `{field,because}` | the plan | `because` **mandatory**; address / sector membership / assistance history need the second permission | `implemented` |
 | Withhold a field | `DELETE /api/v1/admin/referrals/{referral}/shared-fields/{field}` | bearer | `referral.manage` | via case | — | the plan | withheld means **absent from the sheet**, never "withheld" printed on it | `implemented` |
 | Attach a document | `POST /api/v1/admin/referrals/{referral}/attachments` | bearer | `referral.manage` **+ `document.share`** | via case | `{document_id,label,because}` | the plan | the **same** permission as any outward share (ADR 0020 §7), which nobody holds — so this is refused today, deliberately (gap G-26). `sensitive` files are refused outright | `implemented` |
 | Detach | `DELETE /api/v1/admin/referrals/{referral}/attachments/{document}` | bearer | `referral.manage` | via case | — | the plan | — | `implemented` |
@@ -1067,7 +1067,7 @@ Full reasoning: ADR 0026.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Dashboard | `GET /api/v1/admin/dashboard` | bearer | `report.view` | caller's barangays | `?from=&to=&barangay_id=&program_id=&status=&assigned_to=` | summary, aging, reach, utilization, referral outcomes, workload, completeness | **no names anywhere**; every metric scoped; cells below 5 suppressed | `implemented` |
 | My exports | `GET /api/v1/admin/exports` | bearer | `report.view` | own requests | — | export records | scoped to the caller's own requests; **no storage key in the payload** | `implemented` |
-| Request an export | `POST /api/v1/admin/exports` | bearer | **from the report** | caller's barangays | `{report,format?,filters?}` | `201` `queued` | aggregate costs `report.view`; person-level costs `report.export.person-level` | `implemented` |
+| Request an export | `POST /api/v1/admin/exports` | bearer | **from the report** | caller's barangays | `{report,format?,filters?}` | `201` `queued` | aggregate costs `report.view`; person-level costs `report.export-person-level` | `implemented` |
 | Download | `GET /api/v1/admin/exports/{export}/download` | bearer | re-checked at download | requester only | — | the file | unknown / another person's / expired / unfinished / no-longer-permitted all answer **`404`** | `implemented` |
 
 ### A small cell is a person
@@ -1322,7 +1322,7 @@ Requested through the existing export lifecycle — `POST /api/v1/admin/report-e
 queued and never inline, permission context snapshotted at request time, re-authorized at download.
 
 It is **person-level**, so 24-hour retention and its own audit action, and it costs
-`event.export-registrants` rather than `report.export.person-level` — a door list and a payout
+`event.export-registrants` rather than `report.export-person-level` — a door list and a payout
 manifest are two different authorities held by two different offices. Minimal fields: reference,
 name, status, attendance. No address, no contact, no barangay, no staff note. An export naming no
 event returns nothing rather than every registrant the LGU has ever had.

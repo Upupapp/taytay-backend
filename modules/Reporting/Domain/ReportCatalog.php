@@ -48,7 +48,7 @@ enum ReportCatalog: string
      *
      * PERSON-LEVEL. An event is public; being on the list for a supplementary feeding programme is
      * a fact about a household's circumstances. It carries its own permission rather than
-     * `report.export.person-level`, because the two lists concern different offices and folding
+     * `report.export-person-level`, because the two lists concern different offices and folding
      * them together would mean whoever could print a payout manifest could also print this
      * (ADR 0031 §6).
      */
@@ -70,7 +70,7 @@ enum ReportCatalog: string
     {
         return match (true) {
             /*
-             * NOT `report.export.person-level`. Both are person-level and both get its retention
+             * NOT `report.export-person-level`. Both are person-level and both get its retention
              * and its audit action, but the permission is the *authority to take this particular
              * copy out of the system*, and a door list and a payout manifest are two different
              * authorities held by two different offices (ADR 0031 §6).
