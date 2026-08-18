@@ -784,3 +784,72 @@ it is the default case rather than an edge case.
 
 On the arithmetic of money the two sides agree completely. They disagree about **who may press the
 button**, which is a policy question rather than a technical one.
+
+---
+
+## L-18 (P0) — a sign-in code is issued, recorded, and never delivered
+
+Found by the resident mobile app's integration sequence and confirmed here against
+this API running locally on sqlite. No resident can sign in to the platform.
+
+`AuthenticationController::requestCode` calls `requestSignInCode`, which issues a
+code and stores its hash, and then does `unset($code)` — deliberately, so it is
+neither returned nor logged. That half is right. The other half does not exist:
+**nothing dispatches it.**
+
+Measured, on this machine, with the API serving:
+
+```
+POST /api/v1/auth/otp {"mobile_number":"+639170000001"}   → 202
+verification_codes                                        → 1 → 2   (issued)
+notifications                                             → 0       (nothing recorded)
+no SMS, no push, no mail, no log line carrying the code
+```
+
+Sign-in **does** work once the code is in hand — proven end to end by reading it
+from `AuthenticationService` directly, exchanging it at `auth/otp/verify` for a
+token, and calling `GET me` successfully. Every part of the flow is built except
+the one that reaches a person.
+
+The comment at the call site says delivery waits on the `Notification` module.
+That comment is stale: `Notification` has been implemented since TAB 20 and has
+no awareness of sign-in codes.
+
+### Why `Notifier::notify()` is the wrong seam for this
+
+The obvious fix is wrong, and the reason is worth recording before somebody
+writes it:
+
+1. **`notify()` persists `title` and `body`**, and that row is read back over an
+   authenticated API at `GET me/notifications`. A one-time code stored there is a
+   credential in an inbox.
+2. **The recipient is not authenticated yet.** A notification addressed to a
+   subject who cannot read their inbox until they have used the code is
+   circular.
+3. `notify()` is inbox-shaped by design — category, priority, deep-link subject.
+   None of that applies to a transactional message that must not be recorded.
+
+What is needed is a narrow published contract on `Notification/Application` for
+**transactional delivery that persists nothing** — send this text to this number
+now, return whether it left. `Identity` may not reach into `Notification`'s
+`Infrastructure/` (Article 2.1), so the channel dispatch has to be exposed
+deliberately rather than borrowed.
+
+**Not implemented here.** It is a new cross-module contract in a repository with
+its own live TAB sequence, and it belongs to that sequence rather than to a
+passing client integration. The design constraint above is the finding.
+
+### Two more, from the same session
+
+* **No citizen account exists in any seeder.** `DatabaseSeeder` and
+  `DemoDataSeeder` create staff and catalogue data; the account used above had to
+  be created by hand. Combined with the absence of any self-registration route,
+  a fresh environment has nobody who can sign in — which makes reviewer access,
+  UAT and acceptance testing impossible to set up without a manual database
+  write.
+* **`GET newsfeed` answers 401 to a guest** on a route carrying no
+  `auth:sanctum`, because `NewsfeedController::assertReadable` gates anonymous
+  readers on `newsfeed.public_access`, which defaults false. Reading the route
+  file says public; calling it says otherwise. Any client that reasons from the
+  route file — as the mobile app did — ships a feed that fails for signed-in
+  residents too, because it sends no token by construction.
