@@ -3,6 +3,9 @@
 .env
 .env.backup
 .env.production
+# Local integration run (TAB 05/06). Inherits real .env values — never committed.
+.env.integration
+.env.local
 .phpactor.json
 .phpunit.result.cache
 /.codex
