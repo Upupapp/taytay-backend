@@ -62,87 +62,128 @@ final class ConsumerContractTest extends KycTestCase
 {
     use RefreshDatabase;
 
-    private const CONSUMER = 'taytay-admin-web';
-
-    #[Test]
-    public function the_vendored_consumer_expectations_are_what_the_console_published(): void
+    /**
+     * Every consumer whose expectations are vendored here, discovered from the directory rather
+     * than listed.
+     *
+     * **Four clients consume this API** (Article 0): citizen web, citizen mobile, the admin
+     * console and verifier devices. Only the admin console has published expectations, so only
+     * the admin console is verified — the other three could each lose a field they depend on and
+     * this suite would stay green.
+     *
+     * Discovering the list from disk rather than naming it here means adding one of them is a
+     * data change: drop the generated file and its provenance beside this one. Naming a constant
+     * would have made a second consumer look like a code change and quietly discouraged it.
+     *
+     * @return list<string>
+     */
+    private function consumers(): array
     {
-        $source = $this->provenance();
+        $names = [];
 
-        foreach (['repository', 'commit', 'sha256', 'vendoredOn'] as $key) {
-            $this->assertArrayHasKey($key, $source, "Consumer provenance is missing \"{$key}\".");
+        foreach (glob(base_path('docs/api/consumers/*.json')) ?: [] as $file) {
+            $name = basename($file, '.json');
+
+            if (! str_ends_with($name, '.source')) {
+                $names[] = $name;
+            }
         }
 
-        $this->assertMatchesRegularExpression(
-            '/^[0-9a-f]{40}$/',
-            $source['commit'],
-            'Consumer provenance must record a full commit SHA; a short one is ambiguous across repositories.',
-        );
+        sort($names);
 
-        $this->assertSame(
-            $source['sha256'],
-            hash_file('sha256', $this->expectationsPath()),
-            'docs/api/consumers/'.self::CONSUMER.".json does not match its recorded sha256.\n\n".
-            "It is a vendored artefact generated in the console. Do not edit it here to make this\n".
-            'test pass — re-vendor it, and read what changed.',
-        );
+        return $names;
     }
 
     #[Test]
-    public function every_route_the_console_calls_exists_on_this_router(): void
+    public function the_vendored_consumer_expectations_are_what_each_client_published(): void
+    {
+        $this->assertNotEmpty($this->consumers(), 'No consumer has published expectations, so nothing is verified.');
+
+        foreach ($this->consumers() as $consumer) {
+            $source = $this->provenance($consumer);
+
+            foreach (['repository', 'commit', 'sha256', 'vendoredOn'] as $key) {
+                $this->assertArrayHasKey($key, $source, "{$consumer} provenance is missing \"{$key}\".");
+            }
+
+            $this->assertMatchesRegularExpression(
+                '/^[0-9a-f]{40}$/',
+                $source['commit'],
+                "{$consumer} provenance must record a full commit SHA; a short one is ambiguous across repositories.",
+            );
+
+            $this->assertSame(
+                $source['sha256'],
+                hash_file('sha256', $this->expectationsPath($consumer)),
+                "docs/api/consumers/{$consumer}.json does not match its recorded sha256.\n\n".
+                "It is a vendored artefact generated in the client repository. Do not edit it here to\n".
+                'make this test pass — re-vendor it, and read what changed.',
+            );
+        }
+    }
+
+    #[Test]
+    public function every_route_a_client_calls_exists_on_this_router(): void
     {
         $missing = [];
 
-        foreach ($this->interactions() as $interaction) {
-            if ($this->matchRoute($interaction['method'], $interaction['path']) === null) {
-                $missing[] = "{$interaction['method']} api/v1/{$interaction['path']}  ({$interaction['consumer']})";
+        foreach ($this->consumers() as $consumer) {
+            foreach ($this->interactions($consumer) as $interaction) {
+                if ($this->matchRoute($interaction['method'], $interaction['path']) === null) {
+                    $missing[] = "{$interaction['method']} api/v1/{$interaction['path']}  ({$consumer}: {$interaction['consumer']})";
+                }
             }
         }
 
         $this->assertSame(
             [],
             $missing,
-            "The console calls routes this API does not serve:\n\n  ".implode("\n  ", $missing)."\n\n".
+            "A client calls routes this API does not serve:\n\n  ".implode("\n  ", $missing)."\n\n".
             "Either the route was renamed — which is a breaking change needing a CHANGELOG_API entry\n".
             'and a deprecation decision (ADR 0038 §4) — or the console is calling something it invented.',
         );
     }
 
     /**
-     * The test that earns the file: a live response must carry every field the console cannot
-     * render a record without.
+     * The test that earns the file: a live response must carry every field a client cannot render
+     * a record without.
      */
     #[Test]
-    public function every_field_the_console_requires_arrives_in_a_real_response(): void
+    public function every_field_a_client_requires_arrives_in_a_real_response(): void
     {
         $failures = [];
         $verified = 0;
+        $expected = 0;
 
-        foreach ($this->interactions() as $interaction) {
-            $record = $this->sampleRecordFor($interaction['method'], $interaction['path']);
+        foreach ($this->consumers() as $consumer) {
+            foreach ($this->interactions($consumer) as $interaction) {
+                $expected++;
 
-            /*
-             * An interaction with no reachable sample is NOT quietly skipped. "Nothing to check"
-             * reads as "checked and fine" in a green suite, which is the precise failure this
-             * whole TAB exists to stop.
-             */
-            if ($record === null) {
-                $failures[] = "{$interaction['path']}: no sample record could be produced, so nothing was verified.";
+                $record = $this->sampleRecordFor($interaction['path']);
 
-                continue;
-            }
-
-            $verified++;
-
-            foreach ($interaction['required'] as $field) {
-                if (! array_key_exists($field, $record)) {
-                    $failures[] = "{$interaction['path']}: required field \"{$field}\" is absent from the response.";
+                /*
+                 * An interaction with no reachable sample is NOT quietly skipped. "Nothing to
+                 * check" reads as "checked and fine" in a green suite, which is the precise
+                 * failure this whole TAB exists to stop.
+                 */
+                if ($record === null) {
+                    $failures[] = "{$consumer} {$interaction['path']}: no sample record could be produced, so nothing was verified.";
 
                     continue;
                 }
 
-                if ($record[$field] === null) {
-                    $failures[] = "{$interaction['path']}: required field \"{$field}\" arrived as null.";
+                $verified++;
+
+                foreach ($interaction['required'] as $field) {
+                    if (! array_key_exists($field, $record)) {
+                        $failures[] = "{$consumer} {$interaction['path']}: required field \"{$field}\" is absent from the response.";
+
+                        continue;
+                    }
+
+                    if ($record[$field] === null) {
+                        $failures[] = "{$consumer} {$interaction['path']}: required field \"{$field}\" arrived as null.";
+                    }
                 }
             }
         }
@@ -150,42 +191,38 @@ final class ConsumerContractTest extends KycTestCase
         $this->assertSame(
             [],
             $failures,
-            "The console drops a record when one of these is missing — silently, with no error and\n".
+            "A client drops the record when one of these is missing — silently, with no error and\n".
             "no empty state. The list is simply shorter and nothing on the screen says so.\n\n  ".
             implode("\n  ", $failures)."\n\n".
             "If a field genuinely had to go, it is a breaking change: CHANGELOG_API.md, a\n".
-            'deprecation decision, and the console repointed before this is made to pass.',
+            'deprecation decision, and the client repointed before this is made to pass.',
         );
 
-        $this->assertGreaterThanOrEqual(
-            count($this->interactions()),
-            $verified,
-            'Fewer interactions were verified than the console published.',
-        );
+        $this->assertSame($expected, $verified, 'Fewer interactions were verified than clients published.');
     }
 
     // ── the vendored document ────────────────────────────────────────────────────────
 
-    private function expectationsPath(): string
+    private function expectationsPath(string $consumer): string
     {
-        return base_path('docs/api/consumers/'.self::CONSUMER.'.json');
+        return base_path('docs/api/consumers/'.$consumer.'.json');
     }
 
     /** @return array<string, mixed> */
-    private function provenance(): array
+    private function provenance(string $consumer): array
     {
         return json_decode(
-            (string) file_get_contents(base_path('docs/api/consumers/'.self::CONSUMER.'.source.json')),
+            (string) file_get_contents(base_path('docs/api/consumers/'.$consumer.'.source.json')),
             true,
             flags: JSON_THROW_ON_ERROR,
         );
     }
 
     /** @return list<array{method: string, path: string, consumer: string, required: list<string>}> */
-    private function interactions(): array
+    private function interactions(string $consumer): array
     {
         $document = json_decode(
-            (string) file_get_contents($this->expectationsPath()),
+            (string) file_get_contents($this->expectationsPath($consumer)),
             true,
             flags: JSON_THROW_ON_ERROR,
         );
@@ -214,7 +251,7 @@ final class ConsumerContractTest extends KycTestCase
      *
      * @return array<string, mixed>|null
      */
-    private function sampleRecordFor(string $method, string $path): ?array
+    private function sampleRecordFor(string $path): ?array
     {
         /*
          * FIXTURES ARE BUILT BY ONE ACTOR AND READ BY ANOTHER, and that is the design working

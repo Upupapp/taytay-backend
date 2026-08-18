@@ -1093,3 +1093,22 @@ is the failure this TAB exists to stop.
 
 Suite: **933 tests, 6,868 assertions**, `pint --test` clean — including three files left
 unformatted by earlier TABs of this integration, now fixed.
+
+### One consumer is verified; three are not, and the test says which
+
+Four clients consume this API (Article 0): citizen web, citizen mobile, the admin console and
+verifier devices. Only the admin console publishes expectations, so only the admin console is
+verified — **the other three could each lose a field they depend on and this suite would stay
+green.**
+
+The consumer list is discovered from `docs/api/consumers/` rather than named in a constant, so
+adding a client is a data change: drop the generated file and its provenance beside the existing
+one. Naming a constant would have made a second consumer look like a code change and quietly
+discouraged it. An empty directory **fails** rather than passing vacuously — mutation-tested by
+removing both files.
+
+`taytay-mobile-app` is on this machine and reads the wire in the same shape the console does —
+`raw['field']` reads with null-guards that drop the record — across 5 DTOs. Generating its
+expectations is a job for whichever TAB takes on that repository; it is outside the two this
+Master Command joins, and starting it unasked would be widening the integration by a third
+codebase.
