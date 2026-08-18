@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Modules\ResidentProfile\Http\Controllers\V1\BarangayDirectoryController;
 use Modules\ResidentProfile\Http\Controllers\V1\HouseholdController;
 use Modules\ResidentProfile\Http\Controllers\V1\KycController;
 use Modules\ResidentProfile\Http\Controllers\V1\MyProfileController;
@@ -20,6 +21,21 @@ use Modules\ResidentProfile\Http\Controllers\V1\VulnerabilityController;
  * identifier in the path to tamper with. The `/admin/...` routes each require an explicit
  * permission — the routing prefix confers nothing (ADR 0002).
  */
+
+/*
+ * UNAUTHENTICATED BY AFFIRMATIVE CHOICE (Article 3.5).
+ *
+ * `me/kyc` requires a barangay and nothing published the list, so an applicant
+ * was asked for an identifier they had no way to obtain — which made verification
+ * unreachable from any client. Requiring an account would not help, because the
+ * first thing onboarding asks for is an address.
+ *
+ * Barangay names and codes are on municipal signage. There is nothing here about
+ * anybody, so there is nothing to authorize.
+ */
+Route::get('barangays', BarangayDirectoryController::class)
+    ->defaults('cache', 'public')
+    ->name('v1.barangays.index');
 
 Route::middleware('auth:sanctum')->group(function (): void {
     // ── the applicant's own onboarding ────────────────────────────────────────────────

@@ -853,3 +853,67 @@ passing client integration. The design constraint above is the finding.
   file says public; calling it says otherwise. Any client that reasons from the
   route file — as the mobile app did — ships a feed that fails for signed-in
   residents too, because it sends no token by construction.
+
+---
+
+## ADR 0044's second decision, verified — and three refusals both sides make
+
+### Supersede is implementable today, with no backend change
+
+ADR 0044 chose **supersede over merge** on the reasoning that a merged record cannot be un-merged,
+and a wrong finding about identity in a welfare registry means one household inherits another's
+history. The sweep listed only `POST .../merge`, which made that look like a request for new
+backend work.
+
+It is not. Walked against the running API:
+
+1. A near-duplicate resident was created and detection ran — one pair, rule `name-and-birth-date`,
+   confidence `exact`.
+2. `POST .../decide` with `same-person` and a note recorded `decision`, `decision_note` and
+   `decided_at`.
+3. **Both residents returned `200` afterwards.** Neither was deleted, neither deactivated.
+4. Re-running detection reported `pairs_found: 1, undecided: 0` — the pair stops resurfacing as
+   work without either record being destroyed.
+
+That is `DL-74` exactly. **The doctrinal conflict the sweep recorded needs no backend change at
+all** — `/merge` simply goes unused, and `/preview` belongs to it (it requires a
+`survivor_resident_id`, which is a merge concept).
+
+### L-21 (P2) — the review panel is handed values the console withholds
+
+`DL-73`: *"A `MatchSignal` carries an attribute, an outcome and the rule applied — **never a
+value** — so the review panel cannot leak a birth date it was never handed."*
+
+The API sends the **full resident record on both sides of the pair**, birth date included. It does
+name the rule it matched on, which is the part the console wanted — but the values come with it.
+
+Not a bug: comparing two records is arguably what a reviewer is for. It is a different answer to
+*how much must somebody see in order to decide this*, and the console's answer was reasoned about
+rather than assumed. Recorded so it is decided rather than inherited.
+
+### Search — three refusals, reached independently
+
+| Rule | Console | API |
+| --- | --- | --- |
+| No snippet, context or matched text | `DL-109` | confirmed — the payload has none |
+| No matching on free text | `NEVER_SEARCHED` | confirmed — two phrases existing **only** inside a visit observation and a referral reason returned **zero results** |
+| A composed view, not records | `SearchHit` | confirmed — `type`, `id`, `title`, `barangay_id`, `status`, and nothing else |
+
+The second is the one that matters. `DL-109`'s reasoning is that *"matching on free text discloses
+it even with no snippet rendered: type a condition, get back one resident, and the office has said
+what is in that person's file."* The API refuses the same thing, and neither side read the other.
+
+### The tally that is worth keeping
+
+Across the surfaces exercised live, the two sides **independently agree** on: the visit-observation
+attribution rule (`DL-85`), the referral lawful-basis requirement (`DL-82`), all three search
+refusals (`DL-109`), integer-centavo money with goods never valued (`DL-93`), and identity
+resolution by finding rather than deletion (`DL-74`).
+
+They **disagree** on: who may release money (`L-19`, the office's call), how much a duplicate
+reviewer may see (`L-21`), and referral destination as controlled vocabulary versus free text
+(`L-18`).
+
+Every agreement is on a rule protecting a resident. Every disagreement is a policy question about
+how an office works. That is a good shape for a project to be in — the hard parts were understood
+the same way by two teams who never spoke.
