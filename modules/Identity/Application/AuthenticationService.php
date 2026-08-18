@@ -12,10 +12,10 @@ use Modules\Identity\Contracts\AccountType;
 use Modules\Identity\Contracts\VerificationPurpose;
 use Modules\Identity\Infrastructure\Eloquent\Account;
 use Modules\Shared\Application\CacheKey;
+use Modules\Shared\Application\ClientChannel;
 use Modules\Shared\Contracts\TransactionalDelivery;
 use Modules\Shared\Contracts\TransactionalMessage;
 use Modules\Shared\Contracts\TransactionalSender;
-use Modules\Shared\Application\ClientChannel;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
 

@@ -1035,3 +1035,61 @@ rather than deletion (`DL-74`) · **publication irreversible (`DL-124`)** · **a
 (`DL-125`)** · **reach is counts (`DL-126`)**.
 
 Eight rules, reached twice, by two teams who never spoke.
+
+---
+
+## TAB 06 — provider verification: the console's expectations, replayed here
+
+The console vendors this API's generated types and fails its own build when they drift. That
+protects the console from this repository and protects this repository from nothing.
+`ConsumerContractTest` is the reciprocal.
+
+### The expectations are generated, not written
+
+`docs/api/consumers/taytay-admin-web.json` is produced **in the console** by
+`tools/emit-consumer-expectations.mjs`, which parses its mappers: the `field(wire, '…')` reads and
+the null-guards that decide whether a record survives. It is vendored here with its repository,
+full commit SHA and `sha256`.
+
+Hand-writing it would have created a *third* description of this API, beside the controller and
+the mapper. Every divergence this integration has found — D1–D8, L-01 through L-21 — had exactly
+that shape.
+
+### What is gated, and what is only reported
+
+A **required** field is one whose absence makes the console's mapper return `null`: the record is
+dropped, with no error, no empty state and no log. The list is simply shorter.
+
+**L-15 was this exactly.** `barangay_id` is required by `toResident`, this API sends the integer
+`2`, the mapper wanted a string, and a resident list would have rendered empty against a healthy
+API and a green suite in *both* repositories. So the test asserts the value as well as the key —
+a required field arriving as `null` is the same silent drop.
+
+Optional fields are reported and not enforced. Their loss degrades a screen rather than emptying
+it, and gating on them would freeze every field this API has ever published.
+
+### Two things the test found about this codebase
+
+1. **No single role can read all eight endpoints, by design.** `audit.view` is deliberately withheld
+   from `lgu_admin` — `Role::DataProtectionOfficer` exists so that the trail recording the MSWDO
+   head's approvals is not read by the MSWDO head. Verifying through one all-powerful actor would
+   have meant granting an administrator the permission a whole role exists to keep from them.
+2. **Fixtures and reads need different actors.** The DPO may read the trail and register nobody. The
+   test builds every fixture as `lgu_admin` and reads as whoever may see the endpoint — the
+   separation working, not an inconvenience.
+
+### Mutation-tested
+
+| Planted regression | Result |
+| --- | --- |
+| `barangay_id` removed from the resident projection | **caught** |
+| `barangay_id` kept but emitted as `null` | **caught** |
+| `admin/residents` renamed to `admin/resident-records` | **caught** |
+| the vendored expectations edited here to go green | **caught** |
+
+A fifth case is handled by construction: an interaction with no reachable sample record **fails**
+rather than being skipped. "Nothing to check" reads as "checked and fine" in a green suite, which
+is the failure this TAB exists to stop.
+
+Suite: **933 tests, 6,868 assertions**, `pint --test` clean — including three files left
+unformatted by earlier TABs of this integration, now fixed.

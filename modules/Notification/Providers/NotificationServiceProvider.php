@@ -13,9 +13,9 @@ use Modules\Notification\Application\NotifyRegistrantOnWaitlistPromotion;
 use Modules\Notification\Infrastructure\Channels\DatabaseChannel;
 use Modules\Notification\Infrastructure\Channels\FcmChannel;
 use Modules\Notification\Infrastructure\Channels\NullChannel;
-use Modules\Shared\Contracts\TransactionalSender;
 use Modules\Notification\Infrastructure\Transactional\LogTransactionalSender;
 use Modules\Notification\Infrastructure\Transactional\NullTransactionalSender;
+use Modules\Shared\Contracts\TransactionalSender;
 use Modules\Welfare\Contracts\CaseStatusChanged;
 
 /**

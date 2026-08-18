@@ -1,0 +1,9 @@
+{
+  "repository": "Upupapp/taytay-admin-web",
+  "commit": "107592dd6c4b19fa386fc2c7ba44c3bca56c735c",
+  "commitShort": "107592d",
+  "path": "docs/integration/consumer-expectations.json",
+  "sha256": "62be586682e4edd65757227b6898419402dcd6990e027155dccb72508a67783c",
+  "vendoredOn": "2026-08-18",
+  "generatedBy": "tools/emit-consumer-expectations.mjs"
+}

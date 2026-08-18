@@ -52,7 +52,7 @@ interface TransactionalSender
      * Attempts delivery, now.
      *
      * @return TransactionalDelivery Never throws for a provider-side failure, and **never puts the
-     *                        message text in `failureReason`** — that string is logged.
+     *                               message text in `failureReason`** — that string is logged.
      */
     public function send(TransactionalMessage $message): TransactionalDelivery;
 }
