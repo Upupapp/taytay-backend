@@ -663,3 +663,57 @@ came from reading two descriptions against each other. The command's wording is 
 *"not hand-written fixtures, which drift toward what the author expected"* — and the drift here
 was not carelessness: the fixture matched the documentation, the schema, and the mock. It just did
 not match the API.
+
+---
+
+## L-16 and L-17 — the assistance request cannot be constructed either
+
+Found by creating a real assistance request through the API and reading it back, which is
+something no amount of document-comparison would have surfaced.
+
+`POST admin/assistance-requests` returns 201 and a 21-field payload matching the published shape.
+Two things are missing from it, and from the table behind it.
+
+### L-16 (P1) — there is no field for why the household applied
+
+`AssistanceRequest.reasonForRequest` is a **required string** in the console's domain. The payload
+has no such field, and `welfare_cases` has **no narrative or reason column at all** — only
+`priority_reason`, which is about urgency, not need. It is not withheld behind a permission; it
+does not exist.
+
+A `narrative` sent on create is simply not a field the endpoint accepts, so it is ignored.
+
+**A console that cannot show why a household applied cannot support the decision it is asking a
+social worker to make.** The whole assessment screen is built around reading what was asked for.
+
+### L-17 (P1) — the assistance request carries no money
+
+`requestedAmount` and `approvedAmount` are core domain fields on the console's model. There is no
+amount, currency or minor-unit field anywhere in the payload, and none in the table. Money lives
+on `releases`.
+
+That may be the right model — an amount is arguably a property of what was released rather than
+what was asked — but it is **a different model from the one the console has**, and TAB 08 has to
+settle it before either side is wired. It is not a mapping problem.
+
+### The consequence
+
+`AssistanceRequestRepository` joins `ProgramRepository` on the list of ports that **cannot be
+satisfied from the current API** — not because a route is missing, but because the payload cannot
+fill the model. `programId` is typed non-nullable in the domain and arrives `null`;
+`reasonForRequest` is required and has no source at all.
+
+No mapper was written. Instead the gaps are **pinned by test** against the recorded payload
+(`recorded/assistance-request.spec.ts`), so they are facts somebody can check rather than claims
+in a document — and so the day the backend closes them, the tests fail and tell somebody the
+mapper can now be written.
+
+### Something the payload does well, worth saying
+
+`available_transitions: ["submitted", "cancelled"]` — the server tells the client which
+transitions are legal, so the console never re-derives the transition map. That is the staff-side
+equivalent of ADR 0007's `available_actions`, and it is exactly the right shape.
+
+### Also confirmed
+
+`barangay_id` is a number here too (L-15), on a third resource.
