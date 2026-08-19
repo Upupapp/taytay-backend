@@ -1315,3 +1315,105 @@ would look verified and fail as a regression the day PostgreSQL arrives. What mu
 written down in the class docblock.
 
 Suite: **1,026 tests, 7,595 assertions, 1 skipped**, `pint --test` clean.
+
+---
+
+## TAB 10 — newsfeed and events
+
+*"The two modules that speak to residents directly, where nothing can be taken back."*
+
+The command predicted this would be *"mostly reconciliation rather than construction"*, and it was.
+Three divergences, one measurement, one blocked item.
+
+### The lifecycle diverged in the direction the command did not anticipate
+
+Step 1 warns: *"If the API is more permissive, the console must not expose the difference."* It was
+the **console** that was more permissive — it allowed `archived → published`; `PostStatus::Archived`
+here has no outgoing transition.
+
+The console's reasoning was about the office (taking a post down by mistake is ordinary). This
+API's is about the reader: resurfacing a post puts it back at the top of the feed carrying its
+**original date**, which reads as the municipality announcing something old as though it were new.
+In the one module where nothing can be taken back, the reader's argument wins. The console now
+matches (`DL-134`), and the mistake case is served by publishing a *new* post — which is what
+actually happened.
+
+It was also a control that could not work: the button would have produced a refusal a caseworker
+could do nothing about.
+
+### `author_subject_id` reached every reader of a public thread
+
+The comment reader projection published the author's **stable account identifier** to anybody
+reading. That lets one person's comments be correlated across the whole feed, and on a welfare
+newsfeed that correlation is a profile.
+
+The code had already identified this and retained the field because removing one is breaking,
+asking that the removal be *"scheduled deliberately rather than forgotten"*. TAB 10 is that
+scheduling: no client reads it — the console holds it only in a captured fixture and the mobile
+client never references it — so the cost is a changelog entry and nothing else.
+
+**It moved rather than vanished.** A moderator acting on a repeat offender needs to know it is the
+same account, and inferring that from comment bodies is guesswork. It now reaches holders of
+`newsfeed.moderate` and nobody else.
+
+### Reach had no source at all (G-31)
+
+`DL-126` defines reach as reaction and comment counts. This API published **neither** — the admin
+projection carried status, audience, schedule and transitions and nothing about response. A screen
+built to that doctrine had nothing to render.
+
+Both are now counted at read time, so no stored figure can drift from what happened, and
+eager-loaded with `withCount` so a page of twenty-five costs one query rather than fifty. Two
+numbers, and a test asserting no reactor, reader or sharer listing exists — so adding one breaks a
+test rather than passing as a small convenience.
+
+### What was already right, and verified rather than changed
+
+* **Reporting a comment changes nothing about it.** An earlier version moved reported comments to
+  `review-needed`, which `visibleComments()` filters out — one resident could have removed another
+  from the municipality's feed. Already caught and fixed, with the assertion made from the reader's
+  side.
+* **Scheduling is the clock's.** `isLive()` requires status *and* an arrived `publish_at`; there is
+  no job whose having-run decides visibility.
+* **Capacity warns rather than blocks where it should.** A resident cannot register into a
+  nonexistent seat, which is correct; staff *promotion* recomputes under a lock and returns an
+  empty list when there is genuinely no room, so the office is never blocked from asking and the
+  server decides.
+* **Cancellation and completion are one-way**, both reaching only `archived`.
+* **A registrant row is composed** — reference, resident id, name from the published minimum,
+  status — and the projection cannot casually include an address or a vulnerability factor.
+* **The resident-facing projection names no member of staff** (`DL-123`).
+
+### Step 10 — the measurement, and the decision
+
+Derivation is inline on publish. Measured on this machine, against a realistic 1600×1200 municipal
+photograph (181 KB JPEG), two variants per image:
+
+| images | derivation | per image |
+| --- | --- | --- |
+| 1 | 78 ms | 78 ms |
+| 5 | 367 ms | 73 ms |
+| 10 | 753 ms | 75 ms |
+
+Linear, ~75 ms an image. **Decision: accept and document, do not defer to a queue.**
+
+Deferring would create a window in which a post is live and its images are not yet derived — so
+residents would see an announcement with missing pictures. For a module whose whole property is
+*"residents see what the municipality actually published"*, that trade is the wrong way round: a
+staff member waiting a second on a deliberate act is a better outcome than a resident seeing a
+half-rendered post.
+
+**What this measurement does not include** is the object-storage write. Two objects per image is
+20 network round trips for a ten-image post, and no store is provisioned, so that cost is unknown.
+
+**Revisit when** any of these is true: object storage is real and measured PUT latency pushes a
+ten-image publish past ~3 s; a post routinely carries more than ten images; or the production host
+proves materially slower than a developer machine. The hard ceiling today is the 50-image position
+limit — ~3.8 s of CPU plus 100 PUTs — which is worth remembering before somebody raises it.
+
+### Blocked
+
+Step 9 — *"Verify the resident projection in a mobile client"* — needs the precondition *"at least
+one mobile client available in staging"*. There is no staging. The projection was verified by
+reading: `publicProjection` carries no `author_subject_id`, so the office is named rather than the
+member of staff. That is not the same as watching it render.
