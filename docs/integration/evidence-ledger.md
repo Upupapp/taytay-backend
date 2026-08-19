@@ -1728,3 +1728,50 @@ breaks is the release still serving traffic, which nothing else in this reposito
 No pipeline (no Actions credit — the gate is local and run before every push), no staging, no
 production, no backups, no restore, no rollback rehearsal, no secrets manager. **The restore is
 release-gate blocker 3**, and RPO/RTO are management decisions engineering must not invent.
+
+---
+
+## TAB 19 — the gate
+
+**NO-GO**, and not marginally. Four of fifteen lines have evidence; eleven do not, and **eight of
+those cannot be closed by engineering at all** — they need an appointment, a decision, a room with
+three people in it, or a server.
+
+Full assessment in the console repository: `docs/integration/launch-gate.md`.
+
+### The finding that decides the gate
+
+**61 composed request paths the console builds do not exist on this API.** Every one is a 404 in
+the HTTP configuration, and they include **every money write**.
+
+TAB 05 produced a correct 148-row mapping in `port-mapping.md` and repointed the twenty **base**
+paths. The composed action paths in the adapters were never brought in line with it. The mapping
+records `markReleased → POST admin/releases/{release}/status`; the adapter posts to
+`admin/releases/{id}/release`.
+
+Appendix A named this failure before any code was written:
+
+> *"TAB 05 is estimated from the 146 call sites rather than from the 147-row mapping. The call
+> sites are typing; the mapping is the work."*
+
+**Nothing caught it for fourteen commands**, and the reason is the uncomfortable one: the mock
+serves every one of those paths happily, the types are right, 91 console test files are green, and
+the console has never once run against this API. Every check on that side was consistent with a
+mock rather than with a system.
+
+It is now extracted from the adapters on every build, compared against this repository's own
+published route snapshot, baselined so the number cannot grow, and printed in red whether or not
+the check passes.
+
+### And the document is stale in the other direction
+
+`port-mapping.md` still lists ten categories as having no counterpart that **TAB 07 built** —
+families, beneficiaries, work queues, the report catalogue, governance reads, kinship history,
+requirement templates, programme utilisation and the intake advisory. The gate would have been
+signed against that document, and it is wrong in both directions at once.
+
+### What the three engineering NO-GOs share
+
+Lines 05/07, 08 and 17 have one cause between them: **the console has never run against the API.**
+Everything green on the console side is green against a mock, and this command is where that
+stopped being an acceptable state.
