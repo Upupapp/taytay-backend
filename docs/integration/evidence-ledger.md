@@ -1417,3 +1417,71 @@ Step 9 — *"Verify the resident projection in a mobile client"* — needs the p
 one mobile client available in staging"*. There is no staging. The projection was verified by
 reading: `publicProjection` carries no `author_subject_id`, so the office is named rather than the
 member of staff. That is not the same as watching it render.
+
+---
+
+## TAB 11 — search, saved views and notifications
+
+*"The three services the shell uses on every screen, and the three easiest places to leak."*
+
+### Search was scoped and unaudited
+
+Scoping was already right and is now tested from the angle that matters: a barangay clerk searching
+a neighbouring barangay's resident gets **exactly** what they get for a name that does not exist —
+same keys, same empty array. Two different answers would make the search box an existence oracle
+for the whole municipality.
+
+**Auditing was missing entirely**, and it is the step the command spends the most words on. Every
+search now records actor, term and match count.
+
+Recording the term needed a decision, because {@see AuditTrail} exists to refuse this shape:
+*"a trail that duplicates the data it protects is a second, less-guarded copy of it."* A search term
+on a welfare registry is frequently somebody's name.
+
+It is recorded anyway. The question an audit of this system has to answer is **who has been looking
+up whom**, and a trail saying somebody searched four hundred times is not accountability. What makes
+it safe is who reads it: `audit.view` is held by the **Data Protection Officer alone**, deliberately
+withheld from `lgu_admin` because the auditee must not be the auditor. And the doctrine is not bent
+— it forbids copying a *record's contents* into the trail, and a search term is the actor's own
+input, which *is* the act being audited.
+
+The command's other half — *"a searchable log of searches is a second copy of the disclosure"* — is
+held structurally: `GlobalSearch` searches residents, cases, households and referrals and **never**
+`audit_entries`. A test asserts the log cannot be mined through the surface that writes it.
+
+### Saved views: sharing already cost a permission; scope was the thing to prove
+
+`is_shared` already required `saved-view.share`, with the right reason recorded — a shared view's
+*name* describes a population to everybody who opens the screen.
+
+What TAB 11 adds is the proof of step 8: an unrestricted administrator saves a view aimed at a
+barangay a clerk cannot reach, the clerk sees the view — it is office furniture — and running it
+returns nothing. The saved filter is applied **on top of** the reader's scope, so it can only
+narrow. The test accepts either a refusal or an empty result, because both mean the same thing: the
+author's reach did not travel with the view.
+
+### Notifications: the port was already right, and the mechanism needed a decision
+
+`NotificationRepository` has no `create` — the withdrawal recorded in TAB 07's triage is done, and
+no adapter can mint one.
+
+Step 10 asked for an honest delivery mechanism. **The answer is neither poll nor subscribe: on
+demand** (`DL-135`). The inbox is fetched when the drawer opens and at no other time; the only
+timers in the store dismiss toasts.
+
+That is honest because **the console shows no unread badge**. A badge is a freshness claim, and a
+number kept current only by opening the drawer is a claim the system cannot keep. Polling to
+support a badge nobody asked for would put a recurring request from every open tab against a shared
+municipal API for a feature that does not exist.
+
+The cost is stated rather than hidden: a notification raised by the *server* is not seen until
+somebody opens the inbox. Anything genuinely owed to a person belongs in their work queue, which is
+`DL-96`'s distinction and a screen they open deliberately. **If a badge is ever added, the decision
+must be revisited in the same change.**
+
+Step 12 resolves without work: the console's channels are `toast | inbox | both`, which are
+*presentation* surfaces inside one browser tab, not delivery channels. There is no channel it
+offers that could have a missing worker. The API's own `email` and `sms` are `NullChannel`s
+recording `skipped` and never `sent` — the same honesty, one layer down.
+
+Suite: **1,036 tests, 7,655 assertions**, 1 skipped, `pint --test` clean.

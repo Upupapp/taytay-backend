@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Contracts\AuditWriter;
 
 /**
  * Global search across the records staff work with (ADR 0027).
@@ -38,7 +39,10 @@ final class GlobalSearch
     /** Per entity, so one noisy type cannot fill the whole result set. */
     public const PER_ENTITY_LIMIT = 5;
 
-    public function __construct(private readonly AuthorizationService $authorization) {}
+    public function __construct(
+        private readonly AuthorizationService $authorization,
+        private readonly AuditWriter $trail,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -56,6 +60,41 @@ final class GlobalSearch
             $this->cases($actor, $term),
             $this->households($actor, $term),
             $this->referrals($actor, $term),
+        );
+
+        /*
+         * EVERY SEARCH IS RECORDED (TAB 11 step 5), and the term is recorded with it.
+         *
+         * ── The tension, and how it resolves ────────────────────────────────────────
+         *
+         * {@see AuditTrail} exists to refuse exactly this shape: *"a trail that duplicates the
+         * data it protects is a second, less-guarded copy of it."* A search term on a welfare
+         * registry is frequently a resident's name.
+         *
+         * It is recorded anyway, because the question an audit of this system must be able to
+         * answer is **"who has been looking up whom"**, and without the term it cannot. A trail
+         * that records only that somebody searched, four hundred times, is not accountability.
+         *
+         * What makes that safe is who reads it. `audit.view` is held by the **Data Protection
+         * Officer alone** — deliberately withheld from `lgu_admin`, because the auditee must not
+         * be the auditor. So the term reaches the one person whose job is asking this question,
+         * and nobody else in the office.
+         *
+         * The doctrine is not weakened either: it forbids copying a **record's contents** into the
+         * trail — case notes, identifiers, whole resident objects. A search term is not a record's
+         * contents. It is the actor's own input, and it *is* the act being audited; recording an
+         * act without recording what it was is not recording it.
+         *
+         * The other half of the command — *"a searchable log of searches is a second copy of the
+         * disclosure"* — is held structurally: this service searches residents, cases, households
+         * and referrals, and **never `audit_entries`**. The log cannot be mined through the
+         * surface it logs.
+         */
+        $this->trail->record(
+            $actor->subjectId,
+            'search.performed',
+            sprintf('Searched "%s" — %d matched', $term, count($results)),
+            'Search.Query',
         );
 
         return ['term' => $term, 'results' => $results];

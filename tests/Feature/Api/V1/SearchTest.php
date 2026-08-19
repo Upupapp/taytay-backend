@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Api\V1;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Identity\Infrastructure\Eloquent\Account;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
@@ -402,6 +404,216 @@ final class SearchTest extends KycTestCase
             'last_name' => 'Rched',
             'birth_date' => '1983-05-'.str_pad((string) (($n % 27) + 1), 2, '0', STR_PAD_LEFT),
         ]);
+    }
+
+    // ── TAB 11: the search box as a disclosure surface ───────────────────────────────
+
+    /**
+     * Step 5 — *"every search is audited server-side with the actor and the term."*
+     *
+     * Without the term, a trail saying somebody searched four hundred times is not
+     * accountability: the question an audit of a welfare registry has to answer is **who has been
+     * looking up whom**.
+     */
+    #[Test]
+    public function every_search_is_recorded_with_who_searched_and_what_for(): void
+    {
+        $admin = $this->admin();
+        Sanctum::actingAs($admin);
+
+        $this->existingResident(['first_name' => 'Auditable', 'middle_name' => null, 'last_name' => 'Person']);
+
+        $this->getJson('/api/v1/admin/search?q=Auditable')->assertOk();
+
+        $entry = DB::table('audit_entries')->where('action', 'search.performed')->first();
+
+        $this->assertNotNull($entry, 'A search that leaves no trace cannot be reviewed.');
+        $this->assertSame((string) $admin->uuid, (string) $entry->actor_subject_id);
+        $this->assertStringContainsString('Auditable', (string) $entry->summary);
+    }
+
+    /**
+     * Step 5's second half — *"a searchable log of searches is a second copy of the disclosure."*
+     *
+     * Held structurally rather than by a filter: the service searches residents, cases, households
+     * and referrals, and never `audit_entries`. So the terms recorded above cannot be mined
+     * through the surface that recorded them.
+     */
+    #[Test]
+    public function the_log_of_searches_cannot_be_mined_through_search(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $this->existingResident(['first_name' => 'Quietly', 'middle_name' => null, 'last_name' => 'Sought']);
+
+        // One search, whose term is now in the trail.
+        $this->getJson('/api/v1/admin/search?q=Quietly')->assertOk();
+
+        // A second search for the same term must find the resident, and never the audit entry
+        // that recorded the first.
+        $results = $this->getJson('/api/v1/admin/search?q=Quietly')->assertOk()->json('data.results');
+
+        foreach ($results as $hit) {
+            $this->assertNotSame('audit-entry', $hit['type'] ?? null);
+            $this->assertNotSame('search', $hit['type'] ?? null);
+        }
+
+        $this->assertNotEmpty($results);
+    }
+
+    /**
+     * Step 2 — *"the empty result is indistinguishable from a name that does not exist."*
+     *
+     * A scoped clerk searching a neighbouring barangay's resident must not be able to tell that
+     * the person exists somewhere. Two different answers would make the search box an existence
+     * oracle for the whole municipality.
+     */
+    #[Test]
+    public function a_name_outside_scope_answers_exactly_as_a_name_that_does_not_exist(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $this->existingResident([
+            'first_name' => 'Elsewhere', 'middle_name' => null, 'last_name' => 'Resident',
+            'barangay_id' => $this->otherBarangayId(),
+        ]);
+
+        $clerk = Account::factory()->staff()->create();
+        $this->grantRole($clerk, 'lgu_staff', $this->barangayId());
+        Sanctum::actingAs($clerk);
+
+        $outside = $this->getJson('/api/v1/admin/search?q=Elsewhere')->assertOk()->json('data');
+        $fictional = $this->getJson('/api/v1/admin/search?q=Zzzqqxnobody')->assertOk()->json('data');
+
+        $this->assertSame([], $outside['results']);
+        $this->assertSame($fictional['results'], $outside['results']);
+        $this->assertSame(array_keys($fictional), array_keys($outside));
+    }
+
+    /**
+     * Step 1 — *"one query parameter … the console must not offer a field list or a note flag that
+     * would widen it."*
+     *
+     * Extra parameters are ignored rather than honoured. A client that could name the fields to
+     * search could ask the registry to match on a note body, and matching on free text discloses
+     * it even with no snippet rendered.
+     */
+    #[Test]
+    public function no_parameter_can_widen_what_is_searched(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $resident = $this->existingResident([
+            'first_name' => 'Widen', 'middle_name' => null, 'last_name' => 'Target',
+        ]);
+
+        DB::table('welfare_cases')->insert([
+            'uuid' => (string) Str::uuid7(),
+            'case_number' => 'WC-NOTEPROBE1',
+            'type' => 'assistance',
+            'resident_id' => (string) $resident->uuid,
+            'barangay_id' => $this->barangayId(),
+            'status' => 'assessment',
+            'priority' => 'normal',
+            'opened_at' => now(),
+            'last_activity_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $base = $this->getJson('/api/v1/admin/search?q=Widen')->assertOk()->json('data.results');
+
+        foreach ([
+            '/api/v1/admin/search?q=Widen&fields=notes',
+            '/api/v1/admin/search?q=Widen&include_notes=1',
+            '/api/v1/admin/search?q=Widen&scope=all-barangays',
+        ] as $path) {
+            $this->assertSame(
+                $base,
+                $this->getJson($path)->assertOk()->json('data.results'),
+                "{$path} changed what was searched.",
+            );
+        }
+    }
+
+    /**
+     * TAB 11 step 8 — *"a saved view cannot widen scope. Restoring a saved filter must re-apply
+     * the actor's scope, not the author's."*
+     *
+     * This is the failure a shared view invites: an unrestricted administrator saves a useful
+     * filter, a barangay clerk opens it, and the clerk sees the administrator's rows. The saved
+     * filter is applied **on top of** the reader's scope rather than in place of it, so it can
+     * only ever narrow.
+     */
+    #[Test]
+    public function a_shared_view_re_applies_the_readers_scope_and_not_the_authors(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $elsewhere = $this->existingResident([
+            'first_name' => 'Shared', 'middle_name' => null, 'last_name' => 'Elsewhere',
+            'barangay_id' => $this->otherBarangayId(),
+        ]);
+
+        // The administrator saves a view aimed at the barangay a clerk cannot reach.
+        $this->postJson('/api/v1/admin/saved-views', [
+            'entity' => 'residents',
+            'name' => 'Everyone in the other barangay',
+            'filters' => [['field' => 'barangay_id', 'operator' => 'eq', 'value' => $this->otherBarangayId()]],
+            'is_shared' => true,
+        ])->assertSuccessful();
+
+        $clerk = Account::factory()->staff()->create();
+        $this->grantRole($clerk, 'lgu_staff', $this->barangayId());
+        Sanctum::actingAs($clerk);
+
+        // The clerk can see the view — it is office furniture — and running its filter finds
+        // nothing, because their own scope is applied underneath it.
+        $names = array_column(
+            $this->getJson('/api/v1/admin/saved-views')->assertOk()->json('data.views'),
+            'name',
+        );
+        $this->assertContains('Everyone in the other barangay', $names);
+
+        /*
+         * Running the view's own filter finds nothing. Either answer is correct — the barangay
+         * filter may be refused outright, or accepted and intersected with the clerk's scope to
+         * nothing — because both mean the same thing: the author's reach did not travel with the
+         * view. What must never happen is the row coming back.
+         */
+        $response = $this->getJson('/api/v1/admin/residents?barangay_id='.$this->otherBarangayId());
+
+        if ($response->status() === 200) {
+            $ids = array_column($response->json('data'), 'id');
+            $this->assertNotContains((string) $elsewhere->uuid, $ids);
+        } else {
+            $this->assertSame(404, $response->status());
+        }
+    }
+
+    /**
+     * Sharing costs a permission because a shared view's **name** describes a population to
+     * everybody who opens that screen, and it outlives whoever wrote it.
+     */
+    #[Test]
+    public function sharing_a_view_is_refused_without_the_grant(): void
+    {
+        $clerk = Account::factory()->staff()->create();
+        $this->grantRole($clerk, 'lgu_staff', $this->barangayId());
+        Sanctum::actingAs($clerk);
+
+        // A personal view needs no grant.
+        $this->postJson('/api/v1/admin/saved-views', [
+            'entity' => 'residents',
+            'name' => 'My own shortlist',
+        ])->assertSuccessful();
+
+        // The same view, shared, does.
+        $this->postJson('/api/v1/admin/saved-views', [
+            'entity' => 'residents',
+            'name' => 'Households worth watching',
+            'is_shared' => true,
+        ])->assertForbidden();
     }
 
     private function caseFor(Resident $resident): string
