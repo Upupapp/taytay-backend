@@ -73,14 +73,14 @@ final class ReleaseTest extends KycTestCase
 
         Sanctum::actingAs($this->disburser());
 
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
 
         /*
          * The key protects a retry; this protects two staff at two tables at the same
          * distribution, each holding their own key. Both load the record showing `ready` and both
          * click — the row lock and the re-read inside the transaction mean only one wins.
          */
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertStatus(409);
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertStatus(409);
 
         $this->assertSame(1, DB::table('release_transitions')->where('to_status', 'released')->count());
     }
@@ -127,7 +127,7 @@ final class ReleaseTest extends KycTestCase
          * Allowing one against a case still under assessment would let money be scheduled before
          * anybody decided it should be.
          */
-        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+        $this->money()->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'cash',
             'amount_centavos' => 500000,
             'release_mode' => 'cash-pickup',
@@ -184,7 +184,7 @@ final class ReleaseTest extends KycTestCase
 
         $case = $this->approvedCase();
 
-        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+        $this->money()->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'cash',
             'release_mode' => 'cash-pickup',
         ])->assertStatus(422);
@@ -194,14 +194,14 @@ final class ReleaseTest extends KycTestCase
          * figure against a family that received rice — which then appears in every total as
          * though cash had been handed over.
          */
-        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+        $this->money()->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'in-kind',
             'in_kind_description' => 'One family food pack',
             'amount_centavos' => 50000,
             'release_mode' => 'in-kind-pickup',
         ])->assertStatus(422);
 
-        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+        $this->money()->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'in-kind',
             'in_kind_description' => 'One family food pack',
             'release_mode' => 'in-kind-pickup',
@@ -213,7 +213,7 @@ final class ReleaseTest extends KycTestCase
     {
         Sanctum::actingAs($this->admin());
 
-        $batch = $this->postJson('/api/v1/admin/release-batches', [
+        $batch = $this->money()->postJson('/api/v1/admin/release-batches', [
             'name' => 'AICS payout, Barangay Dolores',
             'scheduled_for' => now()->addWeek()->toDateString(),
         ])->assertCreated()->json('data.id');
@@ -227,7 +227,7 @@ final class ReleaseTest extends KycTestCase
         ]);
 
         foreach ([$cash, $inKind] as $release) {
-            $this->postJson("/api/v1/admin/release-batches/{$batch}/releases", ['release_id' => $release])
+            $this->money()->postJson("/api/v1/admin/release-batches/{$batch}/releases", ['release_id' => $release])
                 ->assertOk();
         }
 
@@ -256,11 +256,11 @@ final class ReleaseTest extends KycTestCase
         $this->grantRole($approver, 'disbursing_officer', $this->barangayId());
         Sanctum::actingAs($approver->refresh());
 
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertForbidden();
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertForbidden();
 
         // Anybody else with the role may.
         Sanctum::actingAs($this->disburser());
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
     }
 
     #[Test]
@@ -272,7 +272,7 @@ final class ReleaseTest extends KycTestCase
 
         // `lgu_admin` approves and does not release. Until TAB 18 nobody held `request.release`
         // at all, which was correct while there was nothing to release.
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertForbidden();
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertForbidden();
     }
 
     #[Test]
@@ -308,7 +308,7 @@ final class ReleaseTest extends KycTestCase
         $release = $this->preparedRelease();
 
         Sanctum::actingAs($this->disburser());
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [])
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])
             ->assertOk()->assertJsonPath('data.status', 'released');
 
         /*
@@ -316,7 +316,7 @@ final class ReleaseTest extends KycTestCase
          * true first — a cheque given to a relative who has not confirmed, a transfer sent but
          * not landed.
          */
-        $this->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'completed'])
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'completed'])
             ->assertOk()->assertJsonPath('data.status', 'completed');
     }
 
@@ -326,11 +326,11 @@ final class ReleaseTest extends KycTestCase
         $release = $this->preparedRelease();
 
         Sanctum::actingAs($this->disburser());
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
 
         // Money has moved. A release sent in error is completed and then corrected by a new
         // record, never un-moved by a status change.
-        $this->postJson("/api/v1/admin/releases/{$release}/status", [
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/status", [
             'status' => 'cancelled',
             'reason' => 'Sent in error.',
         ])->assertStatus(409);
@@ -342,12 +342,12 @@ final class ReleaseTest extends KycTestCase
         Sanctum::actingAs($this->admin());
         $release = $this->prepare($this->approvedCase());
 
-        $this->postJson("/api/v1/admin/releases/{$release}/status", [
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/status", [
             'status' => 'failed',
             'reason' => 'Beneficiary did not attend the payout.',
         ])->assertOk();
 
-        $this->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'ready'])
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'ready'])
             ->assertOk()->assertJsonPath('data.status', 'ready');
     }
 
@@ -359,7 +359,7 @@ final class ReleaseTest extends KycTestCase
 
         // A failed release with no reason is indistinguishable from one nobody attempted, and the
         // family is owed an answer either way.
-        $this->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'failed'])
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'failed'])
             ->assertStatus(422);
     }
 
@@ -372,7 +372,7 @@ final class ReleaseTest extends KycTestCase
 
         // Frequently not the beneficiary: an elderly person sends a daughter, a bedridden patient
         // sends a neighbour. Recording only "released" loses the fact a dispute turns on.
-        $body = $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [
+        $body = $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [
             'acknowledged_by_name' => 'Ana Cruz',
             'acknowledged_relationship' => 'daughter',
             'acknowledgement_method' => 'signature',
@@ -389,7 +389,7 @@ final class ReleaseTest extends KycTestCase
         $release = $this->preparedRelease();
 
         Sanctum::actingAs($this->disburser());
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [
             'acknowledgement_method' => 'thumbmark',
         ])->assertOk();
 
@@ -412,7 +412,7 @@ final class ReleaseTest extends KycTestCase
         $release = $this->preparedRelease(250000);
 
         Sanctum::actingAs($this->disburser());
-        $this->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
 
         $residentId = (string) Release::query()->where('uuid', $release)->value('resident_id');
 
@@ -433,7 +433,7 @@ final class ReleaseTest extends KycTestCase
         $case = $this->approvedCase();
         $release = $this->prepare($case, ['amount_centavos' => 250000]);
 
-        $this->postJson("/api/v1/admin/releases/{$release}/status", [
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/status", [
             'status' => 'failed',
             'reason' => 'Beneficiary did not attend.',
         ])->assertOk();
@@ -469,7 +469,269 @@ final class ReleaseTest extends KycTestCase
         $this->postJson('/api/v1/admin/release-batches', [])->assertForbidden();
     }
 
+    #[Test]
+    public function a_release_says_who_approved_it_and_whether_that_is_you(): void
+    {
+        $admin = $this->admin();
+        Sanctum::actingAs($admin);
+
+        $case = $this->approvedCase($admin);
+        $release = $this->prepare($case);
+
+        $mine = $this->getJson("/api/v1/admin/releases/{$release}")->assertOk()->json('data');
+
+        $this->assertSame((string) $admin->uuid, $mine['approved_by']);
+        $this->assertTrue($mine['self_release'], 'The screen must be able to warn before the officer commits, not after.');
+
+        Sanctum::actingAs($this->disburser());
+
+        $theirs = $this->getJson("/api/v1/admin/releases/{$release}")->assertOk()->json('data');
+
+        $this->assertFalse($theirs['self_release'], 'Derived per caller — a client comparing identifiers can get it wrong, and the cost is a warning that never appears.');
+    }
+
+    #[Test]
+    public function a_distribution_run_reports_counts_and_never_a_status_of_its_own(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $batch = $this->money()->postJson('/api/v1/admin/release-batches', [
+            'name' => 'Saturday distribution',
+            'scheduled_for' => now()->addDay()->toDateString(),
+        ])->assertCreated()->json('data');
+
+        $listed = $this->getJson('/api/v1/admin/release-batches')->assertOk()->json('data.0');
+        $detail = $this->getJson("/api/v1/admin/release-batches/{$batch['id']}")->assertOk()->json('data');
+
+        $this->assertSame($batch['id'], $listed['id']);
+        $this->assertSame($batch['id'], $detail['id']);
+
+        // DL-90: "partially complete" hides the two people still waiting.
+        foreach (['progress', 'completion', 'percent_complete'] as $forbidden) {
+            $this->assertArrayNotHasKey($forbidden, $detail);
+        }
+    }
+
+    /**
+     * TAB 08 step 9. *"A figure nobody can reconcile is a figure nobody trusts."*
+     */
+    #[Test]
+    public function reconciliation_totals_tie_and_count_goods_beside_the_money(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $case = $this->approvedCase();
+        $this->prepare($case, ['amount_centavos' => 250000]);
+        $this->prepare($case, ['kind' => 'in-kind', 'in_kind_description' => 'One sack of rice', 'amount_centavos' => null]);
+
+        Sanctum::actingAs($this->disburser());
+
+        $data = $this->getJson('/api/v1/admin/releases/reconciliation')->assertOk()->json('data');
+
+        $this->assertSame(2, $data['totals']['line_count']);
+        $this->assertSame(250000, $data['totals']['centavos'], 'An in-kind release contributes nothing to a peso figure.');
+        $this->assertSame(1, $data['totals']['in_kind_count'], 'It is counted beside the money rather than summed in as zero.');
+
+        // The parts must add up to the whole, or the view fails at the one job it has.
+        $this->assertSame(
+            $data['totals']['line_count'],
+            array_sum(array_column($data['by_status'], 'line_count')),
+        );
+        $this->assertSame(
+            $data['totals']['centavos'],
+            array_sum(array_column($data['by_program'], 'centavos')),
+        );
+    }
+
+    #[Test]
+    public function the_reconciliation_view_is_refused_to_someone_who_may_not_release(): void
+    {
+        Sanctum::actingAs($this->staff());
+
+        $this->getJson('/api/v1/admin/releases/reconciliation')->assertForbidden();
+    }
+
     // ── fixtures ──────────────────────────────────────────────────────────────────────
+
+    // ── TAB 08: money discipline ─────────────────────────────────────────────────────
+
+    #[Test]
+    public function every_money_write_refuses_a_request_with_no_idempotency_key(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $case = $this->approvedCase();
+
+        /*
+         * The service treats a missing key as "no protection, carry on" — the right default for an
+         * ordinary write, and the wrong one here, because what an unprotected retry produces is a
+         * second payout to a real family. So this surface refuses it rather than being silently
+         * unprotected: a client that forgets the header finds out on its first request in
+         * development, not on a bad connection at a payout table.
+         */
+        $this->withoutIdempotencyKey()
+            ->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+                'kind' => 'cash',
+                'amount_centavos' => 500000,
+                'release_mode' => 'cash-pickup',
+            ])->assertStatus(422);
+
+        $release = $this->prepare($case);
+
+        $this->withoutIdempotencyKey()
+            ->postJson("/api/v1/admin/releases/{$release}/status", [
+                'status' => 'deferred',
+                'reason' => 'Funds had not arrived.',
+            ])->assertStatus(422);
+
+        $this->withoutIdempotencyKey()
+            ->postJson('/api/v1/admin/release-batches', [
+                'name' => 'Saturday distribution',
+                'scheduled_for' => now()->addDay()->toDateString(),
+            ])->assertStatus(422);
+    }
+
+    #[Test]
+    public function the_same_key_and_the_same_body_replays_rather_than_scheduling_twice(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $case = $this->approvedCase();
+        $key = (string) Str::uuid7();
+        $body = ['kind' => 'cash', 'amount_centavos' => 500000, 'release_mode' => 'cash-pickup'];
+
+        $first = $this->withHeaders(['Idempotency-Key' => $key])
+            ->postJson("/api/v1/admin/assistance-requests/{$case}/releases", $body)
+            ->assertCreated()->json('data');
+
+        $second = $this->withHeaders(['Idempotency-Key' => $key])
+            ->postJson("/api/v1/admin/assistance-requests/{$case}/releases", $body)
+            ->assertSuccessful()->json('data');
+
+        $this->assertSame($first['id'], $second['id'], 'The stored response is replayed; the operation is not run again.');
+        $this->assertSame(1, Release::query()->count(), 'One intent, one row.');
+    }
+
+    /**
+     * The case that matters more than the replay.
+     *
+     * A client reusing a key with a changed amount is confused or being tampered with, and quietly
+     * replaying the old response would tell it a payout of ₱5,000 succeeded when it asked for
+     * ₱50,000.
+     */
+    #[Test]
+    public function the_same_key_with_a_different_body_is_refused_rather_than_replayed(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $case = $this->approvedCase();
+        $key = (string) Str::uuid7();
+
+        $this->withHeaders(['Idempotency-Key' => $key])
+            ->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+                'kind' => 'cash', 'amount_centavos' => 500000, 'release_mode' => 'cash-pickup',
+            ])->assertCreated();
+
+        $this->withHeaders(['Idempotency-Key' => $key])
+            ->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+                'kind' => 'cash', 'amount_centavos' => 5000000, 'release_mode' => 'cash-pickup',
+            ])->assertStatus(409);
+
+        $this->assertSame(1, Release::query()->count());
+    }
+
+    /**
+     * The attack the command asks for by name: one actor holding both permissions, expecting refusal.
+     *
+     * Separated permissions do not separate **people**. An administrator holds approval and release
+     * by definition, and on a small office's bad day one person is available. So the control cannot
+     * be "which permissions does this actor hold" — it has to be "is this the same human who
+     * approved it", and only the server can answer that.
+     */
+    #[Test]
+    public function the_approver_of_a_request_cannot_release_its_own_payout(): void
+    {
+        /*
+         * ONE ACCOUNT HOLDING BOTH ROLES, which is the only way to satisfy the command's premise.
+         *
+         * `lgu_admin` holds approval and NOT release — the role split already prevents the simple
+         * case, and `disbursing_officer` exists precisely so that releasing is somebody else's job.
+         * So the attack has to be an office that grants one person both roles, which is exactly
+         * what a small office on a bad day does.
+         *
+         * That is why the control cannot be "which permissions does this actor hold". It has to be
+         * "is this the same human who approved it", and only the server can answer that.
+         */
+        $both = Account::factory()->staff()->create();
+        $this->grantRole($both, 'lgu_admin', $this->barangayId());
+        $this->grantRole($both, 'disbursing_officer', $this->barangayId());
+
+        Sanctum::actingAs($both);
+
+        $case = $this->approvedCase($both);
+        $release = $this->prepare($case);
+
+        $refusal = $this->money()
+            ->postJson("/api/v1/admin/releases/{$release}/confirmation", [])
+            ->assertForbidden();
+
+        /*
+         * The command also asks that the refusal be legible, not just correct. A disbursing officer
+         * who is told "forbidden" reaches for the administrator; one who is told they approved this
+         * themselves goes and finds a colleague, which is the outcome the rule wants.
+         */
+        $this->assertStringContainsString('approved', (string) $refusal->json('error.message'));
+
+        $this->assertSame(0, DB::table('release_transitions')->where('to_status', 'released')->count());
+    }
+
+    /**
+     * The command: *"the API must refuse it rather than storing a blank."*
+     *
+     * A blank reason is worse than a missing one, because it reads later as though somebody
+     * answered.
+     */
+    #[Test]
+    public function a_state_that_requires_a_reason_refuses_a_blank_one(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $case = $this->approvedCase();
+        $release = $this->prepare($case);
+
+        $this->money()
+            ->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'deferred', 'reason' => '   '])
+            ->assertStatus(422);
+
+        $this->money()
+            ->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'deferred'])
+            ->assertStatus(422);
+
+        $this->assertSame(0, DB::table('release_transitions')->where('to_status', 'deferred')->count());
+    }
+
+    /**
+     * The command: *"Test a value that a float would round wrongly."*
+     *
+     * ₱1,234,567.89 is 123456789 centavos. Through a float, 1234567.89 × 100 is 123456788.99999999,
+     * and truncation makes that 123456788 — one centavo short, on a figure a disbursing officer
+     * will be asked to reconcile.
+     */
+    #[Test]
+    public function a_peso_figure_never_passes_through_a_float(): void
+    {
+        $centavos = 123456789;
+
+        $release = $this->preparedRelease($centavos);
+
+        $stored = (int) DB::table('releases')->where('uuid', $release)->value('amount_centavos');
+
+        $this->assertSame($centavos, $stored);
+        $this->assertSame($centavos, (int) $this->getJson("/api/v1/admin/releases/{$release}")->assertOk()->json('data.amount_centavos'));
+
+        // What the naive path would have produced, kept as the thing being avoided.
+        $this->assertNotSame($centavos, (int) ((float) ($centavos / 100) * 100));
+    }
 
     private function admin(): Account
     {
@@ -569,7 +831,7 @@ final class ReleaseTest extends KycTestCase
      */
     private function prepare(string $case, array $overrides = []): string
     {
-        return $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", array_filter($overrides + [
+        return $this->money()->postJson("/api/v1/admin/assistance-requests/{$case}/releases", array_filter($overrides + [
             'kind' => 'cash',
             'amount_centavos' => 500000,
             'release_mode' => 'cash-pickup',

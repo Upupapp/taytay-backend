@@ -275,6 +275,14 @@ Route::middleware('auth:sanctum')->group(function (): void {
      * status re-check inside the service (two staff at two tables clicking at once), and a
      * segregation check on the *person* (the approver may not also release).
      */
+    /*
+     * The disbursing officer's ledger view (TAB 08 step 9) — totals by status, programme and
+     * period, to tie against a cash count. NOT a report: no small-cell suppression, because a
+     * withheld row makes a balance impossible, and `request.release` is what pays for that.
+     * Declared before `{release}` so the literal segment is not swallowed.
+     */
+    Route::get('admin/releases/reconciliation', [ReleaseController::class, 'reconciliation'])->name('v1.admin.releases.reconciliation');
+
     Route::get('admin/releases', [ReleaseController::class, 'index'])->name('v1.admin.releases.index');
     Route::get('admin/releases/{release}', [ReleaseController::class, 'show'])->name('v1.admin.releases.show');
     Route::post('admin/assistance-requests/{case}/releases', [ReleaseController::class, 'store'])->name('v1.admin.assistance-requests.releases.store');
@@ -284,8 +292,14 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('admin/releases/{release}/confirmation', [ReleaseController::class, 'confirm'])->name('v1.admin.releases.confirm');
     Route::post('admin/releases/{release}/status', [ReleaseController::class, 'transition'])->name('v1.admin.releases.status');
 
+    /*
+     * The distribution runs (TAB 08). A batch has no status of its own — counts, derived from
+     * its members, because "partially complete" hides the people still waiting (DL-90).
+     */
+    Route::get('admin/release-batches', [ReleaseController::class, 'indexBatches'])->name('v1.admin.release-batches.index');
     Route::post('admin/release-batches', [ReleaseController::class, 'storeBatch'])->name('v1.admin.release-batches.store');
     Route::post('admin/release-batches/{batch}/releases', [ReleaseController::class, 'addToBatch'])->name('v1.admin.release-batches.add');
     // Ordered by reference so two copies printed an hour apart match line for line.
+    Route::get('admin/release-batches/{batch}', [ReleaseController::class, 'showBatch'])->name('v1.admin.release-batches.show');
     Route::get('admin/release-batches/{batch}/manifest', [ReleaseController::class, 'manifest'])->name('v1.admin.release-batches.manifest');
 });

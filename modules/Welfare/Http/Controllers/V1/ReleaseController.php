@@ -78,7 +78,7 @@ final class ReleaseController
 
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
-            fn (Release $release): array => $this->projection($release),
+            fn (Release $release): array => $this->projection($release, $actor),
         );
     }
 
@@ -88,7 +88,7 @@ final class ReleaseController
 
         $model = $this->releaseOrFail($actor, $release);
 
-        return ApiResponse::item($this->projection($model) + [
+        return ApiResponse::item($this->projection($model, $actor) + [
             'transitions' => $model->transitions()->get()->map(fn (ReleaseTransition $t): array => [
                 'from' => $t->from_status,
                 'to' => $t->to_status,
@@ -121,9 +121,21 @@ final class ReleaseController
             'release_location' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
-        return ApiResponse::created($this->projection(
-            $this->releases->prepare($model, $validated, $actor),
-        ));
+        /*
+         * IDEMPOTENT (TAB 08 step 3). Creating a release is a money write: a double-click or a
+         * retry on a bad connection would schedule a second payout for the same family, and
+         * nothing downstream would recognise it as a duplicate — the two rows differ only by
+         * `sequence`, which the table's unique key positively expects.
+         */
+        [$status, $body] = $this->idempotency->execute(
+            $this->idempotencyKeyOrFail($request),
+            $actor->subjectId,
+            'POST /api/v1/admin/assistance-requests/{case}/releases',
+            ['case' => $case] + $validated,
+            fn (): array => [201, $this->projection($this->releases->prepare($model, $validated, $actor), $actor)],
+        );
+
+        return ApiResponse::item($body, $status);
     }
 
     /**
@@ -150,12 +162,12 @@ final class ReleaseController
         ]);
 
         [$status, $body] = $this->idempotency->execute(
-            $request->header('Idempotency-Key'),
+            $this->idempotencyKeyOrFail($request),
             $actor->subjectId,
             'POST /api/v1/admin/releases/{release}/confirmation',
             ['release' => $release] + $validated,
             function () use ($model, $validated, $actor): array {
-                return [200, $this->projection($this->releases->confirmRelease($model, $validated, $actor))];
+                return [200, $this->projection($this->releases->confirmRelease($model, $validated, $actor), $actor)];
             },
         );
 
@@ -180,12 +192,30 @@ final class ReleaseController
         // a handover and belongs to whoever may release, while deferring is scheduling.
         $this->authorization->authorize($actor, $target->requiredPermission());
 
-        return ApiResponse::item($this->projection($this->releases->transition(
-            $model,
-            $target,
-            $validated['reason'] ?? null,
-            $actor,
-        )));
+        /*
+         * IDEMPOTENT. `ready → released` is the moment money moves, so a replayed request here is
+         * the worst case in the system. The stored response is replayed rather than the transition
+         * being attempted twice.
+         *
+         * The row lock inside the service handles the *different* failure — two officers pressing
+         * at the same instant with different keys — and the two protections are not
+         * interchangeable: a key defends against one caller retrying, a lock against two callers
+         * racing.
+         */
+        [$httpStatus, $body] = $this->idempotency->execute(
+            $this->idempotencyKeyOrFail($request),
+            $actor->subjectId,
+            'POST /api/v1/admin/releases/{release}/status',
+            ['release' => $release] + $validated,
+            fn (): array => [200, $this->projection($this->releases->transition(
+                $model,
+                $target,
+                $validated['reason'] ?? null,
+                $actor,
+            ), $actor)],
+        );
+
+        return ApiResponse::item($body, $httpStatus);
     }
 
     // ── batches and manifests ─────────────────────────────────────────────────────────
@@ -200,13 +230,25 @@ final class ReleaseController
             'location' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
-        /** @var ReleaseBatch $batch */
-        $batch = ReleaseBatch::query()->create($validated + [
-            'status' => 'open',
-            'opened_by' => $actor->subjectId,
-        ]);
+        // A duplicate batch is not a duplicate payout, but it is a second list an officer can
+        // work from, and two lists for one distribution is how somebody gets paid off both.
+        [$status, $body] = $this->idempotency->execute(
+            $this->idempotencyKeyOrFail($request),
+            $actor->subjectId,
+            'POST /api/v1/admin/release-batches',
+            $validated,
+            function () use ($validated, $actor): array {
+                /** @var ReleaseBatch $batch */
+                $batch = ReleaseBatch::query()->create($validated + [
+                    'status' => 'open',
+                    'opened_by' => $actor->subjectId,
+                ]);
 
-        return ApiResponse::created($this->batchProjection($batch));
+                return [201, $this->batchProjection($batch)];
+            },
+        );
+
+        return ApiResponse::item($body, $status);
     }
 
     public function addToBatch(Request $request, ActorContext $actor, string $batch): JsonResponse
@@ -228,9 +270,142 @@ final class ReleaseController
             );
         }
 
-        $release->forceFill(['release_batch_id' => $model->id])->save();
+        [$status, $body] = $this->idempotency->execute(
+            $this->idempotencyKeyOrFail($request),
+            $actor->subjectId,
+            'POST /api/v1/admin/release-batches/{batch}/releases',
+            ['batch' => $batch] + $validated,
+            function () use ($release, $model, $actor): array {
+                $release->forceFill(['release_batch_id' => $model->id])->save();
 
-        return ApiResponse::item($this->projection($release->refresh()));
+                return [200, $this->projection($release->refresh(), $actor)];
+            },
+        );
+
+        return ApiResponse::item($body, $status);
+    }
+
+    /**
+     * The distribution runs (TAB 08), closing `ReleaseRepository.listBatches`.
+     *
+     * **Counts, never a status of its own** (`DL-90`). A batch is a plan — a date, a venue, an
+     * officer and a list — and what it amounts to is derived by counting its members. "38 of 41
+     * released, 2 deferred" names the problem; "partially complete" hides the two people still
+     * waiting.
+     */
+    public function indexBatches(Request $request, ActorContext $actor): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::RequestView);
+
+        $pagination = PaginationParams::fromRequest($request);
+
+        $query = ReleaseBatch::query()->orderByDesc('scheduled_for')->orderByDesc('id');
+
+        $scheduledFor = $request->query('scheduled_for');
+
+        if (is_string($scheduledFor) && $scheduledFor !== '') {
+            $query->whereDate('scheduled_for', $scheduledFor);
+        }
+
+        $total = (clone $query)->count();
+        $rows = $query->forPage($pagination->page, $pagination->perPage)->get();
+
+        return ApiResponse::page(
+            new Page($rows->all(), $total, $pagination),
+            fn (ReleaseBatch $batch): array => $this->batchProjection($batch),
+        );
+    }
+
+    /** One distribution run, with the counts that say where it stands. */
+    public function showBatch(Request $request, ActorContext $actor, string $batch): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::RequestView);
+
+        return ApiResponse::item($this->batchProjection($this->batchOrFail($batch)));
+    }
+
+    /**
+     * Totals a disbursing officer can tie to the office's own records (TAB 08 step 9).
+     *
+     * *"A figure nobody can reconcile is a figure nobody trusts."*
+     *
+     * ── WHAT IS AND IS NOT SUPPRESSED HERE ───────────────────────────────────────────
+     *
+     * Reporting suppresses small cells because an aggregate of one identifies a household. This is
+     * **not** a report: it is the disbursing officer's own ledger view, reached with
+     * `request.release`, and its purpose is to tie to a cash count at the end of a distribution
+     * day. A withheld row would make it impossible to balance — the officer would be told the
+     * total does not add up and not told which row was removed.
+     *
+     * So no suppression, and the narrower permission is what pays for that. It also carries no
+     * names: totals by status, by programme and by period, and nothing that identifies a person.
+     */
+    public function reconciliation(Request $request, ActorContext $actor): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::RequestRelease);
+
+        $query = $this->releases->query();
+
+        foreach ([['from', '>='], ['to', '<=']] as [$param, $operator]) {
+            $value = $request->query($param);
+
+            if (is_string($value) && $value !== '') {
+                $query->whereDate('scheduled_for', $operator, $value);
+            }
+        }
+
+        $rows = (clone $query)
+            ->selectRaw('status, program_code, kind, count(*) as line_count')
+            ->selectRaw('sum(case when kind = ? then coalesce(amount_centavos, 0) else 0 end) as centavos', ['cash'])
+            ->groupBy('status', 'program_code', 'kind')
+            ->get();
+
+        $byStatus = [];
+        $byProgram = [];
+
+        /*
+         * Accumulated with a named helper rather than references held inside an array. The first
+         * version used `foreach ([[&$byStatus, ...], [&$byProgram, ...]] as [$bucket, $key])`, and
+         * PHP's list destructuring drops the reference — both buckets were copies, so the totals
+         * were right and every breakdown came back empty. Caught by the assertion that the parts
+         * must add up to the whole, which is the one job this endpoint has.
+         */
+        $accumulate = static function (array &$bucket, string $key, object $row): void {
+            $bucket[$key] ??= ['key' => $key, 'line_count' => 0, 'centavos' => 0, 'in_kind_count' => 0];
+            $bucket[$key]['line_count'] += (int) $row->line_count;
+            $bucket[$key]['centavos'] += (int) $row->centavos;
+
+            if ($row->kind === 'in-kind') {
+                $bucket[$key]['in_kind_count'] += (int) $row->line_count;
+            }
+        };
+
+        foreach ($rows as $row) {
+            $statusKey = $row->status instanceof ReleaseStatus ? $row->status->value : (string) $row->status;
+
+            $accumulate($byStatus, $statusKey, $row);
+            $accumulate($byProgram, (string) ($row->program_code ?? 'unassigned'), $row);
+        }
+
+        return ApiResponse::item([
+            'by_status' => array_values($byStatus),
+            'by_program' => array_values($byProgram),
+            'totals' => [
+                'line_count' => (int) $rows->sum('line_count'),
+                'centavos' => (int) $rows->sum('centavos'),
+                /*
+                 * Goods are counted beside the money, never summed into it (`DL-93`). Nobody priced
+                 * that sack of rice, and a peso total that silently included it as zero is a total
+                 * that cannot be tied to anything.
+                 */
+                'in_kind_count' => (int) $rows->where('kind', 'in-kind')->sum('line_count'),
+                'currency' => 'PHP',
+            ],
+            'filters' => array_filter([
+                'from' => $request->query('from'),
+                'to' => $request->query('to'),
+            ]),
+        ]);
     }
 
     /**
@@ -251,7 +426,7 @@ final class ReleaseController
              * for line, which is what makes a paper manifest checkable against a screen at a
              * table with a queue in front of it.
              */
-            'lines' => $rows->map(fn (Release $release): array => $this->projection($release))->all(),
+            'lines' => $rows->map(fn (Release $release): array => $this->projection($release, $actor))->all(),
             'total_count' => $rows->count(),
             /*
              * A total in CENTAVOS, summed as integers. In-kind releases contribute nothing —
@@ -268,9 +443,41 @@ final class ReleaseController
     // ── projections ───────────────────────────────────────────────────────────────────
 
     /**
+     * Money writes require an `Idempotency-Key`. It is optional everywhere else, and it is not
+     * optional here.
+     *
+     * {@see IdempotencyService} treats a missing key as "no protection, carry on", which is the
+     * right default for an ordinary write: a key is a promise a client opts into. On this surface
+     * that default is wrong, because the thing an unprotected retry produces is a **second payout
+     * to a real family**, and the only safeguard would be the discipline of four independent
+     * clients.
+     *
+     * Refused rather than silently unprotected. A client that forgets the header finds out on its
+     * first request in development, not on a bad connection at a payout table.
+     *
+     * This is a tightening of a published contract, taken now because no client is wired to these
+     * endpoints yet — the console still runs on mock adapters — and this is the last moment it
+     * costs nothing.
+     */
+    private function idempotencyKeyOrFail(Request $request): string
+    {
+        $key = $request->header('Idempotency-Key');
+
+        if (! is_string($key) || trim($key) === '') {
+            throw new ApiException(
+                ErrorCode::ValidationFailed,
+                'Idempotency-Key is required on this request. Generate one when the officer commits '
+                .'the intent and send the same key on every retry, so a repeat cannot become a second payout.',
+            );
+        }
+
+        return $key;
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function projection(Release $release): array
+    private function projection(Release $release, ActorContext $actor): array
     {
         return [
             'id' => $release->uuid,
@@ -279,6 +486,22 @@ final class ReleaseController
             'program_id' => $release->program_id,
             'program_code' => $release->program_code,
             'approval_reference' => $release->approval_reference,
+            /*
+             * WHO APPROVED IT, and whether that is the person reading this (TAB 08).
+             *
+             * The server already refuses a self-release outright, so this is not the control — it
+             * is what lets a screen say so **before** the officer commits, instead of after. A
+             * refusal that arrives only on submit teaches people to submit and see.
+             *
+             * `self_release` is derived per caller rather than left to the client to compute from
+             * `approved_by`, because a client comparing identifiers is a client that can get the
+             * comparison wrong, and the consequence of getting it wrong is a warning that does not
+             * appear.
+             */
+            'approved_by' => $release->approved_by,
+            'self_release' => $release->approved_by !== null
+                && $actor->subjectId !== null
+                && (string) $release->approved_by === (string) $actor->subjectId,
             'sequence' => (int) $release->sequence,
             'kind' => $release->kind,
             // Integer centavos plus an explicit currency (conventions §6). Never a formatted

@@ -136,7 +136,7 @@ final class CoreJourneyTest extends KycTestCase
         }
 
         // ── the money ──
-        $releaseId = (string) $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+        $releaseId = (string) $this->money()->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'cash',
             // INTEGER CENTAVOS: five thousand pesos. Never a decimal — a peso figure that has been
             // through a float is a peso figure nobody can reconcile (ADR 0023 §1).
@@ -152,7 +152,7 @@ final class CoreJourneyTest extends KycTestCase
          */
         Sanctum::actingAs($this->reviewer('disbursing_officer'));
 
-        $this->postJson("/api/v1/admin/releases/{$releaseId}/confirmation", [
+        $this->money()->postJson("/api/v1/admin/releases/{$releaseId}/confirmation", [
             // Frequently not the beneficiary: an elderly person sends a daughter, and recording
             // only "released" loses the one fact a dispute turns on (ADR 0023).
             'acknowledged_by_name' => 'Ana Dela Cruz',

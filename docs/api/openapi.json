@@ -1906,6 +1906,8 @@
                                                 "program_id": {},
                                                 "program_code": {},
                                                 "approval_reference": {},
+                                                "approved_by": {},
+                                                "self_release": {},
                                                 "sequence": {},
                                                 "kind": {},
                                                 "amount_centavos": {},
@@ -10317,6 +10319,71 @@
             }
         },
         "/admin/release-batches": {
+            "get": {
+                "operationId": "v1.admin.release-batches.index",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin release batches index",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {},
+                                                "reference_number": {},
+                                                "name": {},
+                                                "scheduled_for": {},
+                                                "location": {},
+                                                "status": {}
+                                            }
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            },
             "post": {
                 "operationId": "v1.admin.release-batches.store",
                 "tags": [
@@ -10330,6 +10397,84 @@
                 ],
                 "responses": {
                     "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {},
+                                                "reference_number": {},
+                                                "name": {},
+                                                "scheduled_for": {},
+                                                "location": {},
+                                                "status": {}
+                                            }
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/release-batches/{batch}": {
+            "get": {
+                "operationId": "v1.admin.release-batches.show",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin release batches show",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "batch",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "200": {
                         "description": "Success.",
                         "content": {
                             "application/json": {
@@ -10505,6 +10650,8 @@
                                                 "program_id": {},
                                                 "program_code": {},
                                                 "approval_reference": {},
+                                                "approved_by": {},
+                                                "self_release": {},
                                                 "sequence": {},
                                                 "kind": {},
                                                 "amount_centavos": {},
@@ -10588,6 +10735,8 @@
                                                 "program_id": {},
                                                 "program_code": {},
                                                 "approval_reference": {},
+                                                "approved_by": {},
+                                                "self_release": {},
                                                 "sequence": {},
                                                 "kind": {},
                                                 "amount_centavos": {},
@@ -10605,6 +10754,65 @@
                                                 "outcome_reason": {},
                                                 "available_transitions": {}
                                             }
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/admin/releases/reconciliation": {
+            "get": {
+                "operationId": "v1.admin.releases.reconciliation",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin releases reconciliation",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
                                         },
                                         "meta": {
                                             "$ref": "#/components/schemas/Meta"
@@ -10682,6 +10890,8 @@
                                                 "program_id": {},
                                                 "program_code": {},
                                                 "approval_reference": {},
+                                                "approved_by": {},
+                                                "self_release": {},
                                                 "sequence": {},
                                                 "kind": {},
                                                 "amount_centavos": {},
@@ -10776,6 +10986,8 @@
                                                 "program_id": {},
                                                 "program_code": {},
                                                 "approval_reference": {},
+                                                "approved_by": {},
+                                                "self_release": {},
                                                 "sequence": {},
                                                 "kind": {},
                                                 "amount_centavos": {},
@@ -10870,6 +11082,8 @@
                                                 "program_id": {},
                                                 "program_code": {},
                                                 "approval_reference": {},
+                                                "approved_by": {},
+                                                "self_release": {},
                                                 "sequence": {},
                                                 "kind": {},
                                                 "amount_centavos": {},

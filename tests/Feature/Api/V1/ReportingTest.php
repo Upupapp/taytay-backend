@@ -191,7 +191,7 @@ final class ReportingTest extends KycTestCase
 
         // An approved case with a prepared but unreleased payment.
         $case = $this->approvedCase();
-        $this->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+        $this->money()->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
             'kind' => 'cash',
             'amount_centavos' => 500000,
             'release_mode' => 'cash-pickup',

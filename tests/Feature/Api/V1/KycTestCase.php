@@ -27,6 +27,32 @@ use Tests\TestCase;
  */
 abstract class KycTestCase extends TestCase
 {
+    /**
+     * A request carrying a fresh `Idempotency-Key`, which every money write requires (TAB 08).
+     *
+     * **`withHeaders` sets a DEFAULT that persists for the rest of the test**, not a header on one
+     * call. That is Laravel's behaviour and it is worth stating here, because it silently defeated
+     * the first version of the no-key test: `money()` earlier in the method meant every later
+     * request carried a key, and an assertion that a keyless request is refused passed a keyed one.
+     *
+     * Each call still installs a *new* key, so two intents in one test never share one — which is
+     * what a real client does, since the key is generated when an officer commits an intent.
+     *
+     * Use {@see withoutIdempotencyKey()} to assert the refusal.
+     */
+    protected function money(): self
+    {
+        return $this->withHeaders(['Idempotency-Key' => (string) Str::uuid7()]);
+    }
+
+    /** Clears the persisted key so a keyless request can actually be made. */
+    protected function withoutIdempotencyKey(): self
+    {
+        $this->flushHeaders();
+
+        return $this;
+    }
+
     protected function citizen(array $overrides = []): Account
     {
         return Account::factory()->create($overrides);
