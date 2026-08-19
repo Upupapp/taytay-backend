@@ -559,4 +559,43 @@ final class CaseDocumentTest extends KycTestCase
 
         return $account;
     }
+
+    /**
+     * TAB 09 step 7 — *"pending is not clean, and the interface must say which it is."*
+     *
+     * The version listing has carried `scan_status` all along. The **grant** did not, and the
+     * grant is what a client holds at the instant it opens the file: a warning composed without it
+     * can only say "this is recorded against your account" when it should also be saying "nothing
+     * has examined this yet".
+     *
+     * The first attempt at this shipped `null`. `issueAccess` works on the Eloquent model, whose
+     * attribute is `scan_status`, and I wrote the *contract's* `scanStatus` — which compiled,
+     * resolved to null through a null-safe chain, and produced a grant that said nothing about the
+     * scanner while looking entirely correct. Hence the assertion on the value rather than the key.
+     */
+    #[Test]
+    public function a_grant_says_where_the_scanner_got_to(): void
+    {
+        [$case, $requirement] = $this->caseWithRequirement();
+        $version = $this->recordScan($case, $requirement);
+
+        $grant = $this->postJson(
+            "/api/v1/admin/assistance-requests/{$case}/requirements/{$requirement}/documents/{$version}/access",
+        )->assertOk()->json('data');
+
+        $this->assertContains(
+            $grant['scan_status'],
+            ['pending', 'clean', 'infected', 'skipped'],
+            'A grant that reports no scan status is one a client cannot be honest about.',
+        );
+
+        // An unexamined file says so FIRST. "Recorded against your account" is a fact about
+        // accountability; "nothing has examined this yet" is a fact about risk, and only the
+        // second should change what somebody does next.
+        if ($grant['scan_status'] === 'pending') {
+            $this->assertStringContainsString('not been scanned', $grant['warning']);
+        }
+
+        $this->assertStringContainsString('recorded against your account', $grant['warning']);
+    }
 }

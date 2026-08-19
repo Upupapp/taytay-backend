@@ -260,9 +260,14 @@ final class CaseRequirementController
             'handle' => $grant['handle'],
             'expires_at' => $grant['expires_at'],
             'redacted_for_sharing' => $grant['redacted_for_sharing'],
-            'warning' => $forSharing
-                ? 'This copy is marked as leaving the office. The disclosure is recorded against your account.'
-                : 'Opening this document is recorded against your account.',
+            'scan_status' => $grant['scan_status'],
+            /*
+             * The warning is COMPOSED HERE, from what is true of this file, rather than assembled
+             * by the screen. A client writing its own sentence writes it once and then forgets to
+             * revisit it when a case like "not yet scanned" is added — and the sentence that goes
+             * stale is the one somebody relies on.
+             */
+            'warning' => $this->openingWarning($forSharing, $grant['scan_status']),
         ]);
     }
 
@@ -364,6 +369,28 @@ final class CaseRequirementController
             'is_outstanding' => $this->requirements->outstandingGiven($requirement, $version),
             'current_version' => $version === null ? null : $this->versionProjection($version),
         ];
+    }
+
+    /**
+     * What the reader is about to see, in the office's words (TAB 09 step 5).
+     *
+     * Composed on the server for the same reason the payout manifest is: a sentence assembled by
+     * a screen is a sentence that stops being true when a new case appears, and nobody notices
+     * because the screen still renders something.
+     *
+     * An unscanned file says so **first**. "Recorded against your account" is a fact about
+     * accountability; "nothing has examined this yet" is a fact about risk, and the second is the
+     * one that should change what somebody does next.
+     */
+    private function openingWarning(bool $forSharing, ?string $scanStatus): string
+    {
+        $unexamined = $scanStatus === 'pending'
+            ? 'This file has not been scanned yet. Open it only on an office workstation. '
+            : '';
+
+        return $unexamined.($forSharing
+            ? 'This copy is marked as leaving the office. The disclosure is recorded against your account.'
+            : 'Opening this document is recorded against your account.');
     }
 
     /**

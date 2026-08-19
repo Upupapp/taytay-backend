@@ -341,12 +341,33 @@ final class DocumentLibrary
         string $purpose = 'view',
         bool $forSharing = false,
     ): array {
-        $grant = $this->access->issue($this->versionOrFail($versionUuid), $actor, $purpose, $forSharing);
+        $version = $this->versionOrFail($versionUuid);
+
+        $grant = $this->access->issue($version, $actor, $purpose, $forSharing);
 
         return [
             'handle' => (string) $grant->uuid,
             'expires_at' => (string) $grant->expires_at?->toIso8601ZuluString(),
             'redacted_for_sharing' => (bool) $grant->redacted_for_sharing,
+            /*
+             * WHERE THE SCANNER GOT TO, carried on the grant and not only on the version listing
+             * (TAB 09 step 7).
+             *
+             * The listing has had it all along, and the listing is not the moment that matters:
+             * the grant is what a client holds at the instant it opens the file, and a warning
+             * composed without it can only say "opening this is recorded" when it should also be
+             * saying "nothing has examined this yet".
+             *
+             * `pending` is not `clean`. An unscanned file is still served — a caseworker opening
+             * an attachment on a managed workstation is a risk the office already carries, and
+             * refusing would stop casework for a scanner that may not be installed — but it is
+             * served **labelled**, and `DocumentAccess` separately refuses to let it leave the
+             * office.
+             */
+            // `$version` here is the Eloquent model, whose attribute is `scan_status` — not the
+            // `DocumentVersionView` contract's `scanStatus`. Writing the contract's name compiled,
+            // resolved to null, and shipped a grant that said nothing about the scanner at all.
+            'scan_status' => $version->file?->scan_status?->value,
         ];
     }
 
