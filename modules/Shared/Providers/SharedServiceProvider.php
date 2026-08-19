@@ -9,6 +9,7 @@ use Illuminate\Support\ServiceProvider;
 use Modules\Shared\Application\RequestContext;
 use Modules\Shared\Console\GenerateOpenApiCommand;
 use Modules\Shared\Console\GenerateTypesCommand;
+use Modules\Shared\Console\PublishedRoutesCommand;
 use Modules\Shared\Console\ReadinessCommand;
 use Modules\Shared\Http\RateLimits;
 
@@ -63,6 +64,7 @@ final class SharedServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 ReadinessCommand::class,
+                PublishedRoutesCommand::class,
                 GenerateOpenApiCommand::class,
                 GenerateTypesCommand::class,
             ]);

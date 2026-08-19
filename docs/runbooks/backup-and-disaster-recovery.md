@@ -156,3 +156,35 @@ consumer updated. What matters is knowing **what exists**:
   retained points and are **not** a DR plan on their own; the master command says so explicitly.
 * Which off-site provider holds the independent copy.
 * Who is on call, and how they are reached.
+
+---
+
+## Schema changes after go-live (TAB 18)
+
+The expand-migrate-contract pattern is **rehearsed**, not just described:
+`tests/Feature/Database/ExpandMigrateContractRehearsalTest.php` runs all four steps against a
+populated table and asserts at every step that the *previously deployed* code still works and that
+no value is lost.
+
+It also demonstrates the failure the pattern exists to prevent — a one-line `renameColumn`, shown
+breaking the release that is still serving traffic. That version passes every other test in this
+repository, which is why it needs a test of its own.
+
+### The step every description leaves out
+
+A row written **during** the backfill, by the still-running old code, has the old column set and the
+new one null. A row count would not notice: the count is right and one value is missing. So the
+release that backfills must also dual-write, and the cut-over waits until the null count is zero.
+
+### Migration reversibility
+
+`tests/Architecture/MigrationSafetyTest.php` migrates up, rolls all 39 back, and migrates up again,
+asserting the schema is identical. The second half matters more: a `down()` that leaves an index or
+a sequence behind rolls back "successfully" and fails on the way up — mid-incident, with the
+rollback already committed.
+
+**It runs on SQLite, and that is materially weaker than the PostgreSQL run TAB 18 asks for.** The
+weakness is specific: Laravel's SQLite grammar rebuilds a table to drop a column, and SQLite does
+not enforce a foreign key against a table being dropped — so the two rollback failures that actually
+happen in production are exactly the two it cannot report. Four static rules carry that weight
+instead, and running the real thing against real PostgreSQL stays on the master TODO.
