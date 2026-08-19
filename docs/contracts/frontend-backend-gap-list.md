@@ -41,6 +41,7 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-30](#g-30) | A post records when it was archived and not why | low | backend |
 | [G-31](#g-31) | ~~No reach counts on the wire~~ → **closed in TAB 10** | — | — |
 | [G-32](#g-32) | The console allowed republishing an archived post; this API does not | — | **closed in TAB 10** |
+| [G-33](#g-33) | The console expects an `audit.view-detail` tier; this API records no values | low | Angular |
 | [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
@@ -902,3 +903,26 @@ so the button would have produced a refusal a caseworker could do nothing about.
 The console now matches (`DL-134`, superseding `DL-124`'s republish clause). The mistake case is
 served by publishing a **new** post — which is what actually happened, and what the feed should say
 happened.
+
+---
+
+### G-33
+**The console's second audit tier has nothing to read.** `low`
+
+`DL-114` describes two tiers: `AuditRow` for the list, and `AuditEntryDetail` — the **recorded
+values** — behind a separate `audit.view-detail` permission. TAB 14 step 7 asks for the same split,
+*"because reading that a record changed is oversight and reading what it changed to is access to
+the record."*
+
+**This API records no values at all.** `AuditTrail` takes column *names* and a reason, and has no
+parameter anywhere for an old or new value: *"a trail that duplicates the data it protects is a
+second, less-guarded copy of it."* There is no `audit.view-detail` permission here, and nothing for
+one to guard.
+
+So the separation both sides want is achieved **more strongly than a permission can**: reading a
+row tells you which columns moved, and nowhere in the system will tell you what they became.
+
+The console's tier should be removed rather than wired. Left open because it is the console's field
+to delete, and because a breach assessment must know this limit exists — it can say *what was
+accessed* and cannot reconstruct *what was read* beyond the record's current state, which
+`docs/contracts/breach-procedure.md` states plainly rather than leaving somebody to discover mid-incident.

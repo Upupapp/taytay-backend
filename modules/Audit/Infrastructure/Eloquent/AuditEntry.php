@@ -29,6 +29,42 @@ final class AuditEntry extends Model
     /** Nothing is mass-assignable, because nothing here is assignable at all. */
     protected $guarded = ['*'];
 
+    /**
+     * The trail refuses to be edited or deleted, at the model rather than by convention.
+     *
+     * `AuditIsAppendOnlyTest` already proves that no application code updates or deletes an entry —
+     * by reading the source. That is a statement about the code that exists today. This is a
+     * statement about the code that can exist tomorrow: an attempt is refused rather than merely
+     * absent, which is what TAB 14 step 8 asks to be demonstrated by attempting it.
+     *
+     * ── The one legitimate deletion, and why it is not exempted here ──────────────────
+     *
+     * The retention schedule has an `audit` category, so an approved disposition will eventually
+     * need to remove old entries. That is not this: it is a deliberate, dated act taken under an
+     * approved schedule, and `RetentionPolicy::mayPurge()` refuses everything until the Data
+     * Protection Officer approves one.
+     *
+     * When that day comes, the escape hatch is added **in the same change as the approval** —
+     * which is the point. A purge path that already exists is a purge path somebody can reach
+     * without an approval.
+     */
+    protected static function booted(): void
+    {
+        self::updating(static function (): never {
+            throw new \RuntimeException(
+                'An audit entry cannot be edited. The trail is append-only (Article 5.4): a record '
+                .'that can be corrected after the fact is a record that proves nothing.',
+            );
+        });
+
+        self::deleting(static function (): never {
+            throw new \RuntimeException(
+                'An audit entry cannot be deleted. Disposal happens under an approved retention '
+                .'schedule, which does not exist yet — see RetentionPolicy::mayPurge().',
+            );
+        });
+    }
+
     protected function casts(): array
     {
         return [
