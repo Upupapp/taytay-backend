@@ -1563,3 +1563,80 @@ the screen: it is written for an operator and may name internals.
   dependencies (Redis, object storage, a slow API) that this machine does not have.
 * **Steps 1–2, the SLOs and the error budget** — numbers the MSWDO agrees to, *"not numbers
   engineering finds comfortable."* An office decision.
+
+---
+
+## TAB 17 — end-to-end journeys
+
+*"A green console suite proves the console is consistent with its mocks; it proves nothing about
+the system."*
+
+### Coverage of the six
+
+| Journey | State |
+| --- | --- |
+| 1. Walk-in to payout | **Added.** Four people, three roles, both separations asserted mid-journey |
+| 2. Resident-initiated | Backend half covered by the existing citizen-draft journey. The cross-client half needs the mobile app running against the same API |
+| 3. Continuing case | **Blocked.** The case model is unratified (ADR 0044) — building the journey would fix a shape nobody has agreed |
+| 4. Duplicate identity | **Added**, and it found a defect |
+| 5. Publication | Covered |
+| 6. Event | Covered |
+
+### Six of my own tests passed for the wrong reason
+
+Journey 1 failed with an unexpected 403, and the cause was that I had granted a role called
+`social_worker`. **There is no such role.** `role_assignments.role` is a plain string, so the grant
+wrote a row that resolved to no permissions at all.
+
+Six tests across TABs 07, 08 and 17 did this, with `social_worker` and `barangay_link`. Every one
+asserted a **refusal**, so every one passed — not because the boundary held, but because the actor
+had nothing. **A test asserting a 403 is exactly where this hides**, because the wrong answer and
+the right answer are the same status code.
+
+`grantRole` now refuses a role the catalog does not contain, which turned a silent weakness into
+seven immediate failures. The one legitimate case — a test whose subject *is* an unknown role
+reaching the database — writes its row directly, with the reason recorded beside it.
+
+All six now use roles that actually hold the intended permission. One premise turned out to be
+unsatisfiable: **no role holds `resident.view` without `program.view`** (G-34), so the beneficiary
+registry's permission choice is correct and currently inert — there is no caller it refuses whom
+`resident.view` would admit.
+
+### Journey 4 found a queue that kept asking a settled question
+
+The duplicate-review listing returned **every** pair, decided ones included. A reviewer who
+recorded *"different person"* was asked about that pair again on their next visit, and re-running
+detection put it in front of them a third time.
+
+`DL-74` records that the finding exists *"so the pair stops resurfacing"*, and the harm is specific:
+a reviewer asked the same question repeatedly learns to dismiss without reading, which is the
+behaviour the review exists to prevent.
+
+The queue now defaults to undecided; the decided pairs stay reachable by filter, and TAB 07's
+per-record findings endpoint is the history.
+
+### What journey 1 actually proves
+
+Four people and three roles, which is the honest shape — intake officers and social workers both
+hold `lgu_staff`, because they perform the same kinds of act and the separations the lifecycle needs
+are **endorser-from-approver** and **approver-from-releaser**.
+
+Both are asserted **mid-journey** rather than in isolation: the endorser is refused the approval,
+and the head who approved is refused the payout. A permission that holds on an empty database and
+fails on a real case is the failure worth catching, and only a journey catches it.
+
+### Blocked, and it is the larger half
+
+* **Step 1 — running all six in CI against a seeded staging API.** There is no staging and no CI.
+  These run against a real database, a real router and real permissions, which is not the same as
+  running against a deployed API — but it is emphatically not a mock, and the command's guardrail
+  is that *"a mocked journey is a feature test wearing a costume."*
+* **Journey 2's cross-client half**, and journey 3 entirely.
+* **Step 3, the failure paths** — API down mid-journey, token expiring mid-form, a slow network, an
+  upload interrupted at 80%. These are console behaviours and need a browser. Duplicate submission
+  and concurrent write are covered on the API side by idempotency and row locking; the concurrent
+  case is still unproven on SQLite.
+* **Steps 4–5, user acceptance testing** with an intake officer, a social worker, the head, the
+  disbursing officer, a barangay focal person and the auditor, on office hardware, with the trainer
+  silent. Nothing engineering can substitute for this, and *"a workaround discovered during UAT
+  becomes the procedure the office teaches forever."*
