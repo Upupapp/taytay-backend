@@ -87,7 +87,18 @@ final class FamilyController
         }
 
         $total = (clone $query)->count();
-        $rows = $query->orderBy('code')->forPage($pagination->page, $pagination->perPage)->get();
+
+        /*
+         * Both resolved for the whole page. `household` was lazy-loading per row and the member
+         * count was its own query per row — 2 extra per family, which `QueryBudgetTest` measured
+         * as 6 queries for one and 16 for six.
+         */
+        $rows = $query
+            ->with('household')
+            ->withCount(['memberships as current_member_count' => fn ($q) => $q->whereNull('effective_to')])
+            ->orderBy('code')
+            ->forPage($pagination->page, $pagination->perPage)
+            ->get();
 
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),

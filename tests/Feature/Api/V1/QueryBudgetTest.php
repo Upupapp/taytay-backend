@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Files\Application\DocumentLibrary;
 use Modules\Files\Application\FileStore;
@@ -401,6 +402,118 @@ final class QueryBudgetTest extends KycTestCase
         ));
     }
 
+    // ── TAB 15 step 4: the endpoints TAB 07 added ────────────────────────────────────
+
+    /**
+     * The family list resolves a member count and a household reference per row.
+     *
+     * I wrote an N+1 into this one and removed it before it shipped: `uuidOf()` looked up each
+     * resident identifier with its own query, and the kinship history resolved a family per
+     * membership row. This is what stops either coming back.
+     */
+    #[Test]
+    public function the_family_list_does_not_grow_with_families(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $household = $this->householdForBudget();
+
+        $small = $this->measure(
+            '/api/v1/admin/families',
+            fn () => $this->familyForBudget($household),
+            1,
+        );
+        $large = $this->measure(
+            '/api/v1/admin/families',
+            fn () => $this->familyForBudget($household),
+            6,
+        );
+
+        $this->assertBudget('family list', $small, $large);
+    }
+
+    /**
+     * The beneficiary registry is the one most exposed to this: every row needs assistance facts
+     * from another module, so a per-row lookup would be a cross-module call per resident.
+     *
+     * It is batched deliberately — `AssistanceHistory::factsFor()` takes the whole page — and this
+     * asserts the batching survives.
+     */
+    #[Test]
+    public function the_beneficiary_registry_does_not_grow_with_residents(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $small = $this->measure('/api/v1/admin/beneficiaries', fn () => $this->existingResident([
+            'first_name' => 'Budget'.mt_rand(1000, 9999),
+            'middle_name' => null,
+            'last_name' => 'Beneficiary',
+        ]), 1);
+
+        $large = $this->measure('/api/v1/admin/beneficiaries', fn () => $this->existingResident([
+            'first_name' => 'Budget'.mt_rand(1000, 9999),
+            'middle_name' => null,
+            'last_name' => 'Beneficiary',
+        ]), 6);
+
+        $this->assertBudget('beneficiary registry', $small, $large);
+    }
+
+    /**
+     * A work queue is the screen an office refreshes most, so an N+1 here is paid for constantly.
+     */
+    #[Test]
+    public function the_work_queue_does_not_grow_with_tasks(): void
+    {
+        $me = $this->reviewer('lgu_admin');
+        Sanctum::actingAs($me);
+
+        $small = $this->measure('/api/v1/admin/work/mine', fn () => $this->taskForBudget((string) $me->uuid), 1);
+        $large = $this->measure('/api/v1/admin/work/mine', fn () => $this->taskForBudget((string) $me->uuid), 6);
+
+        $this->assertBudget('my work queue', $small, $large);
+    }
+
+    private function householdForBudget(): string
+    {
+        $head = (string) $this->postJson('/api/v1/admin/residents', [
+            'first_name' => 'Budget',
+            'last_name' => 'Head',
+            'birth_date' => '1990-01-15',
+            'sex' => 'female',
+            'civil_status' => 'single',
+            'barangay_id' => $this->barangayId(),
+            'street_address' => '12 Rizal Street',
+        ])->assertCreated()->json('data.id');
+
+        return (string) $this->postJson('/api/v1/admin/households', [
+            'head_resident_id' => $head,
+            'barangay_id' => $this->barangayId(),
+            'street_address' => '12 Rizal Street',
+        ])->assertCreated()->json('data.id');
+    }
+
+    private function familyForBudget(string $household): void
+    {
+        $this->postJson("/api/v1/admin/households/{$household}/families", [
+            'label' => 'Budget family '.mt_rand(1000, 9999),
+        ])->assertCreated();
+    }
+
+    private function taskForBudget(string $assignee): void
+    {
+        DB::table('tasks')->insert([
+            'uuid' => (string) Str::uuid7(),
+            'type' => 'general',
+            'title' => 'Budget task '.mt_rand(1000, 9999),
+            'assigned_to' => $assignee,
+            'priority' => 'normal',
+            'status' => 'open',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     /**
      * Grows the data to `$rows`, then counts the queries one request costs.
      */
@@ -499,6 +612,21 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
             str_contains($url, '/me/cases') => DB::table('welfare_cases')->count(),
+            // ── TAB 15: the endpoints TAB 07 added ────────────────────────────────
+            str_contains($url, '/admin/families') => DB::table('families')->count(),
+            str_contains($url, '/admin/beneficiaries') => DB::table('residents')->count(),
+            str_contains($url, '/admin/work/') => DB::table('tasks')->where('status', 'open')->count(),
+            /*
+             * ZERO IS NOT A SAFE DEFAULT, and this arm exists because it was.
+             *
+             * A URL with no arm above counts zero rows forever, so the loop exhausts its attempts
+             * and the guard fails with "the fixture stopped producing rows" — which reads as a
+             * broken fixture and is actually a missing arm. Three tests said exactly that when
+             * these endpoints were added.
+             *
+             * Left as a failure rather than made to pass: an unknown URL measuring nothing would
+             * be a green budget test asserting a growth of zero over zero rows.
+             */
             default => 0,
         };
     }

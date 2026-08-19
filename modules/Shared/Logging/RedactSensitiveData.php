@@ -68,6 +68,24 @@ final class RedactSensitiveData
 
         // Location precise enough to find somebody's home.
         'street_address', 'address_line', 'full_address', 'purok',
+        /*
+         * A PERSON'S NAME (TAB 15 step 10).
+         *
+         * The command's verification is *"search the logs for a seeded resident's name and find
+         * nothing"*, and before this it would have been found. A name on its own is mild; a name
+         * in a line reading `resident.viewed` is a statement that this person is in the welfare
+         * registry, which is exactly the fact the whole system is careful with.
+         *
+         * The operator loses nothing: a uuid and the correlation id identify the record precisely,
+         * and that is already how push payloads work — an identifier and a type, never the detail.
+         *
+         * SPECIFIC KEYS, not a bare `name`. Redacting `name` would blank programme names, event
+         * titles, barangay names and saved-view names, leaving logs that no longer say what
+         * happened — and a log nobody can read is a log nobody keeps.
+         */
+        'first_name', 'middle_name', 'last_name', 'maiden_name', 'suffix',
+        'full_name', 'display_name', 'resident_name', 'head_name',
+        'acknowledged_by_name', 'contact_person',
     ];
 
     /**

@@ -1485,3 +1485,81 @@ offers that could have a missing worker. The API's own `email` and `sms` are `Nu
 recording `skipped` and never `sent` — the same honesty, one layer down.
 
 Suite: **1,036 tests, 7,655 assertions**, 1 skipped, `pint --test` clean.
+
+---
+
+## TAB 15 — performance, resilience and observability
+
+*"A metrics endpoint nobody polls is not monitoring. It is a file."*
+
+### Query budgets found an N+1 in code written two TABs ago
+
+Step 4 asks for query budgets on every endpoint the console calls, *"so an N+1 introduced later
+fails a build rather than a morning."* `QueryBudgetTest` already covered fifteen endpoints; TAB 07
+added twenty and none were measured.
+
+Three were added, and the family list **failed immediately**: 6 queries for one family, 16 for six.
+Two per row — `household` lazy-loading in the projection, and `currentMemberCount()` counting per
+family. I had removed an N+1 from this same file by hand in TAB 07 and left these two, which is
+exactly the argument for measuring rather than reading.
+
+Fixed with `with('household')` and a `withCount` alias, and the projection prefers the eager count.
+
+The row-counting helper is a `match` over known URLs whose default is `0`, so an endpoint with no
+arm counts nothing and the fixture guard fails with *"stopped producing rows"* — which reads as a
+broken fixture and is a missing arm. Left as a failure rather than made to pass: an unknown URL
+measuring nothing would be a green budget test asserting a growth of zero over zero rows.
+
+### A resident's name was not redacted from logs
+
+Step 10's verification is specific: *"search the logs for a seeded resident's name and find
+nothing."* It would have been found.
+
+The redaction list covered identifiers, secrets, tokens, narratives and addresses — and an existing
+test asserted, deliberately, that a first name is **not** redacted: *"over-redacting everything
+makes a log useless and teaches people to bypass it. The list is what Article 5.5 names."* That is
+true of Article 5.5, which does not mention names.
+
+**The command overrides it, and is right.** A name alone is mild; a name in a line reading
+`resident.viewed` states that this person is in the welfare registry, which is the fact this whole
+system is careful with, and RA 10173 §3(g) covers it.
+
+The old reasoning is **answered rather than dismissed**: the list names specific person-name keys
+and never a bare `name`, so programme names, event titles, barangay names and saved-view names
+still appear. The operator's handle is the uuid and the correlation id — already how push payloads
+work, an identifier and a type, never the detail.
+
+**The verification itself was wrong first.** It used `Log::listen`, which fires *before* the Monolog
+processors, so it observed the raw payload and reported a leak that does not exist. It now composes
+the processors in the order the application configures them and asserts on what comes out. Testing
+observability is unusually easy to get backwards: watch the wrong point in the pipe and you conclude
+the opposite of the truth, in either direction.
+
+### Correlation: the reference has to be on the screen
+
+Step 9 asks for `X-Request-Id` in the console's error reporting, *"so a caseworker's screenshot
+leads directly to the server-side trace and the audit entry."*
+
+`readApiError` already extracted it and the global error handler ignored it. It now quotes the
+reference in the message a caseworker actually reads.
+
+**On the screen, not in a log**, because this console ships no telemetry by design: nothing goes to
+an analytics property or a crash reporter. The only artefact that travels from a caseworker to
+whoever can help is a screenshot or a sentence read down a phone, and a reference held anywhere
+else does not survive that trip. The id is opaque — no name, no case, nothing about a resident —
+which is what makes it safe to display. A test also asserts the *server's* message never reaches
+the screen: it is written for an operator and may name internals.
+
+### Blocked
+
+* **Steps 11–13** — polling the metrics endpoint, uptime checks from outside the network, and the
+  operational dashboard. All need infrastructure that does not exist. The endpoint the command
+  describes as unpolled is still unpolled, and it will stay a file until somebody stands up a
+  monitor.
+* **Step 14, the event-capacity race** — release-gate blocker 4, and the same PostgreSQL
+  requirement as TAB 08 step 8. Two concurrent registrations against SQLite would pass for a
+  reason unrelated to the code.
+* **Step 3, load at municipal scale**, and **step 7, degradation** — both need volumes and
+  dependencies (Redis, object storage, a slow API) that this machine does not have.
+* **Steps 1–2, the SLOs and the error budget** — numbers the MSWDO agrees to, *"not numbers
+  engineering finds comfortable."* An office decision.

@@ -214,8 +214,16 @@ final class FamilyDirectory
             'label' => $family->label,
             'household_id' => $family->household?->uuid,
             'head_resident_id' => $this->uuidOf($family->head_resident_id),
-            // Derived from open memberships every time. There is no stored count to drift.
-            'member_count' => $family->currentMemberCount(),
+            /*
+             * Derived from open memberships every time — there is no stored count to drift.
+             *
+             * Reads the eager-loaded count where the caller provided one. Without that fallback
+             * this cost a query per row, and with `household` lazy-loading beside it the list ran
+             * at 6 queries for one family and 16 for six. Caught by `QueryBudgetTest`, which is
+             * the whole reason that test exists: the projection looked correct and the cost was
+             * invisible until something counted.
+             */
+            'member_count' => (int) ($family->current_member_count ?? $family->currentMemberCount()),
             'verification_status' => $family->verification_status,
             'status' => $family->status,
         ];

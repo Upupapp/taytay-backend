@@ -56,9 +56,27 @@ final class ObservabilityTest extends KycTestCase
             $this->assertStringNotContainsString($secret, $flattened, "A log line kept [{$secret}].");
         }
 
-        // A first name is NOT redacted, and that is deliberate: over-redacting everything makes a
-        // log useless and teaches people to bypass it. The list is what Article 5.5 names.
-        $this->assertSame('Maria', $scrubbed['request']['first_name']);
+        /*
+         * A FIRST NAME IS NOW REDACTED, reversing what this test used to assert.
+         *
+         * It previously read: *"A first name is NOT redacted, and that is deliberate:
+         * over-redacting everything makes a log useless and teaches people to bypass it. The list
+         * is what Article 5.5 names."* Article 5.5 does name identifiers, secrets, tokens,
+         * passwords and full addresses — and not names.
+         *
+         * TAB 15 step 10 overrides it: *"Verify by searching the logs for a seeded resident's name
+         * and finding nothing."* And it is right. A name alone is mild; a name in a line reading
+         * `resident.viewed` states that this person is in the welfare registry, which is the fact
+         * the whole system is careful with. RA 10173 §3(g) — information from which an identity is
+         * apparent — covers it.
+         *
+         * The old reasoning was sound and is answered rather than dismissed: the redaction list
+         * names **specific person-name keys**, never a bare `name`, so programme names, event
+         * titles, barangay names and saved-view names still appear and a log still says what
+         * happened. The operator's handle is the uuid and the correlation id, which is already how
+         * push payloads work — an identifier and a type, never the detail.
+         */
+        $this->assertSame(RedactSensitiveData::REDACTED, $scrubbed['request']['first_name']);
     }
 
     #[Test]
@@ -294,5 +312,57 @@ final class ObservabilityTest extends KycTestCase
          */
         $this->assertStringNotContainsString((string) $citizen->uuid, $body);
         $this->assertStringNotContainsString('@', $body);
+    }
+
+    /**
+     * TAB 15 step 10, done the way the command words it: *"Verify by searching the logs for a
+     * seeded resident's name and finding nothing."*
+     *
+     * ── Captured where the line is WRITTEN, not where it is raised ───────────────────
+     *
+     * The first version of this used `Log::listen`, which fires **before** the Monolog processors
+     * run — so it observed the raw payload and reported a leak that does not exist. That is the
+     * hazard of testing observability: it is easy to watch the wrong point in the pipe and
+     * conclude the opposite of the truth, in either direction.
+     *
+     * This composes the processors in the order the application configures them and asserts on
+     * what comes out, which is what reaches a file.
+     */
+    #[Test]
+    public function a_seeded_residents_name_appears_nowhere_in_a_written_log_line(): void
+    {
+        $resident = $this->existingResident([
+            'first_name' => 'Zenaida',
+            'middle_name' => null,
+            'last_name' => 'Malabanan',
+        ]);
+
+        // The line somebody writes at four in the afternoon while chasing a bug.
+        $raw = new LogRecord(
+            new \DateTimeImmutable,
+            'app',
+            Level::Info,
+            'Chasing a bug',
+            [
+                'resident' => [
+                    'first_name' => 'Zenaida',
+                    'last_name' => 'Malabanan',
+                    'street_address' => '12 Manggahan Street',
+                    'uuid' => (string) $resident->uuid,
+                ],
+            ],
+        );
+
+        $written = (string) json_encode((new RedactSensitiveData)((new AddRequestContext)($raw))->context);
+
+        foreach (['Zenaida', 'Malabanan', 'Manggahan'] as $personal) {
+            $this->assertStringNotContainsString($personal, $written, "A written log line kept [{$personal}].");
+        }
+
+        /*
+         * And the handle an operator actually needs survives. This is the half that stops the rule
+         * being over-broad: the record is still identifiable, so a log line is still worth having.
+         */
+        $this->assertStringContainsString((string) $resident->uuid, $written);
     }
 }
