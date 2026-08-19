@@ -138,17 +138,31 @@ naming the old. The chain is only readable if the history is.
 
 → `GET admin/events/{event}/history`
 
-### `EventRepository.metrics` — **build, deliberately narrow**
+### `EventRepository.metrics` — **mapped, not built**
 
-`DL-126` and `DL-130` between them settle the shape: **counts, and nothing that could answer
-*which* residents**. Registrations, attendance, capacity, waitlist depth — no per-resident
-breakdown, no demographic split thin enough to name somebody.
+Revised while building. `GET admin/events/{event}/registration-summary` already returns exactly
+what this row asked for: registrations, waitlist depth, capacity, seats remaining and attendance
+counts — and nothing that could answer *which* residents, which is `DL-126` and `DL-130` already
+held.
 
-→ `GET admin/events/{event}/metrics`
+A second endpoint would have been a second answer to one question, and the triage's own middle
+option is *"map it to something that exists"*. The console repoints; nothing is built.
+
+→ `GET admin/events/{event}/registration-summary`
 
 ---
 
-## What this triage commits to
+## What was actually built
+
+**Nineteen endpoints across six modules, and one mapping.** The triage below planned twenty builds;
+`EventRepository.metrics` turned out to be already served, and was mapped instead.
+
+Sixteen new route patterns, `266 → 284` registered routes, and five defects found in existing code
+by the act of reading it back. See the [evidence ledger](./evidence-ledger.md#tab-07--backend-gap-closure).
+
+---
+
+## What this triage committed to
 
 Twenty endpoints across six modules. Every one traces to a port method the console already calls,
 which is the command's test for whether it should exist at all: *"Build only what a measured port

@@ -1112,3 +1112,115 @@ removing both files.
 expectations is a job for whichever TAB takes on that repository; it is outside the two this
 Master Command joins, and starting it unasked would be widening the integration by a third
 codebase.
+
+---
+
+## TAB 07 — backend gap closure
+
+**Objective met:** every one of TAB 05's 36 `no counterpart` rows now has an endpoint, a mapping to
+one that already existed, or a recorded decision. The triage is
+[`tab-07-triage.md`](./tab-07-triage.md); this is what building it actually produced.
+
+### The count
+
+| Decision | Rows | Outcome |
+| --- | --- | --- |
+| Built | 19 | 16 new route patterns across 6 modules |
+| Mapped to something that exists | 1 | `EventRepository.metrics` → `registration-summary` |
+| Deferred to TAB 08 (money) | 3 | the noun is TAB 08's to decide before the endpoint is built |
+| Blocked on ratification | 11 | the whole of `CaseRepository`; ADR 0044 awaits the MSWDO |
+| Withdrawn | 1 | `NotificationRepository.create` — the API is read-only for the actor |
+| **Total** | **36** | |
+
+Routes: **266 → 284**. Suite: **933 → 1,015 tests**, 7,484 assertions, `pint --test` clean.
+
+### What the command asked for, and where each rule landed
+
+**"Do not create a second family model."** The family read side has no new table and no new entity.
+The kinship history needed no event log either, because `family_memberships` and
+`resident_relationships` are already effective-dated and append-only — the history was in the
+database and had simply never been read back. An event table beside an effective-dated one is two
+records of one fact, agreeing until somebody writes to one path and not the other.
+
+**"A projection, never an entity."** No `beneficiaries` table, no beneficiary identifier, no stored
+standing; the four standings are derived per read and are not exclusive. A stored standing would be
+correct until the next case change and wrong until a job ran, and that window is exactly when
+somebody checks whether a family has already been helped.
+
+**"Read-only and derived server-side."** Nothing in the work queues writes. Acting on an item goes
+to the task's own endpoints, which already audit — a queue that could also mutate is a second write
+path to one record. Alerts are computed per read, so fixing the record clears the alert and there
+is no dismiss.
+
+**"Aggregate-first. Suppress small cells rather than rounding them."** Proven against rows rather
+than asserted: one case in a barangay comes back withheld with a `null` total; five come back
+published. Every reporting response now publishes the threshold and the method.
+
+**"No grouping by caseworker."** `assigned_to` is refused on a report run and still permitted on the
+dashboard. A dashboard is how a supervisor reviews a caseload they are responsible for; a report is
+what gets pasted into a meeting pack, and a per-worker report is a league table however it was made.
+
+**"Authorize every new route explicitly."** Four permission choices were made deliberately rather
+than by default, and each is tested as an attack: the beneficiary registry is `program.view` not
+`resident.view`; the team queue is `staff.view` not `task.view`; requirement *history* is
+`program.manage` not `program.view`; duplicate findings are `resident.merge`.
+
+**"Paginate every collection."** Including the ones where an argument for an exception was available
+— a person's kinship history is small *in practice*, which is a guess about the busiest record
+rather than a limit.
+
+### Five defects found by building read sides
+
+Each was found because something was read back that never had been.
+
+1. **A programme requirement could be created once and never amended** (G-28, fixed).
+   `storeRequirement` wrote `template_version => '1'` unconditionally against a unique key of
+   (program_id, code, template_version), so the second publication of any requirement was refused
+   by the database. An office that worded one badly had no way to correct it.
+2. **`currentRequirements()` had no version filter despite its name** (fixed) — a programme detail
+   would have shown the same requirement twice, once with wording already replaced.
+3. **Naming a household head does not enrol them as a member** (G-23) — found by fixtures that could
+   not join a family without household membership. Left open: it is a write-path change with a
+   backfill behind it.
+4. **`family_memberships` records no role** (G-22) — four of the console's six roles are unknowable,
+   and none of them is guessed.
+5. **A post records when it was archived and not why** (G-30) — the one question worth asking about
+   a removed post is the one its history cannot answer.
+
+### Two mistakes of mine, and what they cost
+
+**The beneficiary projection landed in the wrong module.** I put it in `ResidentProfile`, reasoning
+that the registry is the spine. `ModuleBoundaryTest` rejected it: `Welfare` already depends on
+`ResidentProfile`, so importing back made the dependency graph cyclic. The inversion is also the
+better answer on Article 6's terms — a beneficiary standing is a *welfare* fact about a person, and
+each fact has one owning module. The architecture test earned its keep.
+
+**The advisory silently found nothing.** `status` is cast to the `CaseStatus` enum on the model and
+I compared it against `openValues()` with a strict `in_array`, which matched nothing. It returned
+`200` with an empty signal list — and an advisory that finds no signals looks exactly like a clean
+record, which is the worst failure mode this endpoint has. Caught by a test asserting the signals
+were *not* empty, which is why that assertion exists.
+
+### Where a second description was avoided
+
+Twice the obvious move would have created a rival vocabulary, and both times the existing one was
+extended instead:
+
+* **Reports.** `Reporting\Domain\ReportCatalog` already existed for exports. Extending it also
+  closed a drift: three reports were computed for the dashboard and had no catalogue entry, so they
+  could be seen and not asked for.
+* **Classifications.** Built from the same category list as the retention schedule, in the same
+  config file. One set of record kinds, two facts about each — two lists are how they come to
+  disagree about which categories exist.
+
+### What is not built, and why
+
+`CaseRepository` — eleven rows — is blocked on a working session with the MSWDO head, a social
+worker and an intake officer. A case lifecycle is the office's description of its own continuing
+involvement with a family, and building seven states to a model nobody has agreed would produce
+exactly what the command's risk line names: **building to a guess instead of a measurement**. Here
+the measurement is a decision that does not yet exist.
+
+`admin/work/alerts` also cannot report duplicate residents awaiting review (G-26): `Tasks` may not
+read `ResidentProfile`'s tables and that module publishes no contract for pending pairs. The alert
+is absent and named rather than present and wrong.
