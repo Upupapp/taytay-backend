@@ -1640,3 +1640,91 @@ fails on a real case is the failure worth catching, and only a journey catches i
   disbursing officer, a barangay focal person and the auditor, on office hardware, with the trainer
   silent. Nothing engineering can substitute for this, and *"a workaround discovered during UAT
   becomes the procedure the office teaches forever."*
+
+---
+
+## TAB 18 — release engineering
+
+*"Including the one exercise nobody has ever performed: restoring the backup."*
+
+Most of this command is infrastructure that does not exist. What engineering could actually do was
+the data-safety half — and doing it found three defects.
+
+### Migrations: reversible, and proven on the weaker database
+
+Up, all 39 back, and up again to an identical schema. The second half matters more than the first:
+a `down()` that leaves an index or a sequence behind rolls back *successfully* and fails on the way
+up — mid-incident, with the rollback already committed.
+
+**It runs on SQLite, and the weakness is specific rather than general.** Laravel's SQLite grammar
+rebuilds a table to drop a column, and SQLite does not enforce a foreign key against a table being
+dropped. So the two rollback failures that actually happen in production are exactly the two it
+cannot report. Four static rules carry that weight: no foreign key pointing at a table created
+later, no `down()` dropping a target before its dependant, nothing destructive in an `up()` without
+an `EXPAND-MIGRATE-CONTRACT` note, and no `NOT NULL` column added to an existing table.
+
+Each was validated against a planted regression, which is how the fourth was found **dead** — it
+required a closing brace at four spaces and every real block closes at eight, so it had been
+matching nothing and reporting a guarantee nobody had. The third time that shape has appeared here.
+
+The set itself is clean: 84 foreign keys, none forward-pointing, no destructive `up()`, no
+irreversible migration.
+
+### The preflight, and the third verdict
+
+`lguids:preflight` asks the running process what it loaded, rather than reading a runbook that
+describes a server nobody re-reads it against.
+
+**`unverifiable` is the design decision worth recording.** Some checklist items are properties of
+the host — nginx's body limit, whether the scheduler cron is on one machine, whether a worker is
+consuming. A PHP process cannot see any of them, and printing `ok` for nginx would state a
+guarantee nobody holds. Those print the figure to compare against and say a person must check. They
+are not passes and they do not fail the command; conflating the two teaches an operator to ignore
+red.
+
+It found something true immediately: PHP's `upload_max_filesize` is 2M against the 10 MB this API
+advertises to both clients, so an upload between those sizes arrives with no file and the error
+reads as a client bug.
+
+Two architecture tests refused earlier drafts, both correctly. `Shared` may depend on nothing but
+the framework, so the command moved to `Audit` — which already owns the surfaces for people who
+oversee the system rather than serve residents, for the reason `OperationsController` records. And
+no file outside `Files` may name the public disk, so `StoragePosture` answers whether the two
+buckets are separate **without disclosing either credential** and without a fixed disk name that
+would keep checking a bucket nobody writes to after `FILES_PUBLIC_DISK` repointed the application.
+
+Unset is reported as unverifiable, never as separated. Two absent keys are not two different keys,
+and the pass would print on exactly the deployment where the variables were forgotten.
+
+### Deployment order, and the case that must be split
+
+The order is a fact about the diff, and **one direction is invisible**: adding an endpoint is
+deliberate, removing one is a controller method deleted during a tidy-up. So the 287-route surface
+is committed as `docs/api/routes.published.json`, and `PublishedRoutesAreStableTest` fails when the
+router and the file disagree either way.
+
+The case worth writing down: a release that both adds an endpoint the new console needs *and*
+removes one the old console calls has **no safe ordering** and must be split. Each half looks fine
+to the person who made it.
+
+Vendoring that snapshot into the console found **two endpoints that would have 404'd every screen
+using them** — `work` and `reports` were still at the unprefixed paths from before TAB 07 built
+them under `admin/`. Green tests, correct types, a mock that served both happily, and the only way
+to see it was to ask the API.
+
+### Expand-migrate-contract, rehearsed
+
+All four steps against a populated table, asserting at every step that the previously deployed code
+still works and that no value is lost — not that the count matches, which it does trivially if a
+backfill wrote nulls.
+
+It demonstrates the step every description leaves out: a row written **during** the backfill has the
+old column set and the new one null, so the count is right and one value is missing. And it shows
+the one-line `renameColumn` failing, because that version passes every other test here — what it
+breaks is the release still serving traffic, which nothing else in this repository runs.
+
+### Blocked, and it is most of the command
+
+No pipeline (no Actions credit — the gate is local and run before every push), no staging, no
+production, no backups, no restore, no rollback rehearsal, no secrets manager. **The restore is
+release-gate blocker 3**, and RPO/RTO are management decisions engineering must not invent.
