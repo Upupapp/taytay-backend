@@ -61,7 +61,11 @@ final class SharedServiceProvider extends ServiceProvider
         RateLimits::register();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ReadinessCommand::class, GenerateOpenApiCommand::class, GenerateTypesCommand::class]);
+            $this->commands([
+                ReadinessCommand::class,
+                GenerateOpenApiCommand::class,
+                GenerateTypesCommand::class,
+            ]);
         }
 
         $proxies = trim((string) config('api.trusted_proxies', ''));

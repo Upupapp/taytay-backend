@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Modules\Audit\Application\AuditTrail;
 use Modules\Audit\Application\ReassignConsentOnResidentMerge;
+use Modules\Audit\Console\PreflightCommand;
 use Modules\ResidentProfile\Contracts\ResidentMerged;
 use Modules\Shared\Contracts\AuditWriter;
 
@@ -47,5 +48,9 @@ final class AuditServiceProvider extends ServiceProvider
          * (ADR 0019 §4).
          */
         Event::listen(ResidentMerged::class, ReassignConsentOnResidentMerge::class);
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([PreflightCommand::class]);
+        }
     }
 }
