@@ -55,6 +55,26 @@ final class NewsfeedPost extends Model
      * still scheduled in every way that matters to a reader, and treating `status` alone as the
      * gate is how an embargoed announcement goes out early.
      */
+    /**
+     * Reach, and only reach (TAB 10 step 4).
+     *
+     * These exist so the projection can publish **counts**. Nothing anywhere lists their rows to a
+     * client: there is no reactor list, no reader list and no sharer list, because a field held
+     * "for later" is a field somebody eventually displays.
+     *
+     * @return HasMany<NewsfeedReaction, $this>
+     */
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(NewsfeedReaction::class, 'newsfeed_post_id');
+    }
+
+    /** @return HasMany<NewsfeedComment, $this> */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(NewsfeedComment::class, 'newsfeed_post_id');
+    }
+
     public function isLive(?Carbon $on = null): bool
     {
         return $this->status->isPublic()

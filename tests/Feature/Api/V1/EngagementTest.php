@@ -429,6 +429,97 @@ final class EngagementTest extends KycTestCase
 
     // ── fixtures ──────────────────────────────────────────────────────────────────────
 
+    // ── TAB 10: reach stays counts ───────────────────────────────────────────────────
+
+    /**
+     * *"Confirm no endpoint on the wire can answer which residents reacted, read or shared."*
+     *
+     * A comment thread names its authors by nature — the words are public and somebody wrote
+     * them. What it must not do is hand every reader a **stable account identifier**, because that
+     * is what turns a thread into a way to follow one person across the whole feed. On a welfare
+     * newsfeed, that correlation is a profile.
+     */
+    #[Test]
+    public function a_reader_of_a_thread_cannot_correlate_one_person_across_the_feed(): void
+    {
+        $post = $this->publishedPost();
+
+        [$author] = $this->activeCitizenWithResident();
+        [$reader] = $this->activeCitizenWithResident();
+
+        Sanctum::actingAs($author);
+        $this->postJson("/api/v1/newsfeed/{$post}/comments", ['body' => 'When is the distribution?'])
+            ->assertCreated();
+
+        Sanctum::actingAs($reader);
+
+        $row = $this->getJson("/api/v1/newsfeed/{$post}/comments")->assertOk()->json('data.0');
+
+        $this->assertArrayNotHasKey('author_subject_id', $row);
+
+        // What a client actually needs is whether to offer edit and delete on this row.
+        $this->assertFalse($row['is_mine']);
+
+        foreach (['author_name', 'author', 'resident_id', 'subject_id'] as $forbidden) {
+            $this->assertArrayNotHasKey($forbidden, $row);
+        }
+    }
+
+    /**
+     * The moderator's need is different and real: acting on a repeat offender means knowing it is
+     * the same account, and inferring that from comment bodies is guesswork.
+     */
+    #[Test]
+    public function a_moderator_can_still_tell_that_two_comments_came_from_one_account(): void
+    {
+        $post = $this->publishedPost();
+
+        [$author] = $this->activeCitizenWithResident();
+
+        Sanctum::actingAs($author);
+        $this->postJson("/api/v1/newsfeed/{$post}/comments", ['body' => 'First.'])->assertCreated();
+        $this->postJson("/api/v1/newsfeed/{$post}/comments", ['body' => 'Second.'])->assertCreated();
+
+        Sanctum::actingAs($this->admin());
+
+        // The moderation queue is the staff surface; there is no per-post staff listing.
+        $rows = $this->getJson('/api/v1/admin/newsfeed-comments')->assertOk()->json('data');
+
+        $this->assertCount(2, $rows);
+        $this->assertSame($rows[0]['author_subject_id'], $rows[1]['author_subject_id']);
+        $this->assertNotNull($rows[0]['author_subject_id']);
+    }
+
+    /**
+     * Reactions and shares are counted and never listed. There is no endpoint to remove — there
+     * never was one — and this test exists so that adding one is a deliberate act that breaks a
+     * test rather than a small convenience nobody notices.
+     */
+    #[Test]
+    public function no_endpoint_lists_who_reacted_or_shared(): void
+    {
+        $post = $this->publishedPost();
+
+        [$citizen] = $this->activeCitizenWithResident();
+        Sanctum::actingAs($citizen);
+        $this->postJson("/api/v1/newsfeed/{$post}/reaction", ['reaction' => 'like'])->assertOk();
+
+        Sanctum::actingAs($this->admin());
+
+        foreach ([
+            "/api/v1/newsfeed/{$post}/reactions",
+            "/api/v1/admin/newsfeed/{$post}/reactions",
+            "/api/v1/admin/newsfeed/{$post}/shares",
+            "/api/v1/admin/newsfeed/{$post}/readers",
+        ] as $path) {
+            $this->getJson($path)->assertNotFound();
+        }
+
+        // The count is published, because "how many" is a legitimate question about reach.
+        $detail = $this->getJson("/api/v1/admin/newsfeed/{$post}")->assertOk()->json('data');
+        $this->assertSame(1, $detail['reaction_count']);
+    }
+
     private function admin(): Account
     {
         return $this->reviewer('lgu_admin');

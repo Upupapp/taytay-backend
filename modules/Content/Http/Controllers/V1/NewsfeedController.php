@@ -73,7 +73,14 @@ final class NewsfeedController
          * queries for one post and 14 for eight. A feed page is twenty-five posts, so the
          * endpoint every resident opens first was doing twenty-five avoidable round trips.
          */
-        $rows = $query->with('media')->forPage($pagination->page, $pagination->perPage)->get();
+        $rows = $query
+            ->with('media')
+            // Counted in the same round trip. The projection falls back to counting per post, and
+            // a page of twenty-five falling back is twenty-five avoidable queries — the same N+1
+            // the media eager-load above was added to fix.
+            ->withCount(['reactions', 'comments'])
+            ->forPage($pagination->page, $pagination->perPage)
+            ->get();
 
         return ApiResponse::page(
             new Page($rows->all(), $total, $pagination),
@@ -367,6 +374,21 @@ final class NewsfeedController
                 static fn (PostStatus $status): string => $status->value,
                 $post->status->allowedNext(),
             ),
+            /*
+             * REACH IS COUNTS (TAB 10 step 4), and this is the whole of it.
+             *
+             * Counted at read time from the rows themselves, so there is no stored figure to drift
+             * from what actually happened. Two numbers and nothing that could answer *which*
+             * residents: no reactor list, no reader list, no sharer list, and no endpoint anywhere
+             * that returns one — see `EngagementTest::no_endpoint_lists_who_reacted_or_shared`,
+             * which exists so that adding one breaks a test rather than passing as a convenience.
+             *
+             * The console has asked for these since it was built (`DL-126`) and this API published
+             * neither, so its reach display had no source at all. Recorded as G-31 and closed here
+             * rather than left for the screen to invent something.
+             */
+            'reaction_count' => (int) ($post->reactions_count ?? $post->reactions()->count()),
+            'comment_count' => (int) ($post->comments_count ?? $post->comments()->count()),
         ];
     }
 

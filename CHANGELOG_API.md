@@ -8,6 +8,30 @@ diff is the prompt to add an entry here. Reasoning: [ADR 0038](docs/adr/0038-api
 
 ---
 
+## Unreleased — TAB 10
+
+### Breaking
+
+* **`author_subject_id` removed from the comment reader projection**
+  (`GET /api/v1/newsfeed/{post}/comments`, and the create/edit responses).
+
+  It disclosed the author's stable account identifier to **every reader of a public thread**, which
+  lets anybody correlate one person's comments across the whole feed. On a welfare newsfeed, that
+  correlation is a profile.
+
+  `is_mine` — already published alongside it — is what a client actually needs: whether to offer
+  edit and delete on a row. No known client reads the removed field; the admin console holds it
+  only in a captured response fixture, and the mobile client never references it.
+
+  **It has not disappeared.** It moves to the *moderator* projection
+  (`GET /api/v1/admin/newsfeed/{post}/comments`, behind `newsfeed.moderate`), because acting on a
+  repeat offender means knowing it is the same account, and inferring that from comment bodies is
+  guesswork.
+
+  This is the deliberate scheduling the code's own note asked for when the field was retained.
+
+---
+
 ## Versioning and deprecation policy
 
 ### What is a breaking change

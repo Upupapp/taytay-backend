@@ -7283,7 +7283,9 @@
                                                 "audience_barangay_id": {},
                                                 "scheduled_for": {},
                                                 "archived_at": {},
-                                                "available_transitions": {}
+                                                "available_transitions": {},
+                                                "reaction_count": {},
+                                                "comment_count": {}
                                             }
                                         },
                                         "meta": {
@@ -7357,7 +7359,9 @@
                                                 "audience_barangay_id": {},
                                                 "scheduled_for": {},
                                                 "archived_at": {},
-                                                "available_transitions": {}
+                                                "available_transitions": {},
+                                                "reaction_count": {},
+                                                "comment_count": {}
                                             }
                                         },
                                         "meta": {
@@ -7424,9 +7428,9 @@
                                                 "body": {},
                                                 "is_official": {},
                                                 "is_mine": {},
-                                                "author_subject_id": {},
                                                 "created_at": {},
                                                 "edited_at": {},
+                                                "author_subject_id": {},
                                                 "moderation_state": {},
                                                 "moderation_reason": {},
                                                 "moderated_by": {},
@@ -7510,9 +7514,9 @@
                                                 "body": {},
                                                 "is_official": {},
                                                 "is_mine": {},
-                                                "author_subject_id": {},
                                                 "created_at": {},
                                                 "edited_at": {},
+                                                "author_subject_id": {},
                                                 "moderation_state": {},
                                                 "moderation_reason": {},
                                                 "moderated_by": {},
@@ -7664,7 +7668,9 @@
                                                 "audience_barangay_id": {},
                                                 "scheduled_for": {},
                                                 "archived_at": {},
-                                                "available_transitions": {}
+                                                "available_transitions": {},
+                                                "reaction_count": {},
+                                                "comment_count": {}
                                             }
                                         },
                                         "meta": {
@@ -7749,7 +7755,9 @@
                                                 "audience_barangay_id": {},
                                                 "scheduled_for": {},
                                                 "archived_at": {},
-                                                "available_transitions": {}
+                                                "available_transitions": {},
+                                                "reaction_count": {},
+                                                "comment_count": {}
                                             }
                                         },
                                         "meta": {
@@ -7906,7 +7914,9 @@
                                                 "audience_barangay_id": {},
                                                 "scheduled_for": {},
                                                 "archived_at": {},
-                                                "available_transitions": {}
+                                                "available_transitions": {},
+                                                "reaction_count": {},
+                                                "comment_count": {}
                                             }
                                         },
                                         "meta": {
@@ -7993,7 +8003,9 @@
                                                 "audience_barangay_id": {},
                                                 "scheduled_for": {},
                                                 "archived_at": {},
-                                                "available_transitions": {}
+                                                "available_transitions": {},
+                                                "reaction_count": {},
+                                                "comment_count": {}
                                             }
                                         },
                                         "meta": {
@@ -8080,7 +8092,9 @@
                                                 "audience_barangay_id": {},
                                                 "scheduled_for": {},
                                                 "archived_at": {},
-                                                "available_transitions": {}
+                                                "available_transitions": {},
+                                                "reaction_count": {},
+                                                "comment_count": {}
                                             }
                                         },
                                         "meta": {
@@ -19832,7 +19846,6 @@
                                                 "body": {},
                                                 "is_official": {},
                                                 "is_mine": {},
-                                                "author_subject_id": {},
                                                 "created_at": {},
                                                 "edited_at": {}
                                             }
@@ -20129,7 +20142,6 @@
                                                 "body": {},
                                                 "is_official": {},
                                                 "is_mine": {},
-                                                "author_subject_id": {},
                                                 "created_at": {},
                                                 "edited_at": {}
                                             }
@@ -20217,7 +20229,6 @@
                                                     "body": {},
                                                     "is_official": {},
                                                     "is_mine": {},
-                                                    "author_subject_id": {},
                                                     "created_at": {},
                                                     "edited_at": {}
                                                 }

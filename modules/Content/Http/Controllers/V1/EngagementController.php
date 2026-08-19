@@ -289,13 +289,16 @@ final class EngagementController
              * a profile. The only thing a client actually needs is whether to offer edit and
              * delete on this row, which is a boolean (Article 5.2).
              *
-             * `author_subject_id` is retained because removing a field is a breaking change
-             * (CHANGELOG_API.md). This is its replacement, and the changelog records the
-             * disclosure so the removal can be scheduled deliberately rather than forgotten.
+             * REMOVED FROM THIS PROJECTION IN TAB 10, which is the deliberate scheduling the
+             * previous note asked for. It moves to {@see moderatorProjection()} rather than
+             * disappearing: a moderator acting on a repeat offender needs to know it is the same
+             * account, and deciding that from comment bodies alone is guesswork.
+             *
+             * So the identifier now reaches the people with `newsfeed.moderate` and nobody else,
+             * where before it reached every resident reading a public thread.
              */
             'is_mine' => $readerSubjectId !== null
                 && (string) $comment->author_subject_id === $readerSubjectId,
-            'author_subject_id' => $comment->author_subject_id,
             'created_at' => $comment->created_at?->toIso8601ZuluString(),
             // Shown so a reply is not silently rewritten under a reader who already answered it.
             'edited_at' => $comment->edited_at?->toIso8601ZuluString(),
@@ -314,6 +317,16 @@ final class EngagementController
         ?string $readerSubjectId = null,
     ): array {
         return $this->readerProjection($comment, $parents, $readerSubjectId) + [
+            /*
+             * WHO WROTE IT, for moderators only (TAB 10).
+             *
+             * It used to sit on the reader's projection, where it let anybody correlate one
+             * person's comments across the whole feed — and on a welfare newsfeed that is a
+             * profile. A moderator's need is different and real: acting on a repeat offender
+             * means knowing it is the same account, and inferring that from comment bodies is
+             * guesswork.
+             */
+            'author_subject_id' => $comment->author_subject_id,
             'moderation_state' => $comment->moderation_state->value,
             'moderation_reason' => $comment->moderation_reason,
             'moderated_by' => $comment->moderated_by,

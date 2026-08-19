@@ -39,6 +39,8 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-28](#g-28) | ~~A requirement could be created once and never amended~~ → **fixed in TAB 07** | — | — |
 | [G-29](#g-29) | The intake advisory's windows are convention, not DSWD or MSWDO policy | medium | LGU (MSWDO) |
 | [G-30](#g-30) | A post records when it was archived and not why | low | backend |
+| [G-31](#g-31) | ~~No reach counts on the wire~~ → **closed in TAB 10** | — | — |
+| [G-32](#g-32) | The console allowed republishing an archived post; this API does not | — | **closed in TAB 10** |
 | [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
@@ -862,3 +864,41 @@ down is the one its history cannot answer.
 Closing it is a column and a required field on the archive transition. Left open here because
 adding a required field to an existing write is a contract change, and TAB 07 is a read-side TAB.
 The event side already does this correctly — `cancellation_reason` is recorded and returned.
+
+---
+
+### G-31
+**CLOSED — 19 August 2026, TAB 10.** ~~The console's reach display had no server source.~~
+
+`DL-126` defines reach as `reactionCount` and `commentCount`, and this API published **neither**.
+The admin post projection carried status, audience, schedule and transitions, and nothing about how
+many people had responded — so a screen built to that doctrine had nothing to render.
+
+Both are now on the admin projection, counted at read time from the rows themselves so there is no
+stored figure to drift, and eager-loaded with `withCount` so a page of twenty-five costs one query
+rather than fifty.
+
+Two numbers and nothing else. There is no reactor list, reader list or sharer list, and
+`EngagementTest::no_endpoint_lists_who_reacted_or_shared` exists so that adding one breaks a test
+rather than passing as a small convenience.
+
+---
+
+### G-32
+**CLOSED — 19 August 2026, TAB 10.** ~~The console allowed `archived → published`; this API makes
+`archived` terminal.~~
+
+The command anticipated the opposite direction — *"if the API is more permissive, the console must
+not expose the difference"* — and it was the **console** that was more permissive.
+
+The console's reasoning was about the office: taking a post down by mistake is ordinary and should
+be correctable. This API's is about the reader, and it is the stronger one: resurfacing a post puts
+it back at the top of the feed carrying its **original date**, which reads as the municipality
+announcing something old as though it were new.
+
+It was also a control that could not work. `PostStatus::Archived` has no outgoing transition here,
+so the button would have produced a refusal a caseworker could do nothing about.
+
+The console now matches (`DL-134`, superseding `DL-124`'s republish clause). The mistake case is
+served by publishing a **new** post — which is what actually happened, and what the feed should say
+happened.
