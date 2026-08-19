@@ -1224,3 +1224,94 @@ the measurement is a decision that does not yet exist.
 `admin/work/alerts` also cannot report duplicate residents awaiting review (G-26): `Tasks` may not
 read `ResidentProfile`'s tables and that module publishes no contract for pending pairs. The alert
 is absent and named rather than present and wrong.
+
+---
+
+## TAB 08 — money
+
+P0, public funds. *"Where a retry must never become a second payout."*
+
+### Step by step
+
+| # | Requirement | State |
+| --- | --- | --- |
+| 1 | Reconcile the nouns | **Done** — the console adopted `release` (`DL-132`) |
+| 2 | Map the state machines | **Done**, and it found a defect — see below |
+| 3 | Idempotency on every money write | **Done**, and the key is now *required* |
+| 4 | Separation of duties server-side | **Done** — attack test with one account holding both roles |
+| 5 | Reasons where the domain requires them | **Done** — a blank is refused, not stored |
+| 6 | Batches and manifests | **Done** — list and detail added; manifest already had export discipline |
+| 7 | Integer centavos at every boundary | **Done** — tested with a value a float rounds wrongly |
+| 8 | Concurrency, proven on real PostgreSQL | **NOT MET** — no PostgreSQL exists; recorded, not glossed |
+| 9 | Reconciliation view | **Done** — totals by status, programme and period |
+| 10 | Audit every act | **Done** — every movement leaves a transition carrying its reason |
+
+### The noun, and why the API kept it
+
+The API's `release` is three tables, a permission persisted in `role_assignments`, and seven URLs
+under `/api/v1` read by four clients. Renaming those is a breaking change requiring `/api/v2` under
+Article 4, plus a migration. The console's `disbursement` was 451 occurrences the TypeScript
+compiler checks exhaustively — and its screens already said "Releases". The second vocabulary lived
+entirely in code, which is where a naming divergence is hardest to notice and easiest to keep.
+
+### The defect step 2 found
+
+The command asks for a confirmation that the console offers no control implying a released record
+can be rewound. It failed:
+
+```
+released → unclaimed → scheduled
+```
+
+`released` is "funds or goods issued by the disbursing officer"; `unclaimed` is "not collected". A
+payout could be issued, marked uncollected, and returned to a payout list — **the shape in which a
+family is paid twice** — and it was reachable from the release detail screen.
+
+The identical edge exists here as `Released → Failed → Ready` and is **correct**, because this
+API's `failed` covers a transfer that was sent and did not land. The console has no such state, so
+the same shape meant something different and something wrong.
+
+### The two machines split on different axes
+
+This API splits on **whether an attempt was made**; the console on **whose failing it was**. So
+`unclaimed → deferred` would have been the `DL-94` harm exactly — writing the office's failing onto
+a household's record. It maps to `failed`, which **requires a reason**, and the reason carries the
+distinction the console encodes in a state name. No seventh state was added to a published enum for
+four clients: vocabulary is not meaning.
+
+### Idempotency: required, not optional
+
+`IdempotencyService` treats a missing key as *"no protection, carry on"* — right for an ordinary
+write, wrong when what an unprotected retry produces is a second payout. All five money writes now
+**refuse** a request without a key. That is a tightening of a published contract, taken now because
+no client is wired to these endpoints yet, so it is the last moment it costs nothing.
+
+### Four of my own bugs, found by the tests
+
+1. **Laravel's `withHeaders` sets a persistent default.** The `money()` test helper leaked a key
+   into every later request in the same test, so the test asserting a keyless request is refused
+   was passing a keyed one. `withoutIdempotencyKey()` now flushes.
+2. **PHP list destructuring drops references.** The reconciliation buckets were copies: totals
+   correct, every breakdown empty. Caught by the assertion that the parts must add up to the whole,
+   which is the one job that endpoint has.
+3. A closure in `addToBatch` did not capture `$actor`.
+4. My separation-of-duties test expected `409`; the API correctly answers `403`. The test now
+   asserts the *message* too, because the command asks for the refusal to be legible and not merely
+   correct.
+
+### What the separation-of-duties test had to become
+
+`lgu_admin` holds approval and **not** release — the role split already prevents the simple case,
+and `DisbursingOfficer` exists so that releasing is somebody else's job. So the attack grants one
+account both roles, which is what a small office on a bad day does. The refusal still comes from
+asking *"is this the same human who approved it"*, which is the only question that survives an
+administrator holding everything.
+
+### Step 8 is unmet, and says so
+
+`ReleaseConcurrencyTest` is a single honest skip. SQLite has no row lock, so the test would pass
+for a reason unrelated to the code; and a body written blind against a database nobody can run
+would look verified and fail as a regression the day PostgreSQL arrives. What must be asserted is
+written down in the class docblock.
+
+Suite: **1,026 tests, 7,595 assertions, 1 skipped**, `pint --test` clean.
