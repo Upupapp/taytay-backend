@@ -659,6 +659,79 @@ final class CoreJourneyTest extends KycTestCase
         );
     }
 
+    /**
+     * TAB 17, journey 4 — **duplicate identity**, the supersede path.
+     *
+     * *"Two records reviewed, a finding recorded with a reason, the pair stops resurfacing, and the
+     * history assembles correctly afterwards. Proves: the merge-or-supersede decision."*
+     *
+     * The existing journey covers a **merge** — records moving between modules. This covers the
+     * other outcome, which is the one the office reaches far more often: a reviewer looks at two
+     * records, decides they are different people, and the queue must stop asking. A queue that
+     * keeps resurfacing a decided pair teaches reviewers to dismiss without reading.
+     */
+    #[Test]
+    public function a_decided_duplicate_pair_records_its_reason_and_stops_resurfacing(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        // Two records that look alike on purpose — same name, same birth date.
+        $one = $this->existingResident([
+            'first_name' => 'Rosalinda', 'middle_name' => null, 'last_name' => 'Zabala',
+        ]);
+        $two = $this->existingResident([
+            'first_name' => 'Rosalinda', 'middle_name' => null, 'last_name' => 'Zabala',
+        ]);
+
+        $this->postJson('/api/v1/admin/resident-duplicates/detect')->assertSuccessful();
+
+        $queue = $this->getJson('/api/v1/admin/resident-duplicates')->assertOk()->json('data');
+        $this->assertNotEmpty($queue, 'The detector found no pair, so this journey proves nothing.');
+
+        $pair = $queue[0]['id'];
+
+        /*
+         * A finding is a claim about two people and takes a reason, for the same reason every
+         * mutation in this system does: an unexplained finding is indistinguishable afterwards
+         * from an arbitrary one, and it is the resident who bears that.
+         */
+        $this->postJson("/api/v1/admin/resident-duplicates/{$pair}/decide", [
+            'decision' => 'different-person',
+            'note' => 'Different birth barangay on the certificates; mothers\' names differ.',
+        ])->assertSuccessful();
+
+        // ── the pair stops resurfacing ──
+        $after = $this->getJson('/api/v1/admin/resident-duplicates')->assertOk()->json('data');
+        $this->assertSame(
+            [],
+            array_values(array_filter($after, static fn (array $row): bool => $row['id'] === $pair)),
+            'A decided pair came back to the queue. A reviewer who is asked the same question twice learns to dismiss without reading.',
+        );
+
+        // Re-running detection must not undo the decision.
+        $this->postJson('/api/v1/admin/resident-duplicates/detect')->assertSuccessful();
+
+        $rerun = $this->getJson('/api/v1/admin/resident-duplicates')->assertOk()->json('data');
+        $this->assertSame(
+            [],
+            array_values(array_filter($rerun, static fn (array $row): bool => $row['id'] === $pair)),
+            'Detection resurrected a decided pair.',
+        );
+
+        // ── the history assembles afterwards ──
+        $findings = $this->getJson("/api/v1/admin/residents/{$one->uuid}/duplicate-findings")
+            ->assertOk()->json('data');
+
+        $this->assertCount(1, $findings);
+        $this->assertSame('different-person', $findings[0]['decision']);
+        $this->assertNotEmpty($findings[0]['reason']);
+        $this->assertSame((string) $two->uuid, $findings[0]['other_resident_id']);
+
+        // Both records still exist. `different-person` decides nothing about either of them.
+        $this->getJson("/api/v1/admin/residents/{$one->uuid}")->assertOk();
+        $this->getJson("/api/v1/admin/residents/{$two->uuid}")->assertOk();
+    }
+
     private function statusOf(string $registrationUuid): string
     {
         return EventRegistration::query()->where('uuid', $registrationUuid)->value('status')->value;

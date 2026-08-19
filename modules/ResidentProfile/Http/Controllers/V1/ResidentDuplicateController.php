@@ -53,8 +53,26 @@ final class ResidentDuplicateController
 
         $decision = $request->query('decision');
 
-        if (is_string($decision) && in_array($decision, ['undecided', 'same-person', 'different-person'], true)) {
+        /*
+         * A QUEUE SHOWS WHAT IS STILL OWED. Undecided by default (TAB 17, journey 4).
+         *
+         * This listed every pair, decided ones included, so a reviewer who had settled a pair was
+         * asked about it again on the next visit — and re-running detection put it back in front of
+         * them a third time. `DL-74` is explicit that recording `different-person` exists *"so the
+         * pair stops resurfacing"*, and a reviewer asked the same question repeatedly learns to
+         * dismiss without reading, which is the behaviour the whole review exists to prevent.
+         *
+         * The decided pairs are not hidden — `?decision=same-person`, `?decision=different-person`
+         * and `?decision=all` all still reach them, and `admin/residents/{resident}/duplicate-findings`
+         * is the per-record history. What changed is only what a caller gets when it asks for the
+         * queue without saying which part.
+         */
+        if ($decision === 'all') {
+            // Everything, for somebody reviewing the review.
+        } elseif (is_string($decision) && in_array($decision, ['undecided', 'same-person', 'different-person'], true)) {
             $query->where('decision', $decision);
+        } else {
+            $query->where('decision', 'undecided');
         }
 
         $total = (clone $query)->count();

@@ -32,6 +32,28 @@ diff is the prompt to add an entry here. Reasoning: [ADR 0038](docs/adr/0038-api
 
 ---
 
+## Unreleased — TAB 17
+
+### Behaviour change
+
+* **`GET /api/v1/admin/resident-duplicates` now returns undecided pairs by default.**
+
+  It returned every pair, decided ones included — so a reviewer who had settled a pair was asked
+  about it again on their next visit, and re-running detection put it in front of them a third
+  time. `DL-74` records that a `different-person` finding exists *"so the pair stops resurfacing"*,
+  and a reviewer asked the same question repeatedly learns to dismiss without reading, which is the
+  behaviour the review exists to prevent.
+
+  Nothing is hidden: `?decision=same-person`, `?decision=different-person` and `?decision=all` all
+  still reach the decided ones, and `GET /api/v1/admin/residents/{resident}/duplicate-findings` is
+  the per-record history. What changed is only what a caller gets when it asks for the queue
+  without saying which part of it.
+
+  Not marked breaking: a client asking for "the queue" was already asking for outstanding work, and
+  no client is wired to this endpoint yet.
+
+---
+
 ## Versioning and deprecation policy
 
 ### What is a breaking change
