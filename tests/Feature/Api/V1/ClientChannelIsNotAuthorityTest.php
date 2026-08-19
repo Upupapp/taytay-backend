@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Api\V1;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Identity\Infrastructure\Eloquent\Account;
 use PHPUnit\Framework\Attributes\Test;
@@ -127,8 +129,27 @@ final class ClientChannelIsNotAuthorityTest extends TestCase
     public function an_unknown_role_in_configuration_is_ignored(): void
     {
         $user = Account::factory()->create();
-        $this->grantRole($user, 'super_admin');
-        $this->grantRole($user, 'root');
+
+        /*
+         * Written directly, because `grantRole` now refuses a role the catalog does not contain.
+         *
+         * That guard exists because six tests granted job titles this system has no role for and
+         * every one of them passed for the wrong reason — the account had no permissions, so the
+         * refusal they asserted was guaranteed. **This** test's whole subject is what the system
+         * does when an unknown role reaches the database, so it has to be able to put one there.
+         */
+        foreach (['super_admin', 'root'] as $invented) {
+            DB::table('role_assignments')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'subject_id' => $user->uuid,
+                'role' => $invented,
+                'scope_type' => 'all-barangays',
+                'barangay_id' => null,
+                'valid_from' => now()->subMinute(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
         Sanctum::actingAs($user);
 
         // A role outside the catalog is dropped rather than passed through, so a typo in

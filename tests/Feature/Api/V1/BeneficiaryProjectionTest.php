@@ -220,7 +220,16 @@ final class BeneficiaryProjectionTest extends KycTestCase
         $resident = $this->seedAsAdmin();
 
         $account = Account::factory()->staff()->create();
-        $this->grantRole($account, 'barangay_link');
+        /*
+         * `security_officer` holds neither `program.view` nor `resident.view`.
+         *
+         * The intended test was "resident.view alone does not open the registry", and **no role
+         * separates those two** — every role holding `resident.view` also holds `program.view`.
+         * So the distinction this endpoint's permission choice makes cannot be demonstrated with a
+         * real actor today, and asserting it with an invented role asserted nothing. Recorded as
+         * G-34; what is provable is that a role without `program.view` is refused.
+         */
+        $this->grantRole($account, 'security_officer');
 
         Sanctum::actingAs($account);
 
@@ -234,7 +243,8 @@ final class BeneficiaryProjectionTest extends KycTestCase
         $resident = $this->seedAsAdmin();
 
         $account = Account::factory()->staff()->create();
-        $this->grantRole($account, 'social_worker');
+        // Holds `program.view` and not `resident.merge` — the exact caller this rule is about.
+        $this->grantRole($account, 'lgu_staff');
 
         Sanctum::actingAs($account);
 

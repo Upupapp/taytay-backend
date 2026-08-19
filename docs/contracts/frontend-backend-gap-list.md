@@ -42,6 +42,7 @@ yet. Each gap names its evidence, the risk of leaving it, and who resolves it.
 | [G-31](#g-31) | ~~No reach counts on the wire~~ → **closed in TAB 10** | — | — |
 | [G-32](#g-32) | The console allowed republishing an archived post; this API does not | — | **closed in TAB 10** |
 | [G-33](#g-33) | The console expects an `audit.view-detail` tier; this API records no values | low | Angular |
+| [G-34](#g-34) | No role separates `resident.view` from `program.view` | low | backend |
 | [G-21](#g-21) | Assessment templates and retention periods are placeholders | high | LGU (MSWDO + DPO) |
 
 ---
@@ -926,3 +927,21 @@ The console's tier should be removed rather than wired. Left open because it is 
 to delete, and because a breach assessment must know this limit exists — it can say *what was
 accessed* and cannot reconstruct *what was read* beyond the record's current state, which
 `docs/contracts/breach-procedure.md` states plainly rather than leaving somebody to discover mid-incident.
+
+---
+
+### G-34
+**No role holds `resident.view` without also holding `program.view`.** `low`
+
+Found while fixing a test whose premise turned out to be unsatisfiable. The beneficiary registry is
+deliberately guarded by `program.view` rather than `resident.view` — *a resident row says a person
+exists; a beneficiary row says what this office has done for them* — and that distinction cannot be
+demonstrated with any actor the system can currently produce.
+
+Every role holding `resident.view` (`lgu_staff`, `lgu_admin`, `disbursing_officer`) also holds
+`program.view`. So the permission choice is correct and currently **inert**: no caller exists whom
+it refuses and `resident.view` would admit.
+
+Left open rather than resolved. It becomes real the moment a role is added that reads residents and
+not programme rolls — a barangay focal person is the obvious candidate — and the guard is already in
+place for when it does.

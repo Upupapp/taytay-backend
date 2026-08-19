@@ -549,6 +549,116 @@ final class CoreJourneyTest extends KycTestCase
         return $event;
     }
 
+    /**
+     * TAB 17, journey 1 — **the walk-in**, and the one that proves the actors are separate.
+     *
+     * *"Intake officer records a walk-in applicant → requirements → assessment by a social worker →
+     * endorsement → approval by the head → scheduling → release by the disbursing officer →
+     * acknowledgement → completion. Proves: the whole business, four actors, money, separation of
+     * duties."*
+     *
+     * The existing payment journey starts from a citizen draft, which is journey 2's shape. This
+     * one starts at the counter, where most of the office's work actually starts, and it uses
+     * **four different people** — because a journey run by one account with every permission proves
+     * the lifecycle and nothing about the separation the lifecycle exists to enforce.
+     */
+    #[Test]
+    public function a_walk_in_travels_from_the_counter_to_an_acknowledged_payout_through_four_people(): void
+    {
+        /*
+         * FOUR PEOPLE, THREE ROLES. There is no `social_worker` role — intake officers and social
+         * workers both hold `lgu_staff`, which is correct: they do the same kinds of act on a case
+         * and the separation the lifecycle needs is between *endorsing* and *approving*, and
+         * between *approving* and *releasing*. Two accounts, same role.
+         */
+        $intake = $this->reviewer('lgu_staff');
+        $socialWorker = $this->reviewer('lgu_staff');
+        $head = $this->reviewer('lgu_admin');
+        $disburser = $this->reviewer('disbursing_officer');
+
+        // ── the counter: an intake officer records somebody who walked in ──
+        Sanctum::actingAs($intake);
+
+        $resident = $this->existingResident([
+            'first_name' => 'Consolacion',
+            'middle_name' => null,
+            'last_name' => 'Villanueva',
+        ]);
+
+        $case = (string) $this->postJson('/api/v1/admin/assistance-intakes', [
+            'resident_id' => (string) $resident->uuid,
+            'category' => 'financial',
+            'narrative' => 'Lost income after the father was hospitalised.',
+        ])->assertCreated()->json('data.case_id');
+
+        // ── the social worker assesses and endorses ──
+        Sanctum::actingAs($socialWorker);
+
+        foreach (['intake-review', 'assessment', 'endorsed'] as $step) {
+            $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => $step])
+                ->assertOk();
+        }
+
+        /*
+         * And cannot approve their own endorsement. This is the first of the two separations, and
+         * it is checked mid-journey rather than in isolation, because a permission that holds on an
+         * empty database and fails on a real case is the failure worth catching.
+         */
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])
+            ->assertForbidden();
+
+        // ── the head approves ──
+        Sanctum::actingAs($head);
+        $this->postJson("/api/v1/admin/assistance-requests/{$case}/transitions", ['to' => 'approved'])
+            ->assertOk();
+
+        $release = (string) $this->money()
+            ->postJson("/api/v1/admin/assistance-requests/{$case}/releases", [
+                'kind' => 'cash',
+                'amount_centavos' => 300000,
+                'release_mode' => 'cash-pickup',
+            ])->assertCreated()->json('data.id');
+
+        /*
+         * ── the separation that matters most ──
+         *
+         * The head approved this request. They may not hand over its money, and the refusal comes
+         * from asking whether this is the same human rather than from which permissions they hold —
+         * which is the only question that survives an administrator holding everything.
+         */
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])
+            ->assertForbidden();
+
+        // ── the disbursing officer releases, and the family acknowledges ──
+        Sanctum::actingAs($disburser);
+
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [
+            'acknowledged_by_name' => 'Consolacion Villanueva',
+            'acknowledgement_method' => 'signature',
+        ])->assertOk();
+
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/status", ['status' => 'completed'])
+            ->assertOk();
+
+        // ── what the trail must be able to say afterwards ──
+        $final = $this->getJson("/api/v1/admin/releases/{$release}")->assertOk()->json('data');
+
+        $this->assertSame('completed', $final['status']);
+        $this->assertSame(300000, $final['amount_centavos']);
+
+        // Every movement of the money is recorded, and the two that matter are attributable to
+        // different people.
+        $movements = DB::table('release_transitions')->pluck('to_status')->all();
+        $this->assertContains('released', $movements);
+        $this->assertContains('completed', $movements);
+
+        $this->assertNotSame(
+            (string) $head->uuid,
+            (string) DB::table('releases')->where('uuid', $release)->value('released_by'),
+            'The person who approved the request also released its money.',
+        );
+    }
+
     private function statusOf(string $registrationUuid): string
     {
         return EventRegistration::query()->where('uuid', $registrationUuid)->value('status')->value;

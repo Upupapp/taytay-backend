@@ -152,7 +152,8 @@ final class WorkQueueTest extends KycTestCase
     public function the_team_view_is_refused_to_a_caller_who_only_holds_task_view(): void
     {
         $account = Account::factory()->staff()->create();
-        $this->grantRole($account, 'barangay_link');
+        // Holds `task.view` and not `staff.view` — a caseworker with a queue of their own.
+        $this->grantRole($account, 'lgu_staff');
 
         Sanctum::actingAs($account);
 

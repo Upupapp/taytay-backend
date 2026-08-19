@@ -71,7 +71,8 @@ final class ProgramAndGovernanceReadTest extends KycTestCase
 
         // Holds program.view — enough for the catalogue, not for its history.
         $account = Account::factory()->staff()->create();
-        $this->grantRole($account, 'social_worker');
+        // Holds `program.view` and not `program.manage`: enough for the catalogue, not its history.
+        $this->grantRole($account, 'lgu_staff');
 
         Sanctum::actingAs($account);
 
@@ -188,7 +189,9 @@ final class ProgramAndGovernanceReadTest extends KycTestCase
     public function the_register_is_refused_to_an_administrator_who_does_not_govern_privacy(): void
     {
         $account = Account::factory()->staff()->create();
-        $this->grantRole($account, 'social_worker');
+        // An administrator, refused — which is the sharper version of this rule: privacy
+        // governance is the DPO's, and `lgu_admin` holds everything else.
+        $this->grantRole($account, 'lgu_admin');
 
         Sanctum::actingAs($account);
 
