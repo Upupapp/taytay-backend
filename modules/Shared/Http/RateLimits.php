@@ -64,6 +64,17 @@ final class RateLimits
         RateLimiter::for('kyc-submission', fn (Request $request): Limit => self::perAccount($request, 'kyc_submission'));
 
         /*
+         * An upload costs storage, a virus scan, and eventually somebody's attention (F28).
+         *
+         * Looser than `kyc-submission` on purpose: submitting is the act that queues a human, and
+         * attaching a document is something an applicant reasonably does several times — a photo
+         * of an ID that came out blurred, then the back of it, then a proof of address. A limit
+         * tight enough to be interesting to an attacker would mostly punish somebody standing in
+         * a barangay hall on a slow connection.
+         */
+        RateLimiter::for('uploads', fn (Request $request): Limit => self::perAccount($request, 'uploads'));
+
+        /*
          * Search is the endpoint an enumeration attempt reaches for: it is built to answer partial
          * questions about many records at once. Every searcher is already scoped and authorized,
          * so this limits the rate of legitimate-looking questions rather than the answers.
@@ -102,6 +113,7 @@ final class RateLimits
             'engagement',
             'event-registration',
             'kyc-submission',
+            'uploads',
             'search',
             'export',
             'api',

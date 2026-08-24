@@ -7008,6 +7008,85 @@
                 }
             }
         },
+        "/admin/kyc-cases/{case}/documents/{type}/access": {
+            "post": {
+                "operationId": "v1.admin.kyc.documents.open",
+                "tags": [
+                    "staff"
+                ],
+                "summary": "Admin kyc documents open",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "case",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    },
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
         "/admin/kyc-cases/{case}/reject": {
             "post": {
                 "operationId": "v1.admin.kyc.reject",
@@ -18169,7 +18248,8 @@
                                                 "submitted_at": {},
                                                 "message": {},
                                                 "claimed": {},
-                                                "resident_id": {}
+                                                "resident_id": {},
+                                                "documents": {}
                                             }
                                         },
                                         "meta": {
@@ -18235,8 +18315,203 @@
                                                 "submitted_at": {},
                                                 "message": {},
                                                 "claimed": {},
-                                                "resident_id": {}
+                                                "resident_id": {},
+                                                "documents": {}
                                             }
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/me/kyc/documents": {
+            "post": {
+                "operationId": "v1.me.kyc.documents.store",
+                "tags": [
+                    "citizen"
+                ],
+                "summary": "Me kyc documents store",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "type": {},
+                                                "attached": {},
+                                                "received_at": {},
+                                                "is_available": {},
+                                                "file_name": {}
+                                            }
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                },
+                "x-rate-limit": "uploads"
+            },
+            "get": {
+                "operationId": "v1.me.kyc.documents.index",
+                "tags": [
+                    "citizen"
+                ],
+                "summary": "Me kyc documents index",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
+                                        },
+                                        "meta": {
+                                            "$ref": "#/components/schemas/Meta"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthenticated"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationFailed"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/RateLimited"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/ServerError"
+                    }
+                }
+            }
+        },
+        "/me/kyc/documents/{type}/access": {
+            "post": {
+                "operationId": "v1.me.kyc.documents.open",
+                "tags": [
+                    "citizen"
+                ],
+                "summary": "Me kyc documents open",
+                "security": [
+                    {
+                        "bearer": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A UUID, unless the endpoint says otherwise."
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Success.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ],
+                                    "properties": {
+                                        "data": {
+                                            "description": "The resource."
                                         },
                                         "meta": {
                                             "$ref": "#/components/schemas/Meta"
@@ -18303,7 +18578,8 @@
                                                 "submitted_at": {},
                                                 "message": {},
                                                 "claimed": {},
-                                                "resident_id": {}
+                                                "resident_id": {},
+                                                "documents": {}
                                             }
                                         },
                                         "meta": {
@@ -22212,6 +22488,14 @@
                     "withdrawn"
                 ],
                 "description": "The lifecycle of a resident's request to have their own record corrected (ADR 0013 §4)."
+            },
+            "ResidentProfileKycDocumentType": {
+                "type": "string",
+                "enum": [
+                    "identity-document",
+                    "proof-of-address"
+                ],
+                "description": "What an applicant may attach to their own KYC case (F28)."
             },
             "ResidentProfileKycStatus": {
                 "type": "string",

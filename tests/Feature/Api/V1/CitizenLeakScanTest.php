@@ -368,6 +368,9 @@ final class CitizenLeakScanTest extends KycTestCase
             '/api/v1/me/profile',
             '/api/v1/me/household',
             '/api/v1/me/kyc',
+            // F28. The scan reads it because an applicant's own document list is exactly
+            // the kind of payload a reviewer field could leak into.
+            '/api/v1/me/kyc/documents',
             '/api/v1/me/credential',
             '/api/v1/me/sessions',
             '/api/v1/me/devices',

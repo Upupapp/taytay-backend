@@ -279,6 +279,10 @@ export type ResidentProfileCorrectionStatus =
 |  'rejected'
 |  'withdrawn';
 
+export type ResidentProfileKycDocumentType =
+   'identity-document'
+|  'proof-of-address';
+
 export type ResidentProfileKycStatus =
    'draft'
 |  'submitted'

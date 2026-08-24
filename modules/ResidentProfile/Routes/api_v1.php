@@ -53,6 +53,28 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->middleware('throttle:kyc-submission')
         ->name('v1.me.kyc.submit');
 
+    /*
+     * THE APPLICANT'S OWN DOCUMENTS (F28).
+     *
+     * Nothing attached a file to a KYC case: `me/kyc/submit` takes no body, and the only upload
+     * route in the contract belonged to a `Welfare` assistance case — a different module and
+     * lifecycle, where an identity document would be attached to an application the resident
+     * never made. So a claim could be opened and submitted, and the applicant could not send the
+     * document that settles a case the registry match does not.
+     *
+     * `me/...` like everything else here: the case is resolved from the authenticated account,
+     * so there is no identifier in any of these paths to tamper with. The document type is the
+     * slot key, not a document id — a caller cannot name somebody else's file.
+     *
+     * Uploads are throttled: each one costs storage, a virus scan and eventually a reviewer's
+     * attention.
+     */
+    Route::post('me/kyc/documents', [KycController::class, 'uploadDocument'])
+        ->middleware('throttle:uploads')
+        ->name('v1.me.kyc.documents.store');
+    Route::get('me/kyc/documents', [KycController::class, 'listDocuments'])->name('v1.me.kyc.documents.index');
+    Route::post('me/kyc/documents/{type}/access', [KycController::class, 'openDocument'])->name('v1.me.kyc.documents.open');
+
     // ── the resident's own canonical profile ──────────────────────────────────────────
     Route::get('me/profile', [MyProfileController::class, 'show'])->name('v1.me.profile.show');
     Route::post('me/profile/corrections', [MyProfileController::class, 'requestCorrection'])->name('v1.me.profile.corrections.store');
@@ -67,6 +89,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('admin/kyc-cases', [KycController::class, 'index'])->name('v1.admin.kyc.index');
     Route::get('admin/kyc-cases/{case}', [KycController::class, 'show'])->name('v1.admin.kyc.show');
     Route::post('admin/kyc-cases/{case}/rescreen', [KycController::class, 'rescreen'])->name('v1.admin.kyc.rescreen');
+    // F28. A document the applicant attached, opened by the reviewer deciding the case.
+    Route::post('admin/kyc-cases/{case}/documents/{type}/access', [KycController::class, 'openCaseDocument'])->name('v1.admin.kyc.documents.open');
     Route::post('admin/kyc-cases/{case}/candidates/{candidate}', [KycController::class, 'decideCandidate'])->name('v1.admin.kyc.candidate');
     Route::post('admin/kyc-cases/{case}/approve', [KycController::class, 'approve'])->name('v1.admin.kyc.approve');
     Route::post('admin/kyc-cases/{case}/reject', [KycController::class, 'reject'])->name('v1.admin.kyc.reject');

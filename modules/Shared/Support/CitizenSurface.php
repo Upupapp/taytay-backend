@@ -80,6 +80,9 @@ final class CitizenSurface
 
             // ── verification / KYC ──
             'v1.me.kyc.show',
+            'v1.me.kyc.documents.store',
+            'v1.me.kyc.documents.index',
+            'v1.me.kyc.documents.open',
             'v1.me.kyc.register',
             'v1.me.kyc.submit',
 

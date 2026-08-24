@@ -81,6 +81,10 @@ return [
          */
         'kyc_submission' => (int) env('RATE_LIMIT_KYC', 5),
 
+        // Documents attached to a KYC case (F28). See RateLimits for why this is looser
+        // than the submission limit above.
+        'uploads' => (int) env('RATE_LIMIT_UPLOADS', 20),
+
         // Comments, reactions and shares. A comment box on a municipal feed is the cheapest way
         // to flood a system with text somebody then has to read.
         'engagement' => (int) env('RATE_LIMIT_ENGAGEMENT', 20),

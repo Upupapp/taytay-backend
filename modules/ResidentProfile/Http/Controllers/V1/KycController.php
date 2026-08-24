@@ -12,7 +12,12 @@ use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\ResidentProfile\Application\KycCaseService;
 use Modules\ResidentProfile\Application\ResidentMatcher;
+use Modules\Files\Application\DocumentLibrary;
+use Modules\Files\Contracts\DocumentSource;
+use Modules\Files\Contracts\DocumentVersionView;
+use Modules\Files\Contracts\FileClassification;
 use Modules\ResidentProfile\Contracts\KycStatus;
+use Modules\ResidentProfile\Domain\KycDocumentType;
 use Modules\ResidentProfile\Infrastructure\Eloquent\KycCase;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentMatchCandidate;
@@ -38,6 +43,14 @@ final class KycController
         private readonly KycCaseService $cases,
         private readonly ResidentMatcher $matcher,
         private readonly AuthorizationService $authorization,
+        /**
+         * Documents are `Files`' job, not this module's (F28).
+         *
+         * No `kyc_case_documents` table was added and none should be: `Files` already owns
+         * slots, versioning, supersession, scan status and retention, and a second document
+         * store would be a second answer to "what did this person show us".
+         */
+        private readonly DocumentLibrary $library,
     ) {}
 
     // ── applicant ─────────────────────────────────────────────────────────────────────
@@ -104,6 +117,104 @@ final class KycController
         );
     }
 
+    // ── the applicant's own documents (F28) ───────────────────────────────────────────
+
+    /**
+     * Attaches a document to the caller's own case.
+     *
+     * ---
+     *
+     * **The gap this closes.** `POST me/kyc/submit` takes no body and nothing attached a file to a
+     * KYC case, so a claim could be opened and submitted but the applicant could not send the
+     * document that settles a case the registry match does not. The only upload route in the
+     * contract belonged to a `Welfare` assistance case — a different module and lifecycle — and
+     * filing an identity document there would attach somebody's ID to an application they never
+     * made.
+     *
+     * **Only while the case is the applicant's to change.** A document arriving after submission
+     * would change what a reviewer already looked at, without the reviewer knowing. `draft` and
+     * `needs-more-information` are exactly the two states where the office is waiting on them.
+     *
+     * **Classification is decided here, never asked of the applicant.** `Personal`, which is what
+     * this system's own vocabulary says an identity document is. Somebody photographing their
+     * PhilID should not have to know what "sensitive" means for it to be held correctly — and
+     * they must not be able to under-classify it either.
+     */
+    public function uploadDocument(Request $request, ActorContext $actor): JsonResponse
+    {
+        $case = $this->editableOwnCaseOrFail($actor);
+
+        $validated = $request->validate([
+            'file' => ['required', 'file'],
+            'type' => ['required', 'string', 'in:'.implode(',', KycDocumentType::values())],
+        ]);
+
+        $type = KycDocumentType::from($validated['type']);
+
+        $file = $this->library->store(
+            $request->file('file'),
+            FileClassification::Personal,
+            $actor,
+        );
+
+        $version = $this->library->append(
+            $this->library->slotFor(KycDocumentType::OWNER_TYPE, (string) $case->uuid, $type->value),
+            $file->id,
+            [
+                // From the route, not the body. A client claiming `scanned` would be
+                // manufacturing evidence that a clerk imaged the paper at a counter.
+                'source' => DocumentSource::Uploaded,
+            ],
+            $actor,
+        );
+
+        return ApiResponse::created($this->documentProjection($type, $version));
+    }
+
+    /**
+     * What the applicant has attached, and nothing about how it was judged.
+     */
+    public function listDocuments(Request $request, ActorContext $actor): JsonResponse
+    {
+        $case = $this->ownCaseOrFail($actor);
+
+        return ApiResponse::item(['documents' => $this->documentsFor($case)]);
+    }
+
+    /**
+     * Opens something the applicant supplied themselves.
+     */
+    public function openDocument(Request $request, ActorContext $actor, string $type): JsonResponse
+    {
+        $case = $this->ownCaseOrFail($actor);
+        $documentType = KycDocumentType::tryFrom($type);
+
+        if ($documentType === null) {
+            throw ResourceNotFoundException::make('That document was not found.');
+        }
+
+        $version = $this->library->currentVersion(
+            $this->library->slotFor(KycDocumentType::OWNER_TYPE, (string) $case->uuid, $documentType->value),
+        );
+
+        if ($version === null) {
+            throw ResourceNotFoundException::make('That document was not found.');
+        }
+
+        /*
+         * Resolved from the caller's own case, so there is no document identifier in this request
+         * for anybody to substitute. An applicant may open what they supplied; never a copy for
+         * onward sharing, because an outward disclosure is the office's decision to make and
+         * record (ADR 0020 §7).
+         */
+        $grant = $this->library->issueAccess($version->id, $actor, 'view', false);
+
+        return ApiResponse::item([
+            'handle' => $grant['handle'],
+            'expires_at' => $grant['expires_at'],
+        ]);
+    }
+
     // ── reviewer ──────────────────────────────────────────────────────────────────────
 
     public function index(Request $request, ActorContext $actor): JsonResponse
@@ -155,7 +266,11 @@ final class KycController
         $model = $this->caseOrFail($actor, $case);
 
         return ApiResponse::item(
-            $this->reviewerProjection($model) + ['candidates' => $this->candidateProjection($model)],
+            $this->reviewerProjection($model)
+                + ['candidates' => $this->candidateProjection($model)]
+                // F28. Without this the applicant's documents are a write nobody reads, which is
+                // worse than not accepting them: the resident believes the office has their ID.
+                + ['documents' => $this->reviewerDocumentsFor($model)],
         );
     }
 
@@ -256,6 +371,43 @@ final class KycController
         return ApiResponse::item($this->reviewerProjection($model));
     }
 
+    /**
+     * A reviewer opens a document the applicant attached (F28).
+     *
+     * Scoped to the case in the path: the slot is derived from that case's uuid, so a version
+     * belonging to somebody else's case cannot be reached by naming it. There is no version
+     * identifier in this request at all.
+     *
+     * `KycReview` like every other reviewer action here, and the read is recorded — opening a
+     * resident's identity document is exactly the access an audit trail exists for.
+     */
+    public function openCaseDocument(Request $request, ActorContext $actor, string $case, string $type): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::KycReview);
+
+        $model = $this->caseOrFail($actor, $case);
+        $documentType = KycDocumentType::tryFrom($type);
+
+        if ($documentType === null) {
+            throw ResourceNotFoundException::make('That document was not found.');
+        }
+
+        $version = $this->library->currentVersion(
+            $this->library->slotFor(KycDocumentType::OWNER_TYPE, (string) $model->uuid, $documentType->value),
+        );
+
+        if ($version === null) {
+            throw ResourceNotFoundException::make('That document was not found.');
+        }
+
+        $grant = $this->library->issueAccess($version->id, $actor, 'kyc-review', false);
+
+        return ApiResponse::item([
+            'handle' => $grant['handle'],
+            'expires_at' => $grant['expires_at'],
+        ]);
+    }
+
     // ── projections ───────────────────────────────────────────────────────────────────
 
     /**
@@ -284,7 +436,99 @@ final class KycController
                 'birth_date' => $case->claimed_birth_date?->toDateString(),
             ],
             'resident_id' => $case->resolved_resident_id,
+            'documents' => $this->documentsFor($case),
         ];
+    }
+
+    /**
+     * What the applicant attached (F28).
+     *
+     * ---
+     *
+     * **Nothing about how it was judged.** `verificationStatus`, `verificationNote` and
+     * `verifiedAt` are on the version and are deliberately not here: a reviewer's remark on a
+     * document is deliberation, and this app shows an applicant the decision on their case rather
+     * than the working that led to it (visibility matrix §1). The same rule the requirement
+     * projection in `Welfare` already follows.
+     *
+     * Every type is listed whether or not something was attached, so a client can render the two
+     * slots without knowing the vocabulary — and an applicant can see that they have sent nothing
+     * yet, which is the state most likely to be misread as "sent".
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function documentsFor(KycCase $case): array
+    {
+        $documents = [];
+
+        foreach (KycDocumentType::cases() as $type) {
+            $documents[] = $this->documentProjection(
+                $type,
+                $this->library->currentVersion(
+                    $this->library->slotFor(KycDocumentType::OWNER_TYPE, (string) $case->uuid, $type->value),
+                ),
+            );
+        }
+
+        return $documents;
+    }
+
+    /**
+     * The same documents, with what the applicant is not shown (F28).
+     *
+     * A reviewer needs the verification status and the note, because those are their own working
+     * notes and their colleague's. The applicant sees neither — see [documentsFor].
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function reviewerDocumentsFor(KycCase $case): array
+    {
+        $documents = [];
+
+        foreach (KycDocumentType::cases() as $type) {
+            $version = $this->library->currentVersion(
+                $this->library->slotFor(KycDocumentType::OWNER_TYPE, (string) $case->uuid, $type->value),
+            );
+
+            $documents[] = $this->documentProjection($type, $version) + [
+                'version' => $version?->version,
+                'verification_status' => $version?->verificationStatus->value,
+                'verification_note' => $version?->verificationNote,
+                'scan_status' => $version?->file?->scanStatus->value,
+            ];
+        }
+
+        return $documents;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function documentProjection(KycDocumentType $type, ?DocumentVersionView $version): array
+    {
+        return [
+            'type' => $type->value,
+            'attached' => $version !== null,
+            'received_at' => $version?->receivedAt?->toIso8601ZuluString(),
+            // So a client can say "your ID is still being checked for viruses" rather than
+            // offering a file that will not open.
+            'is_available' => $version?->file?->isAvailable ?? false,
+            'file_name' => $version?->file?->name,
+        ];
+    }
+
+    /**
+     * The caller's own case, and only while it is theirs to change.
+     */
+    private function editableOwnCaseOrFail(ActorContext $actor): KycCase
+    {
+        $case = $this->ownCaseOrFail($actor);
+
+        if (! $case->status->isEditableByApplicant()) {
+            throw new ApiException(ErrorCode::Conflict, 'This application is not awaiting your input.');
+        }
+
+        return $case;
     }
 
     /**
