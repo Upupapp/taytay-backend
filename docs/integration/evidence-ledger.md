@@ -1775,3 +1775,57 @@ signed against that document, and it is wrong in both directions at once.
 Lines 05/07, 08 and 17 have one cause between them: **the console has never run against the API.**
 Everything green on the console side is green against a mock, and this command is where that
 stopped being an acceptable state.
+
+
+---
+
+## L-22 — F28 closed, and the transport bug the first upload found
+
+`POST me/kyc/documents` attaches a document to the applicant's own case; the reviewer deciding it
+can see and open it. **No new table**: `Files` already owns slots, versioning, supersession, scan
+status and retention, and `slotFor()` + `append()` is the API `Welfare` already uses. The KYC
+migration's own comment has said *"a KYC case holds identity documents"* since the schema was
+written — that was the only part that never arrived.
+
+Measured against this API serving locally, with `FILES_DISK=local` because MinIO is not running on
+this machine:
+
+```
+POST /api/v1/me/kyc/documents  (multipart: file=id.jpg, type=identity-document)
+  → 201 {type: identity-document, attached: true, is_available: true}
+GET  /api/v1/me/kyc/documents
+  → identity-document attached, proof-of-address not
+stored_files: classification=personal          ← set server-side, never asked of the applicant
+documents:    kyc-case/identity-document       ← the slot, in the module that owns documents
+              kyc-case/proof-of-address
+```
+
+**The live run proved something the tests could not.** The mobile client's `HttpApiTransport`
+wrote `multipart.fields[key] = '\$value'` — a backslash-escaped dollar, so every text field sent
+beside a file was the literal five characters `$value`. It had never fired, because no repository
+had ever sent a body with a file. This endpoint is the first, and `type=$value` would have been a
+422 on the screen that decides whether a resident ever becomes Verified. Fixed in the app, with a
+test that fails when the line is restored verbatim.
+
+### What is deliberately absent
+
+**No selfie, no liveness capture, no biometric**, on either side. A facial image is `Sensitive`
+under this system's own vocabulary, is not revocable the way a password is, and a released mobile
+build cannot be trusted to grade its own verification (ADR 0002). Identity is confirmed here by a
+person comparing a document to the registry, which is what the office already does at a counter.
+Both the API vocabulary and the app assert the absence rather than assuming it.
+
+Documents are accepted only while the case is the applicant's to change. One arriving after
+submission would change what a reviewer already looked at without their knowing;
+`needs-more-information` reopens the door, which is usually exactly what the office asked for.
+
+### The reviewer half is not optional
+
+`GET admin/kyc-cases/{case}` carries the documents and there is a scoped open route. Without it
+the applicant's documents are a write nobody reads — worse than refusing them, because the
+resident believes the office holds their ID. That is the mistake F26 made one commit earlier, where
+a reported comment reached a table no queue queried; it is not repeated here.
+
+The reviewer sees verification status, note and scan status. The applicant sees none of them: a
+remark on a document is deliberation, and an applicant is shown the decision on their case rather
+than the working (visibility matrix §1).
