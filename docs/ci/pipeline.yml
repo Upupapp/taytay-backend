@@ -1,0 +1,248 @@
+# The deployment gate, DEFINED HERE AND DELIBERATELY NOT ARMED.
+#
+# This is a complete GitHub Actions workflow and it lives in `docs/` on purpose. Moving it to
+# `.github/workflows/` arms it; nothing else is needed.
+#
+# WHY IT IS NOT ARMED
+#
+# The owner has no GitHub Actions credit. A workflow at `.github/workflows/ci.yml` runs on every
+# push to `main`, so keeping it there would bill a run for every commit — and a gate that cannot
+# pay to run is a gate that fails open while looking green.
+#
+# So the gate runs locally instead, before every push, and TAB 18's requirement that gates be
+# "enforced by the pipeline, not by discipline" is NOT met. That is recorded as a NO-GO on gate
+# line 18 rather than papered over.
+#
+# WHAT IS HERE THAT LOCAL RUNS CANNOT DO
+#
+# Three jobs below need infrastructure this machine does not have, and they are the reason this
+# file is kept rather than deleted:
+#
+#   * `gate` runs migrations against a REAL PostgreSQL service and verifies they roll back. The
+#     local suite runs on SQLite, which structurally cannot report the two rollback failures that
+#     actually happen in production (see MigrationSafetyTest).
+#   * `clean-clone` installs with no cache at all and boots the application, which is the only
+#     check of "restorable from a clean clone" — gate line 00.
+#   * `secrets` scans every blob in the history, not just the working tree.
+#
+# Restoring it is one `git mv`. It is recorded in docs/runbooks/deployment-and-rollback.md.
+
+name: CI
+
+# Every push and every pull request. A gate that runs only on the default branch is a gate that
+# tells you after the merge (ADR 0041 §1).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch cancels the first. The older run's answer is about code nobody
+# will deploy, and letting it finish delays the one that matters.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Release gate
+    runs-on: ubuntu-latest
+
+    # Every job below is a REQUIRED check. There is deliberately no `continue-on-error` anywhere in
+    # this file: a step that can fail without failing the build is a step nobody reads, and this
+    # pipeline is the mechanism behind "no production deploy occurs with a failing migration, test
+    # or security gate".
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          # The floor stated in CLAUDE.md Article 1. Pinned rather than `latest`, so a new PHP
+          # release cannot turn a green pipeline red on a morning nobody changed anything.
+          php-version: '8.3'
+          extensions: gd, exif, pdo_sqlite, pdo_pgsql, redis, bcmath
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      # ── 1. the install itself is a check ────────────────────────────────────────────
+      #
+      # `--no-cache` on the install, and the lock file is authoritative. A populated vendor
+      # directory masks a broken install: a build can be green while the repository does not
+      # actually install from a clean clone, and the discovery happens on a deployment host.
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Verify the lock file matches composer.json
+        run: composer validate --strict --no-check-publish
+
+      - name: Prepare the environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # ── 2. style ────────────────────────────────────────────────────────────────────
+      - name: Check formatting
+        run: vendor/bin/pint --test
+
+      # ── 3. migrations against a CLEAN database ──────────────────────────────────────
+      #
+      # Against Postgres, not the SQLite the tests use. Migrations must stay portable (Article 1),
+      # and the only way to know they are is to run them on the engine production uses — a
+      # migration that works on SQLite and not on Postgres fails on a deployment host at the worst
+      # possible moment.
+      - name: Run migrations against a clean PostgreSQL
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: lguids_ci
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+        run: php artisan migrate --force
+
+      # Rolling back is part of the contract: Article 6 requires migrations to be reversible, and
+      # a `down()` nobody runs is a `down()` that does not work.
+      - name: Verify migrations roll back
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: lguids_ci
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+        run: php artisan migrate:rollback --force --step=100
+
+      # ── 4. the test suite ───────────────────────────────────────────────────────────
+      - name: Run the test suite
+        run: php artisan test
+
+      # ── 5. the published contract must be current ───────────────────────────────────
+      #
+      # Belt and braces: `ApiContractTest` already checks this, and it is repeated as its own step
+      # so that a stale contract is named in the job list rather than buried in a test failure.
+      # This is what makes a response-shape change produce a visible decision (ADR 0038 §4).
+      - name: Verify the OpenAPI document is current
+        run: php artisan lguids:openapi --check
+
+      - name: Verify the TypeScript contract is current
+        run: php artisan lguids:types --check
+
+      # ── 6. the console must still be able to read what we serve ────────────────────
+      #
+      # `ConsumerContractTest` already runs inside the suite above. It is repeated as a named step
+      # for one reason: when it fails, the job list must say *the admin console will break*, not
+      # "1 test failed". A dropped field does not raise an error in that console — it drops the
+      # record, and the caseworker sees a shorter list with nothing to explain it.
+      #
+      # The expectations are generated in the console from its own mappers and vendored here with
+      # their provenance. If this step is red, read what changed before touching the vendored file:
+      # editing it here to go green is deleting the evidence.
+      - name: Verify the admin console can still read our responses
+        run: php artisan test --filter=ConsumerContractTest
+
+      # ── 7. dependency security ──────────────────────────────────────────────────────
+      #
+      # Advisory data changes without the repository changing, so this step can start failing on a
+      # morning nobody committed anything. That is correct and it is the point: a newly disclosed
+      # vulnerability in a dependency is news whether or not it arrived with a commit.
+      - name: Audit dependencies for known vulnerabilities
+        run: composer audit --no-interaction
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: lguids_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+  clean-clone:
+    name: Installs from a clean clone
+    runs-on: ubuntu-latest
+
+    # SEPARATE JOB, ON PURPOSE. It shares no cache and no vendor directory with the gate above.
+    #
+    # A populated `vendor/` masks a broken install — the build is green because the packages were
+    # already there, and the repository's ability to install is never actually exercised. This job
+    # is the only one that answers "can somebody clone this and run it", which is the question a
+    # new developer and a deployment host both ask.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, exif, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+
+      - name: Install with no cache at all
+        run: composer install --no-interaction --prefer-dist --no-progress --no-cache
+
+      - name: Boot the application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan config:clear
+          # `route:list` resolves every controller and every middleware alias. A container binding
+          # that only exists because of a cached config fails here rather than on a deploy.
+          php artisan route:list > /dev/null
+          php artisan schedule:list > /dev/null
+
+  # ── The standing pre-push gate ─────────────────────────────────────────────────────────
+  #
+  # TAB 00 made the secret scan standing rather than a one-off, on the grounds that this
+  # repository is public and every push is therefore a publication. Its history is already
+  # published, so the scan is remedial rather than precautionary: anything it finds must be
+  # treated as read, not merely removed from the tree.
+  #
+  # A separate job, so a finding is unambiguous — this failing means "do not publish", not
+  # "a test is flaky".
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The scanner reads every blob reachable from any ref, not the working tree, so it
+          # needs the whole history. A shallow clone reports clean on a repository that is not.
+          fetch-depth: 0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Scan every blob in the history
+        run: |
+          set -euo pipefail
+          git rev-list --objects --all > /tmp/objects.txt
+          awk '{print $1}' /tmp/objects.txt \
+            | git cat-file --batch --buffer \
+            | php docs/integration/tools/secret-scan.php "${{ github.repository }}" /tmp/objects.txt \
+            | tee /tmp/scan.txt
+          # Accepted findings live in docs/integration/secret-scan-allowlist.txt, each with a
+          # reason somebody wrote. Anything outside it stops the build.
+          if ! grep -qE '^findings: 0$' /tmp/scan.txt; then
+            echo "::error::The secret scan found something outside the allowlist. Read it before pushing anywhere."
+            exit 1
+          fi

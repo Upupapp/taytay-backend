@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Modules\Files\Contracts\FileClassification;
-use Modules\Identity\Infrastructure\Eloquent\Account;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
