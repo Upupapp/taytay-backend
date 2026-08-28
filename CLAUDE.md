@@ -210,8 +210,19 @@ ADR 0004 (topology) and ADR 0005 (cross-origin authentication).
 
 ## Article 9 — Operational prohibitions for agents
 
-Never push, force-push, merge protected branches, deploy, rotate credentials, touch
-production infrastructure or production data, or expose secrets. Local commits only, and
-only when explicitly authorized. Preserve existing uncommitted work — inspect and
-reconcile the working tree before editing; never reset, clean or revert someone else's
-changes for convenience.
+**Pushing to `main` is authorised by the owner; production is not.** Direct pushes to
+`main`, no pull request and no required review — the owner asked for that explicitly. The
+same rule already stood in `taytay-admin-web` (section 2, rule 9); this article now agrees
+with it rather than contradicting it.
+
+**This repository is public, so a push is a publication.** Run the full gate
+(`composer check`) before one, and treat anything you commit as publishable from the moment
+you commit it: a later push by another agent will carry it, and commits made in this
+checkout are authored as the owner, because that is what `git config user.email` is set to.
+
+Still forbidden, without exception: **force-push, history rewriting, merging protected
+branches, deployment, credential rotation, any production infrastructure or production data
+operation, and exposing secrets.**
+
+Preserve existing uncommitted work — inspect and reconcile the working tree before editing;
+never reset, clean or revert someone else's changes for convenience.
