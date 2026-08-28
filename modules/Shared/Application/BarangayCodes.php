@@ -61,6 +61,31 @@ final class BarangayCodes
         return $this->map()[(int) $barangayId] ?? null;
     }
 
+    /**
+     * The internal key for a stable code, or null when there is no such barangay.
+     *
+     * The inverse of {@see codeFor}, and it exists so that **writes** can accept the same
+     * identifier reads publish (L-15). Without it every client that receives `barangay_code` has to
+     * send back `barangay_id`, which is the auto-increment key Article 4 keeps out of payloads —
+     * so the read side would be migrated and the write side would hold it in place.
+     *
+     * Reuses the same memoised map as `codeFor`, so accepting a code costs no extra query.
+     *
+     * NULL IS A REAL ANSWER. A code that names no barangay must be refused by the caller's
+     * validation rather than resolved to something; returning a fallback id here would silently
+     * file a resident in the wrong barangay, which is a scope boundary as well as an address.
+     */
+    public function idForCode(?string $code): ?int
+    {
+        if ($code === null || $code === '') {
+            return null;
+        }
+
+        $id = array_search($code, $this->map(), strict: true);
+
+        return $id === false ? null : (int) $id;
+    }
+
     /** @return array<int, string> */
     public function map(): array
     {

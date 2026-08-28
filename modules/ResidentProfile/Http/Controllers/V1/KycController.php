@@ -7,7 +7,6 @@ namespace Modules\ResidentProfile\Http\Controllers\V1;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\Files\Application\DocumentLibrary;
@@ -608,10 +607,14 @@ final class KycController
             return $validated;
         }
 
-        // Validated as `exists:barangays,code` above, so this cannot miss.
-        $validated['barangay_id'] = (int) DB::table('barangays')
-            ->where('code', $code)
-            ->value('id');
+        /*
+         * Through `BarangayCodes` rather than a query of its own.
+         *
+         * `ResidentController` needs the same translation, and two hand-rolled lookups of the same
+         * table are two places for the rule to drift. The map is memoised per request, so this
+         * costs no query at all where a projection has already read it.
+         */
+        $validated['barangay_id'] = $this->barangayCodes->idForCode($code);
 
         return $validated;
     }

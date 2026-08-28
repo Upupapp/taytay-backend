@@ -23,6 +23,8 @@ use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
+use Modules\Shared\Exceptions\ApiException;
+use Modules\Shared\Exceptions\ErrorCode;
 use Modules\Shared\Http\ApiResponse;
 
 /**
@@ -143,12 +145,23 @@ final class ResidentController
             'sex' => ['required', 'string', 'in:female,male'],
             'birth_date' => ['required', 'date', 'before:today'],
             'civil_status' => ['required', 'string', CivilStatus::rule()],
-            'barangay_id' => ['required', 'integer', 'exists:barangays,id'],
+            /*
+             * EITHER IDENTIFIER, following `POST me/kyc` (L-15).
+             *
+             * Every response now names a barangay by code as well as by id, and a client that
+             * receives a code must be able to send it back — otherwise the read side is migrated
+             * and the write side pins the auto-increment key in place, which is the thing
+             * Article 4 keeps out of payloads.
+             */
+            'barangay_id' => ['required_without:barangay_code', 'integer', 'exists:barangays,id'],
+            'barangay_code' => ['required_without:barangay_id', 'string', 'max:64', 'exists:barangays,code'],
             'street_address' => ['required', 'string', 'max:191'],
             'purok_or_sitio' => ['nullable', 'string', 'max:96'],
             'mobile_number' => ['nullable', 'string', 'max:32'],
             'email' => ['nullable', 'email', 'max:191'],
         ]);
+
+        $validated = $this->withResolvedBarangay($validated);
 
         // A clerk must not be able to enrol somebody into a barangay they cannot serve —
         // that is how a record lands where its own office cannot see it.
@@ -182,6 +195,8 @@ final class ResidentController
 
         $reason = $validated['reason'] ?? null;
         unset($validated['reason']);
+
+        $validated = $this->withResolvedBarangay($validated);
 
         if ($validated !== [] && array_key_exists('barangay_id', $validated)) {
             // Moving a resident out of the caller's scope would be a one-way trip: they
@@ -406,6 +421,43 @@ final class ResidentController
      *
      * @return array<string, list<string>>
      */
+    /**
+     * Turns a client-facing barangay `code` into the internal key, and drops it.
+     *
+     * The rest of the module stores `barangay_id`, so the translation happens **here at the
+     * adapter** rather than being pushed inward: a controller may shape a command, and this is
+     * that. `barangay_code` never reaches the application service, so the domain has no second
+     * identifier to disagree with itself about.
+     *
+     * The same shape as `KycController`'s, and both now go through `BarangayCodes` so the
+     * translation exists once — the memoised map means accepting a code costs no extra query.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function withResolvedBarangay(array $validated): array
+    {
+        $code = $validated['barangay_code'] ?? null;
+        unset($validated['barangay_code']);
+
+        if (! is_string($code)) {
+            return $validated;
+        }
+
+        // Validated as `exists:barangays,code`, so this resolves — but a null would silently file
+        // the resident in barangay 0, and a scope boundary is not a place to trust validation
+        // alone.
+        $id = $this->barangayCodes->idForCode($code);
+
+        if ($id === null) {
+            throw new ApiException(ErrorCode::ValidationFailed, 'That barangay was not found.');
+        }
+
+        $validated['barangay_id'] = $id;
+
+        return $validated;
+    }
+
     private function correctionRules(): array
     {
         return [
@@ -417,6 +469,7 @@ final class ResidentController
             CorrectableField::BirthDate->value => ['sometimes', 'date', 'before:today'],
             CorrectableField::CivilStatus->value => ['sometimes', 'string', CivilStatus::rule()],
             CorrectableField::BarangayId->value => ['sometimes', 'integer', 'exists:barangays,id'],
+            'barangay_code' => ['sometimes', 'string', 'max:64', 'exists:barangays,code'],
             CorrectableField::StreetAddress->value => ['sometimes', 'string', 'max:191'],
             CorrectableField::PurokOrSitio->value => ['sometimes', 'nullable', 'string', 'max:96'],
             CorrectableField::MobileNumber->value => ['sometimes', 'nullable', 'string', 'max:32'],

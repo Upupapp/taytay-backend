@@ -260,6 +260,73 @@ final class ResidentRegistryTest extends KycTestCase
             ->assertStatus(409);
     }
 
+    // ── L-15: a client may send back the identifier it was given ─────────────────────
+
+    /**
+     * A resident is created by barangay **code**, which is what every response now names.
+     *
+     * Without this the read side is migrated and the write side pins the auto-increment key in
+     * place: a client receives `barangay_code` and has to send `barangay_id` back, which is the
+     * identifier Article 4 keeps out of payloads in the first place.
+     */
+    #[Test]
+    public function a_resident_can_be_created_by_barangay_code(): void
+    {
+        Sanctum::actingAs($this->reviewer());
+
+        $code = (string) DB::table('barangays')->where('id', $this->barangayId())->value('code');
+
+        $payload = $this->postJson('/api/v1/admin/residents', [
+            'first_name' => 'Coded',
+            'last_name' => 'Barangay',
+            'sex' => 'female',
+            'birth_date' => '1988-03-04',
+            'civil_status' => 'single',
+            'barangay_code' => $code,
+            'street_address' => '4 Mabini Street',
+        ])->assertCreated()->json('data');
+
+        $this->assertSame($this->barangayId(), Resident::query()->where('uuid', $payload['id'])->value('barangay_id'));
+    }
+
+    /**
+     * **Neither identifier is refused, rather than defaulting to somewhere.**
+     *
+     * A barangay is a scope boundary as well as an address: a record filed in the wrong one lands
+     * where its own office cannot see it.
+     */
+    #[Test]
+    public function a_resident_cannot_be_created_with_no_barangay_at_all(): void
+    {
+        Sanctum::actingAs($this->reviewer());
+
+        $this->postJson('/api/v1/admin/residents', [
+            'first_name' => 'Nowhere',
+            'last_name' => 'Person',
+            'sex' => 'female',
+            'birth_date' => '1988-03-04',
+            'civil_status' => 'single',
+            'street_address' => '4 Mabini Street',
+        ])->assertStatus(422);
+    }
+
+    /** A code naming no barangay is refused, never resolved to something. */
+    #[Test]
+    public function an_unknown_barangay_code_is_refused(): void
+    {
+        Sanctum::actingAs($this->reviewer());
+
+        $this->postJson('/api/v1/admin/residents', [
+            'first_name' => 'Unknown',
+            'last_name' => 'Barangay',
+            'sex' => 'female',
+            'birth_date' => '1988-03-04',
+            'civil_status' => 'single',
+            'barangay_code' => 'brgy-does-not-exist',
+            'street_address' => '4 Mabini Street',
+        ])->assertStatus(422);
+    }
+
     // ── the staff registry ────────────────────────────────────────────────────────────
 
     #[Test]
