@@ -159,6 +159,13 @@ final class ReleaseController
             'acknowledged_relationship' => ['sometimes', 'nullable', 'string', 'max:64'],
             // The METHOD only. No signature image, no thumbprint — the mark stays on the paper.
             'acknowledgement_method' => ['sometimes', 'nullable', 'string', 'in:signature,thumbmark,digital-confirmation,witnessed'],
+            /*
+             * WHAT THE OFFICER WROTE ON THE VOUCHER. Not an account code, nothing joins on it
+             * (`DL-89`) — it is the identifier a reconciliation is performed against by a person,
+             * and a payout that cannot be tied back to its cheque number is one nobody can check.
+             */
+            'instrument_reference' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'remarks' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         [$status, $body] = $this->idempotency->execute(
@@ -184,6 +191,21 @@ final class ReleaseController
         $validated = $request->validate([
             'status' => ['required', 'string', 'in:completed,failed,deferred,cancelled,ready'],
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
+            /*
+             * ACCEPTED ON `completed`, WHICH IS THE ACKNOWLEDGEMENT.
+             *
+             * A payout is frequently handed over before the beneficiary signs for it — a bank
+             * transfer sent, a relief pack issued and receipted later. The console models that as
+             * two steps (`released` then `claimed`) and collects who actually collected it at the
+             * second one, where this endpoint had no field for it.
+             *
+             * Still the METHOD only. No signature image, no thumbprint: the mark stays on the
+             * paper manifest, because a biometric held for this purpose is one held for no reason
+             * (RA 10173, Article 5.2).
+             */
+            'acknowledged_by_name' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'acknowledged_relationship' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'acknowledgement_method' => ['sometimes', 'nullable', 'string', 'in:signature,thumbmark,digital-confirmation,witnessed'],
         ]);
 
         $target = ReleaseStatus::from($validated['status']);
@@ -212,6 +234,11 @@ final class ReleaseController
                 $target,
                 $validated['reason'] ?? null,
                 $actor,
+                array_intersect_key($validated, array_flip([
+                    'acknowledged_by_name',
+                    'acknowledged_relationship',
+                    'acknowledgement_method',
+                ])),
             ), $actor)],
         );
 
@@ -516,6 +543,8 @@ final class ReleaseController
             'release_location' => $release->release_location,
             'status' => $release->status->value,
             'released_at' => $release->released_at?->toIso8601ZuluString(),
+            'instrument_reference' => $release->instrument_reference,
+            'release_remarks' => $release->release_remarks,
             'acknowledged_by_name' => $release->acknowledged_by_name,
             'acknowledged_relationship' => $release->acknowledged_relationship,
             'acknowledgement_method' => $release->acknowledgement_method,

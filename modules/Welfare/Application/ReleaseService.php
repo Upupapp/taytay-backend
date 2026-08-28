@@ -173,6 +173,10 @@ final class ReleaseService
                 // reason (RA 10173, Article 5.2).
                 'acknowledgement_method' => $acknowledgement['acknowledgement_method'] ?? null,
                 'acknowledged_at' => isset($acknowledgement['acknowledgement_method']) ? now() : null,
+                // What the officer wrote on the voucher, and anything else worth recording about
+                // this specific handover. Neither is an account code (`DL-89`).
+                'instrument_reference' => $acknowledgement['instrument_reference'] ?? null,
+                'release_remarks' => $acknowledgement['remarks'] ?? null,
             ])->save();
 
             $this->recordTransition($release, ReleaseStatus::Ready, ReleaseStatus::Released, null, $actor);
@@ -191,13 +195,17 @@ final class ReleaseService
     /**
      * Any other movement: completed, failed, deferred, cancelled.
      */
+    /**
+     * @param  array<string, string|null>  $acknowledgement  recorded only on `completed`
+     */
     public function transition(
         Release $release,
         ReleaseStatus $status,
         ?string $reason,
         ActorContext $actor,
+        array $acknowledgement = [],
     ): Release {
-        return DB::transaction(function () use ($release, $status, $reason, $actor): Release {
+        return DB::transaction(function () use ($release, $status, $reason, $actor, $acknowledgement): Release {
             /** @var Release $release */
             $release = Release::query()->lockForUpdate()->findOrFail($release->id);
 
@@ -219,10 +227,26 @@ final class ReleaseService
 
             $from = $release->status;
 
+            /*
+             * THE ACKNOWLEDGEMENT LANDS ON `completed` AND NOWHERE ELSE.
+             *
+             * `completed` is the beneficiary's receipt. Letting these fields through on `failed`,
+             * `deferred` or `cancelled` would record who collected a payout that never happened —
+             * and a record saying a family signed for money they did not receive is worse than a
+             * missing field, because it looks like evidence.
+             *
+             * `array_filter` on `null` so an absent key never overwrites something already
+             * recorded at the handover.
+             */
+            $acknowledged = $status === ReleaseStatus::Completed
+                ? array_filter($acknowledgement, static fn ($value): bool => $value !== null && $value !== '')
+                : [];
+
             $release->forceFill([
                 'status' => $status,
                 'outcome_reason' => $reason ?? $release->outcome_reason,
-            ])->save();
+                'acknowledged_at' => $acknowledged !== [] ? now() : $release->acknowledged_at,
+            ] + $acknowledged)->save();
 
             $this->recordTransition($release, $from, $status, $reason, $actor);
 

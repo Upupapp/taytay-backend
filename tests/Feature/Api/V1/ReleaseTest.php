@@ -733,6 +733,77 @@ final class ReleaseTest extends KycTestCase
         $this->assertNotSame($centavos, (int) ((float) ($centavos / 100) * 100));
     }
 
+    // ── TAB 19: the fields the console collects, and where they may not land ─────────
+
+    /**
+     * The voucher reference and the remarks survive the handover.
+     *
+     * The console's release screen collects both and neither had a column. Wiring that screen
+     * without them would have dropped the one identifier a reconciliation is performed against —
+     * you cannot tie a payout back to a cheque number the system never stored.
+     */
+    #[Test]
+    public function a_handover_records_the_voucher_reference_the_officer_wrote(): void
+    {
+        $release = $this->preparedRelease();
+        Sanctum::actingAs($this->disburser());
+
+        $body = $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [
+            'instrument_reference' => 'CHQ-2026-004871',
+            'remarks' => 'Collected at the barangay hall, second session.',
+        ])->assertOk()->json('data');
+
+        $this->assertSame('CHQ-2026-004871', $body['instrument_reference']);
+        $this->assertSame('Collected at the barangay hall, second session.', $body['release_remarks']);
+    }
+
+    /**
+     * An acknowledgement may be recorded on `completed`, which is the beneficiary's receipt.
+     */
+    #[Test]
+    public function the_beneficiary_receipt_is_recorded_when_the_release_completes(): void
+    {
+        $release = $this->preparedRelease();
+        Sanctum::actingAs($this->disburser());
+        $this->money()->postJson("/api/v1/admin/releases/{$release}/confirmation", [])->assertOk();
+
+        $body = $this->money()->postJson("/api/v1/admin/releases/{$release}/status", [
+            'status' => 'completed',
+            'acknowledged_by_name' => 'Marisol Reyes',
+            'acknowledged_relationship' => 'daughter',
+            'acknowledgement_method' => 'signature',
+        ])->assertOk()->json('data');
+
+        $this->assertSame('Marisol Reyes', $body['acknowledged_by_name']);
+        $this->assertSame('daughter', $body['acknowledged_relationship']);
+    }
+
+    /**
+     * **It may not be recorded on an outcome where nothing was handed over.**
+     *
+     * A record saying a family signed for money they did not receive is worse than a missing
+     * field, because it looks like evidence. `deferred`, `failed` and `cancelled` all mean the
+     * payout did not happen, so the acknowledgement must not survive the request.
+     */
+    #[Test]
+    public function an_acknowledgement_cannot_be_attached_to_a_payout_that_did_not_happen(): void
+    {
+        $release = $this->preparedRelease();
+        Sanctum::actingAs($this->disburser());
+
+        $body = $this->money()->postJson("/api/v1/admin/releases/{$release}/status", [
+            'status' => 'deferred',
+            'reason' => 'The funds had not arrived from the treasury.',
+            'acknowledged_by_name' => 'Marisol Reyes',
+            'acknowledgement_method' => 'signature',
+        ])->assertOk()->json('data');
+
+        $this->assertNull(
+            $body['acknowledged_by_name'],
+            'A deferred release recorded who collected it. Nothing was collected.'
+        );
+    }
+
     private function admin(): Account
     {
         return $this->reviewer('lgu_admin');
