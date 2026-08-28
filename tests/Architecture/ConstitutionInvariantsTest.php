@@ -55,13 +55,27 @@ final class ConstitutionInvariantsTest extends TestCase
         'exposing secrets',
     ];
 
+    /**
+     * The constitution, whitespace-normalised.
+     *
+     * NORMALISED BECAUSE THE FILE IS HARD-WRAPPED, AND THAT IS NOT A CONVENIENCE. Every phrase
+     * asserted here is a sentence to a reader and an arbitrary number of lines on disk. The first
+     * version of this test matched the raw text and passed only because no asserted phrase
+     * happened to straddle a wrap that day; re-wrapping a paragraph — a formatting change with no
+     * meaning — would have failed it.
+     *
+     * That failure mode is worse than no test. A check that goes red on correct work is one people
+     * learn to edit rather than read, and the next person to hit it would have "fixed" it by
+     * deleting the assertion. The sibling `taytay-admin-web` check found this the same day, on a
+     * rule that wraps as "never a security\nboundary".
+     */
     private function constitution(): string
     {
         $path = dirname(__DIR__, 2).'/CLAUDE.md';
 
         $this->assertFileExists($path, 'CLAUDE.md is the highest-authority document and is missing.');
 
-        return (string) file_get_contents($path);
+        return (string) preg_replace('/\s+/', ' ', (string) file_get_contents($path));
     }
 
     #[Test]
