@@ -26,14 +26,20 @@ final class ContentAudit
 {
     public function __construct(private readonly AuditWriter $trail) {}
 
-    public function record(?string $actorSubjectId, string $action, string $summary, string $entityId): void
-    {
+    public function record(
+        ?string $actorSubjectId,
+        string $action,
+        string $summary,
+        string $entityId,
+        ?string $reason = null,
+    ): void {
         $this->trail->record(
             $actorSubjectId,
             $action,
             $summary,
             'Content.NewsfeedPost',
             $entityId,
+            reason: $reason,
         );
     }
 }

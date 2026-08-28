@@ -94,8 +94,9 @@ final class NewsfeedService
         PostStatus $target,
         ActorContext $actor,
         ?Carbon $publishAt = null,
+        ?string $reason = null,
     ): NewsfeedPost {
-        return DB::transaction(function () use ($post, $target, $actor, $publishAt): NewsfeedPost {
+        return DB::transaction(function () use ($post, $target, $actor, $publishAt, $reason): NewsfeedPost {
             /** @var NewsfeedPost $post */
             $post = NewsfeedPost::query()->lockForUpdate()->findOrFail($post->id);
 
@@ -126,11 +127,21 @@ final class NewsfeedService
                 $post->forceFill(['status' => $target, 'publish_at' => null])->save();
             }
 
+            /*
+             * THE REASON IS THE CONSOLE'S, AND IT IS MANDATORY THERE.
+             *
+             * The staff console refuses to publish, schedule or archive without one, and this
+             * endpoint used to accept no such field — so wiring the console to it would have
+             * dropped a required, staff-typed sentence about an outward-facing act. A post goes
+             * out in the municipality's name; "why was this published" is the question the trail
+             * exists to answer.
+             */
             $this->audit->record(
                 $actor->subjectId,
                 'newsfeed.'.$target->value,
                 'Newsfeed post '.$target->value,
                 (string) $post->uuid,
+                $reason,
             );
 
             return $post->refresh();

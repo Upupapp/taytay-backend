@@ -202,6 +202,9 @@ final class NewsfeedController
         $validated = $request->validate([
             'status' => ['required', 'string', 'in:'.implode(',', PostStatus::values())],
             'publish_at' => ['required_if:status,scheduled', 'nullable', 'date'],
+            // The console requires one for every transition. Optional here because other clients
+            // exist, recorded on the trail when supplied.
+            'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         $target = PostStatus::from($validated['status']);
@@ -218,6 +221,7 @@ final class NewsfeedController
             $target,
             $actor,
             isset($validated['publish_at']) ? Carbon::parse($validated['publish_at']) : null,
+            $validated['reason'] ?? null,
         );
 
         /*
