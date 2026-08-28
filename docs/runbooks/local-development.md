@@ -215,3 +215,24 @@ php artisan migrate:fresh
 
 `-v` is local only. There is no equivalent workflow for any deployed environment, and
 nothing in this repository can reach one.
+
+---
+
+## Two suites in one checkout will fail each other's file tests
+
+`Storage::fake('object-storage')` **deletes** `storage/framework/testing/disks/object-storage` when
+a test class sets it up — eight classes here do. That directory belongs to the checkout, not to the
+process, so two `phpunit` runs in the same working tree share it: one wipes files the other has
+just written.
+
+The symptom is a `League\Flysystem\UnableToReadFile` or `UnableToWriteFile` inside a document or
+KYC test, reported as a 500 where a 201 was expected. It looks exactly like a flaky product defect
+and is not one — the same test passes in isolation, passes for its whole file, and passes on a
+re-run once the other process finishes.
+
+Seen three times on 2026-08-28, each time while a second agent was running the suite in this same
+directory.
+
+**Before concluding a file test is flaky, check `ps aux | grep phpunit`.** If somebody else is
+running, your result is not evidence. To run genuinely concurrently, use a separate worktree so the
+two checkouts do not share `storage/framework/testing`.
