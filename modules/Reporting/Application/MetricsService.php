@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 
 /**
  * Dashboard aggregates (ADR 0026).
@@ -41,7 +42,10 @@ final class MetricsService
      */
     public const MINIMUM_CELL = 5;
 
-    public function __construct(private readonly AuthorizationService $authorization) {}
+    public function __construct(
+        private readonly AuthorizationService $authorization,
+        private readonly BarangayCodes $barangayCodes,
+    ) {}
 
     /**
      * The headline figures. No breakdown, so no suppression is needed — a municipality-wide
@@ -117,8 +121,9 @@ final class MetricsService
          * The breakdown most in need of suppression. A barangay is small enough that a count of
          * one, plus any other filter the caller applied, names a household.
          */
-        return $this->suppress($rows->map(static fn (object $row): array => [
+        return $this->suppress($rows->map(fn (object $row): array => [
             'barangay_id' => $row->barangay_id === null ? null : (int) $row->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($row->barangay_id),
             'total' => (int) $row->total,
         ])->all());
     }

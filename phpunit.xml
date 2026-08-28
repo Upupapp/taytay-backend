@@ -24,6 +24,19 @@
         </include>
     </source>
     <php>
+        <!--
+            CaseDocumentTest allocates a file one byte over the 10 MB ceiling to prove the refusal
+            is a 413 and not a generic 422. A 10 MB string does not survive a stock 128 MB limit
+            once the request body and its multipart copy exist beside it, and the failure arrives
+            as "Premature end of PHP process", which reads as a broken runner rather than a missing
+            setting.
+
+            Pinned here rather than left to php.ini because Article 7.1 makes "php artisan test
+            passes" the definition of done, and a definition of done that depends on an ini value
+            the repository does not ship is not one. `php artisan test` spawns a child process, so
+            `php -d memory_limit=...` on the parent does not reach the tests; this does.
+        -->
+        <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_DEBUG" value="false"/>
         <!--

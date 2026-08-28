@@ -22,6 +22,7 @@ use Modules\ResidentProfile\Infrastructure\Eloquent\KycCase;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentMatchCandidate;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ApiException;
@@ -51,6 +52,7 @@ final class KycController
          * store would be a second answer to "what did this person show us".
          */
         private readonly DocumentLibrary $library,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     // ── applicant ─────────────────────────────────────────────────────────────────────
@@ -578,6 +580,7 @@ final class KycController
                     'name' => $resident->fullName(),
                     'birth_date' => $resident->birth_date?->toDateString(),
                     'barangay_id' => $resident->barangay_id,
+                    'barangay_code' => $this->barangayCodes->codeFor($resident->barangay_id),
                     'verification_tier' => $resident->verification_tier->value,
                 ],
             ];

@@ -108,4 +108,31 @@ final readonly class DataScope
     {
         return ['type' => $this->type, 'barangay_ids' => $this->barangayIds];
     }
+
+    /**
+     * The same scope for a client, with the barangay codes the directory publishes (L-15).
+     *
+     * SEPARATE FROM {@see forAudit()} ON PURPOSE. The trail records the identifier the system
+     * actually used and its stored shape is append-only, so a new key would start appearing
+     * halfway through the record for no reason a reader could see. A client needs the identifier
+     * it can resolve. Two needs, two methods, one source.
+     *
+     * The resolver is passed in rather than reached for: this is a value object in `Shared` and it
+     * stays free of the database.
+     *
+     * A grant whose barangay has since been removed contributes no code, so the lists can differ
+     * in length. They are deliberately not zipped into pairs — `barangay_ids` is the shape four
+     * clients already read, and this is the expand step of Article 6, not the contract step.
+     *
+     * @return array{type: string, barangay_ids: list<int>, barangay_codes: list<string>}
+     */
+    public function forResponse(BarangayCodes $codes): array
+    {
+        return $this->forAudit() + [
+            'barangay_codes' => array_values(array_filter(array_map(
+                static fn (int $id): ?string => $codes->codeFor($id),
+                $this->barangayIds,
+            ))),
+        ];
+    }
 }

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Modules\Reporting\Domain\ReportCatalog;
 use Modules\Reporting\Infrastructure\Eloquent\ReportExport;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\WorkloadQueue;
 
 /**
@@ -192,8 +193,22 @@ final class BuildReportExport implements ShouldQueue
             $query->whereIn('barangay_id', $barangayIds);
         }
 
+        /*
+         * Resolved here rather than injected. A queued job's constructor arguments are serialised
+         * onto the queue, so a service in the constructor would be serialised with it — and this
+         * job is dispatched, not built by the container.
+         *
+         * The code is an ADDITIONAL column, not a replacement. The header row is
+         * `array_keys($rows[0])`, so anything already reading this export by column name keeps
+         * working; a positional reader sees one more column, which is why the id stays first and
+         * the code follows it. Dropping `barangay_id` is the contract step and belongs with the
+         * rest of L-15.
+         */
+        $codes = app(BarangayCodes::class);
+
         return $query->get()->map(static fn (object $row): array => [
             'barangay_id' => $row->barangay_id === null ? '' : (string) $row->barangay_id,
+            'barangay_code' => $codes->codeFor($row->barangay_id) ?? '',
             'total' => (int) $row->total,
         ])->all();
     }

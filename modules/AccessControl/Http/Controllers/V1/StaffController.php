@@ -14,6 +14,7 @@ use Modules\AccessControl\Domain\Role;
 use Modules\AccessControl\Domain\RoleAssignmentRepository;
 use Modules\Identity\Application\StaffAccountProvisioner;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\DataScope;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
@@ -43,6 +44,7 @@ final class StaffController
         private readonly AuthorizationService $authorization,
         private readonly ScopeResolver $scopes,
         private readonly RoleAssignmentRepository $assignments,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     public function index(Request $request, ActorContext $actor): JsonResponse
@@ -69,7 +71,7 @@ final class StaffController
                     'permissions' => Role::permissionsFor($authority[(string) $summary->id]['roles'] ?? []),
                     // An absent subject is one with no live assignment, which `forSubjects()`
                     // already resolved to `DataScope::none()` — a real answer, not a miss.
-                    'scope' => ($scopes[(string) $summary->id] ?? DataScope::none())->forAudit(),
+                    'scope' => ($scopes[(string) $summary->id] ?? DataScope::none())->forResponse($this->barangayCodes),
                 ],
             ],
         );

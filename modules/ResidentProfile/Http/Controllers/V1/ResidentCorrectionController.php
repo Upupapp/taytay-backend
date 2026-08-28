@@ -15,6 +15,7 @@ use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentCorrectionField;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentCorrectionRequest;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
@@ -33,6 +34,7 @@ final class ResidentCorrectionController
     public function __construct(
         private readonly ResidentCorrectionService $corrections,
         private readonly AuthorizationService $authorization,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     public function index(Request $request, ActorContext $actor): JsonResponse
@@ -150,6 +152,7 @@ final class ResidentCorrectionController
                 'id' => $resident->uuid,
                 'name' => $resident->fullName(),
                 'barangay_id' => $resident->barangay_id,
+                'barangay_code' => $this->barangayCodes->codeFor($resident->barangay_id),
                 'verification_tier' => $resident->verification_tier->value,
             ],
             'changes' => $request->fields

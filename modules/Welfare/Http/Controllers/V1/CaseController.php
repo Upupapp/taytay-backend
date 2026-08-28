@@ -10,6 +10,7 @@ use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\ResidentProfile\Application\ResidentDirectory;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
@@ -50,6 +51,7 @@ final class CaseController
         private readonly AuthorizationService $authorization,
         private readonly ResidentDirectory $residents,
         private readonly WelfareAudit $audit,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     public function index(Request $request, ActorContext $actor): JsonResponse
@@ -336,6 +338,7 @@ final class CaseController
             'priority' => $case->priority->value,
             'resident_id' => $case->resident_id,
             'barangay_id' => $case->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($case->barangay_id),
             'assigned_to' => $case->assigned_to,
             'opened_at' => $case->opened_at?->toIso8601ZuluString(),
             'last_activity_at' => $case->last_activity_at?->toIso8601ZuluString(),

@@ -16,6 +16,7 @@ use Modules\ResidentProfile\Infrastructure\Eloquent\Household;
 use Modules\ResidentProfile\Infrastructure\Eloquent\HouseholdMembership;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
@@ -40,6 +41,7 @@ final class HouseholdController
         private readonly HouseholdMembershipService $memberships,
         private readonly AuthorizationService $authorization,
         private readonly ResidentProfileAudit $audit,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     public function index(Request $request, ActorContext $actor): JsonResponse
@@ -367,6 +369,7 @@ final class HouseholdController
             'id' => $household->uuid,
             'code' => $household->code,
             'barangay_id' => $household->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($household->barangay_id),
             'street_address' => $household->street_address,
             'purok_or_sitio' => $household->purok_or_sitio,
             // Derived from open memberships every time. There is no stored count to drift.
