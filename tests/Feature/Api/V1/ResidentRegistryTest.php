@@ -6,6 +6,7 @@ namespace Tests\Feature\Api\V1;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\ResidentProfile\Contracts\CorrectionStatus;
 use Modules\ResidentProfile\Contracts\VerificationTier;
@@ -258,6 +259,123 @@ final class ResidentRegistryTest extends KycTestCase
         // row claiming a previous value that is no longer true.
         $this->postJson("/api/v1/admin/resident-corrections/{$correction}/approve")
             ->assertStatus(409);
+    }
+
+    // ── sectoral membership, which nothing could write until TAB 19 ──────────────────
+
+    /**
+     * A sector can be recorded, and it reaches the table the eligibility facts read.
+     *
+     * `resident_sectors` was read by `ResidentDirectory` and written by nothing, so every sector on
+     * every resident came from the seeder — a resident enrolled through this API had none, and
+     * every fact derived from them was absent rather than false.
+     */
+    #[Test]
+    public function a_sector_can_be_recorded_against_a_resident(): void
+    {
+        $resident = $this->existingResident();
+        Sanctum::actingAs($this->reviewer());
+
+        $this->postJson("/api/v1/admin/residents/{$resident->uuid}/sectors", [
+            'sector' => 'solo-parent',
+            'reason' => 'Solo Parent ID presented and checked at the counter.',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('resident_sectors', [
+            'resident_id' => $resident->id,
+            'sector' => 'solo-parent',
+        ]);
+    }
+
+    /** Recording the same sector twice leaves one row, not two sectoral counts. */
+    #[Test]
+    public function recording_a_sector_twice_does_not_double_the_count(): void
+    {
+        $resident = $this->existingResident();
+        Sanctum::actingAs($this->reviewer());
+
+        foreach ([1, 2] as $ignored) {
+            $this->postJson("/api/v1/admin/residents/{$resident->uuid}/sectors", [
+                'sector' => 'senior-citizen',
+                'reason' => 'Senior citizen ID presented.',
+            ])->assertCreated();
+        }
+
+        $this->assertSame(1, DB::table('resident_sectors')
+            ->where('resident_id', $resident->id)
+            ->where('sector', 'senior-citizen')
+            ->count());
+    }
+
+    /**
+     * **A safeguarding sector needs the sensitive permission, not just `resident.manage`.**
+     *
+     * Without this, any front-line clerk could flag somebody as a VAWC survivor — a protection
+     * decision with real consequences for that person, made by whoever happened to be at the
+     * counter. The same doctrine `storeResidentFactor` already applies to protected factors.
+     */
+    #[Test]
+    public function a_clerk_cannot_flag_somebody_as_a_vawc_survivor(): void
+    {
+        $resident = $this->existingResident();
+
+        /*
+         * A CLERK, NOT AN ADMINISTRATOR. `lgu_staff` holds `resident.manage` and not
+         * `request.view-sensitive`; `lgu_admin` holds both, so this test written against the
+         * default reviewer proved nothing and said so — it returned 201.
+         */
+        Sanctum::actingAs($this->reviewer('lgu_staff'));
+
+        $this->postJson("/api/v1/admin/residents/{$resident->uuid}/sectors", [
+            'sector' => 'vawc-survivor',
+            'reason' => 'Disclosed at intake.',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('resident_sectors', [
+            'resident_id' => $resident->id,
+            'sector' => 'vawc-survivor',
+        ]);
+    }
+
+    /**
+     * Removing one is gated identically.
+     *
+     * Being able to remove a VAWC flag is exactly as consequential as being able to add it, and
+     * arguably more so — it is the act that would hide a protection decision from everybody who
+     * relies on it.
+     */
+    #[Test]
+    public function a_clerk_cannot_remove_a_safeguarding_sector_either(): void
+    {
+        $resident = $this->existingResident();
+        DB::table('resident_sectors')->insert([
+            'uuid' => (string) Str::uuid7(),
+            'resident_id' => $resident->id,
+            'sector' => 'cicl',
+        ]);
+
+        Sanctum::actingAs($this->reviewer('lgu_staff'));
+
+        $this->deleteJson("/api/v1/admin/residents/{$resident->uuid}/sectors/cicl", [
+            'reason' => 'Recorded in error.',
+        ])->assertForbidden();
+
+        $this->assertDatabaseHas('resident_sectors', [
+            'resident_id' => $resident->id,
+            'sector' => 'cicl',
+        ]);
+    }
+
+    /** Every sector act takes a reason, like every other mutation in this system. */
+    #[Test]
+    public function a_sector_cannot_be_recorded_without_a_reason(): void
+    {
+        $resident = $this->existingResident();
+        Sanctum::actingAs($this->reviewer());
+
+        $this->postJson("/api/v1/admin/residents/{$resident->uuid}/sectors", [
+            'sector' => 'pwd',
+        ])->assertStatus(422);
     }
 
     // ── L-15: a client may send back the identifier it was given ─────────────────────

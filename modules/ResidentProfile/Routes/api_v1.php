@@ -193,6 +193,17 @@ Route::middleware('auth:sanctum')->group(function (): void {
      */
     Route::get('admin/vulnerability/ruleset', [VulnerabilityController::class, 'ruleset'])->name('v1.admin.vulnerability.ruleset');
 
+    /*
+     * Sectoral membership. `resident_sectors` was read by the eligibility facts and the
+     * vulnerability snapshot and written by nothing, so every sector on every resident came from
+     * the seeder — a resident enrolled through this API had none, permanently.
+     *
+     * A recorded act with a reason rather than a field on the resident payload: each sector rests
+     * on a document somebody checked, and an array on a create call cannot say who checked it.
+     */
+    Route::post('admin/residents/{resident}/sectors', [ResidentController::class, 'storeSector'])->name('v1.admin.residents.sectors.store');
+    Route::delete('admin/residents/{resident}/sectors/{sector}', [ResidentController::class, 'destroySector'])->name('v1.admin.residents.sectors.destroy');
+
     Route::get('admin/residents/{resident}/vulnerability', [VulnerabilityController::class, 'showResident'])->name('v1.admin.residents.vulnerability.show');
     Route::post('admin/residents/{resident}/vulnerability-factors', [VulnerabilityController::class, 'storeResidentFactor'])->name('v1.admin.residents.vulnerability.store');
     Route::post('admin/residents/{resident}/vulnerability-factors/{factor}/review', [VulnerabilityController::class, 'reviewResidentFactor'])->name('v1.admin.residents.vulnerability.review');

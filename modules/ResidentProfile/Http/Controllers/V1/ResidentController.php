@@ -17,14 +17,15 @@ use Modules\ResidentProfile\Contracts\VerificationTier;
 use Modules\ResidentProfile\Infrastructure\Eloquent\AccountResidentLink;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentAlias;
+use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentSector;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentStatusEvent;
 use Modules\Shared\Application\ActorContext;
 use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
-use Modules\Shared\Exceptions\ResourceNotFoundException;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
+use Modules\Shared\Exceptions\ResourceNotFoundException;
 use Modules\Shared\Http\ApiResponse;
 
 /**
@@ -421,6 +422,129 @@ final class ResidentController
      *
      * @return array<string, list<string>>
      */
+    // ── sectoral membership ──────────────────────────────────────────────────────────
+
+    /**
+     * Records that a resident belongs to a statutory sector.
+     *
+     * ## Why this endpoint had to exist
+     *
+     * `resident_sectors` is **read** by `ResidentDirectory` to build eligibility facts and by the
+     * vulnerability snapshot — and until now nothing anywhere wrote a row into it. Every sector on
+     * every resident came from the seeder. So a resident enrolled through this API was permanently
+     * without sectors, and every eligibility fact derived from them was silently absent rather than
+     * false: the screen shows no senior-citizen status because nobody could ever record one.
+     *
+     * It is deliberately **not** a field on the resident payload. Sector membership is a recorded
+     * act with a reason, like a vulnerability factor — `RA 9994`, `RA 7277`, `RA 8972` and the rest
+     * each rest on a document somebody checked, and a silent array on a create call cannot say who
+     * checked it or when.
+     *
+     * ## The protection gate, which is the same one `storeResidentFactor` uses
+     *
+     * `vawc-survivor` and `cicl` are sensitive by their mere existence (`DL-38`, ADR 0008 §13).
+     * Without the second check, `resident.manage` alone would let any front-line clerk flag
+     * somebody as a VAWC survivor — a protection decision with real consequences for that person,
+     * made by whoever happened to be at the counter.
+     */
+    public function storeSector(Request $request, ActorContext $actor, string $resident): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::ResidentManage);
+
+        $model = $this->residentOrFail($actor, $resident);
+
+        $validated = $request->validate([
+            // Open vocabulary on purpose: sectors are defined by statute and new ones arrive by
+            // legislation, not by deploy. The column is a string for the same reason.
+            'sector' => ['required', 'string', 'max:48'],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        $this->assertMaySetSector($actor, $validated['sector']);
+
+        ResidentSector::query()->firstOrCreate([
+            'resident_id' => $model->id,
+            'sector' => $validated['sector'],
+        ]);
+
+        $this->audit->recordResidentWrite(
+            $actor->subjectId,
+            'resident.sector-recorded',
+            // The sector itself is named: which sector somebody was placed in is the act, and an
+            // entry reading "a sector was recorded" is one no reviewer can act on. The *reason*
+            // stays out, because that is a sentence about a person's circumstances (Article 5.5).
+            'Sector recorded: '.$validated['sector'],
+            (string) $model->uuid,
+        );
+
+        return ApiResponse::created([
+            'resident_id' => (string) $model->uuid,
+            'sector' => $validated['sector'],
+        ]);
+    }
+
+    /**
+     * Ends a sectoral membership.
+     *
+     * A DELETE that takes a reason, because this is a **recorded act rather than an erasure**: a
+     * solo parent whose child turns eighteen stops being one, and the office needs to be able to
+     * say when and why. The row goes; the audit entry stays.
+     *
+     * Gated identically to recording one — being able to remove a VAWC flag is exactly as
+     * consequential as being able to add it, and arguably more so.
+     */
+    public function destroySector(Request $request, ActorContext $actor, string $resident, string $sector): JsonResponse
+    {
+        $this->authorization->authorize($actor, Permission::ResidentManage);
+
+        $model = $this->residentOrFail($actor, $resident);
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        $this->assertMaySetSector($actor, $sector);
+
+        ResidentSector::query()
+            ->where('resident_id', $model->id)
+            ->where('sector', $sector)
+            ->delete();
+
+        $this->audit->recordResidentWrite(
+            $actor->subjectId,
+            'resident.sector-ended',
+            'Sector ended: '.$sector,
+            (string) $model->uuid,
+        );
+
+        return ApiResponse::item([
+            'resident_id' => (string) $model->uuid,
+            'sector' => $sector,
+            'ended' => true,
+        ]);
+    }
+
+    /**
+     * A sensitive sector needs the sensitive permission on top of `resident.manage`.
+     *
+     * Checked for both recording and ending, and checked against the sector being written rather
+     * than against what the actor can already see — otherwise somebody could add a flag they are
+     * not allowed to read, which is a way of writing into a record they have no business in.
+     */
+    private function assertMaySetSector(ActorContext $actor, string $sector): void
+    {
+        if (! ResidentSector::isSensitive($sector)) {
+            return;
+        }
+
+        if (! $this->authorization->allows($actor, Permission::RequestViewSensitive)) {
+            throw new ApiException(
+                ErrorCode::Forbidden,
+                'Recording a safeguarding sector requires the sensitive-records permission.',
+            );
+        }
+    }
+
     /**
      * Turns a client-facing barangay `code` into the internal key, and drops it.
      *
