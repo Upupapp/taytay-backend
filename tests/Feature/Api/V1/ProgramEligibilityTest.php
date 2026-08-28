@@ -375,10 +375,114 @@ final class ProgramEligibilityTest extends KycTestCase
 
         $program = $this->program(['code' => 'AICS', 'name' => 'AICS']);
 
+        // A REAL barangay code, so this test still fails for the reason it names. It used to send
+        // `'1'`, which the barangay-code check now also refuses — the test would have stayed green
+        // while no longer testing comparators at all.
+        $this->barangayId();
+
         $this->postJson("/api/v1/admin/programs/{$program->uuid}/eligibility-criteria", [
-            'code' => 'barangay', 'fact' => 'barangay', 'comparator' => 'at-least', 'value' => '1',
+            'code' => 'barangay', 'fact' => 'barangay', 'comparator' => 'at-least', 'value' => 'brgy-san-juan',
             'citizen_explanation' => 'You must live in Taytay.',
         ])->assertStatus(422);
+    }
+
+    // ── the barangay fact is a code, never the auto-increment key ─────────────────────
+
+    #[Test]
+    public function the_barangay_fact_is_the_published_code_not_the_auto_increment_key(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $program = $this->program(['code' => 'BRGY', 'name' => 'Barangay programme']);
+        $this->addCriterion($program, [
+            'code' => 'lives-here', 'fact' => 'barangay', 'comparator' => 'is', 'value' => 'brgy-san-juan',
+            'citizen_explanation' => 'This programme is for residents of San Juan.',
+        ]);
+
+        $applicant = $this->applicant();
+        $check = $this->runCheck($this->caseFor($applicant), $program);
+
+        /*
+         * ASSERTED ON THE VALUE, NOT ONLY ON THE OUTCOME. `met` alone would also be produced by
+         * a criterion authored as the surrogate key matched against the surrogate key — the exact
+         * arrangement being removed. The observed value is what proves which identifier the engine
+         * actually compared.
+         */
+        $this->assertSame('brgy-san-juan', $check['results'][0]['observed_value']);
+        $this->assertSame('met', $check['results'][0]['result']);
+
+        $this->assertNotSame(
+            (string) $applicant->barangay_id,
+            $check['results'][0]['observed_value'],
+            'The barangay fact carried the auto-increment key, which is L-15 inside the guidance engine.',
+        );
+    }
+
+    #[Test]
+    public function a_resident_of_another_barangay_does_not_meet_a_barangay_criterion(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $program = $this->program(['code' => 'BRGY2', 'name' => 'Barangay programme']);
+        $this->addCriterion($program, [
+            'code' => 'lives-here', 'fact' => 'barangay', 'comparator' => 'is', 'value' => 'brgy-dolores',
+            'citizen_explanation' => 'This programme is for residents of Dolores.',
+        ]);
+
+        $applicant = $this->applicant();
+        $check = $this->runCheck($this->caseFor($applicant), $program);
+
+        $this->assertSame('brgy-san-juan', $check['results'][0]['observed_value']);
+        $this->assertSame('not-met', $check['results'][0]['result']);
+    }
+
+    #[Test]
+    public function a_criterion_naming_a_barangay_that_does_not_exist_is_refused(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $program = $this->program(['code' => 'TYPO', 'name' => 'Typo programme']);
+        $this->barangayId();
+
+        /*
+         * THE DEFECT THIS CLOSES. `value` was validated as a string and nothing more, so a
+         * transposed slug stored cleanly, matched no resident, and — blocking — refused every
+         * applicant to the programme while showing each of them the confident explanation the
+         * author wrote. Nothing reported it: a criterion nobody meets is indistinguishable from a
+         * programme nobody qualifies for.
+         */
+        $response = $this->postJson("/api/v1/admin/programs/{$program->uuid}/eligibility-criteria", [
+            'code' => 'lives-here', 'fact' => 'barangay', 'comparator' => 'is', 'value' => 'brgy-san-jaun',
+            'citizen_explanation' => 'This programme is for residents of San Juan.',
+        ])->assertStatus(422);
+
+        // The message names the code, because the author is an administrator typing a slug.
+        $this->assertStringContainsString('brgy-san-jaun', $response->json('error.message'));
+        $this->assertSame(0, ProgramEligibilityCriterion::query()->where('code', 'lives-here')->count());
+    }
+
+    #[Test]
+    public function every_barangay_in_an_is_one_of_criterion_is_checked(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $program = $this->program(['code' => 'MANY', 'name' => 'Several barangays']);
+        $this->barangayId();
+        $this->otherBarangayId();
+
+        // One real, one not. Checking only the first would let the second through, and `is-one-of`
+        // is where a list is long enough that nobody re-reads it.
+        $this->postJson("/api/v1/admin/programs/{$program->uuid}/eligibility-criteria", [
+            'code' => 'lives-here', 'fact' => 'barangay', 'comparator' => 'is-one-of',
+            'value' => 'brgy-san-juan|brgy-nowhere',
+            'citizen_explanation' => 'This programme covers selected barangays.',
+        ])->assertStatus(422);
+
+        $this->postJson("/api/v1/admin/programs/{$program->uuid}/eligibility-criteria", [
+            'code' => 'lives-here', 'fact' => 'barangay', 'comparator' => 'is-one-of',
+            'value' => 'brgy-san-juan|brgy-dolores',
+            'citizen_explanation' => 'This programme covers selected barangays.',
+        ])->assertStatus(201);
     }
 
     #[Test]

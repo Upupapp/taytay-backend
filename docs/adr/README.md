@@ -23,6 +23,8 @@ supersede it with a new one and update the status here.
 | [0016](0016-welfare-case-engine.md) | One case state machine with legality checked before permission; additive citizen projection; separation of duties per case and actor | Accepted |
 | [0017](0017-assistance-intake-and-assessment.md) | One submission path for every channel; drafts expire and are not cases; an assessment recommends but never approves; idempotency gets its first caller | Accepted |
 | [0018](0018-programs-and-eligibility-guidance.md) | Programmes are rows, not config; eligibility guidance flags and never decides; the guidance version is pinned to the case | Accepted |
+| … | **0019–0044 exist on disk and are not listed here.** The index stopped being updated somewhere around TAB 07; recorded rather than quietly closed, because an index that silently omits half its entries is worse than one that admits the gap. | — |
+| [0045](0045-the-barangay-eligibility-fact-is-a-code.md) | The barangay eligibility fact is the published code, never the auto-increment key; criterion values are validated against the directory | Accepted |
 
 An ADR is required when a change alters a module boundary, an API convention, an
 authentication/authorization model, a persistence source of truth, or a lifecycle state

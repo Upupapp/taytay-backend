@@ -7,6 +7,7 @@ namespace Modules\ServiceCatalog\Http\Controllers\V1;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\Reporting\Application\MetricsService;
@@ -310,6 +311,25 @@ final class ProgramController
             );
         }
 
+        /*
+         * A barangay criterion must name barangays that exist, by the code the directory
+         * publishes.
+         *
+         * Checked here rather than as an `exists:` rule on `value` for two reasons: the rule only
+         * applies to one fact, and `is-one-of` packs several codes into the field, which no single
+         * `exists` can express. Ordered after the comparator check so a criterion that is wrong in
+         * both ways still reports the comparator first — the more fundamental mistake.
+         *
+         * WITHOUT THIS, A TYPO IS SILENT AND EXPENSIVE. `value` was validated only as a string, so
+         * `brgy-san-jaun` stored cleanly, matched no resident, and — with `is_blocking` set —
+         * refused every applicant to the programme, each one carrying the confident
+         * `citizen_explanation` the author wrote. Nothing in the system would have reported it: a
+         * criterion nobody meets looks exactly like a programme nobody qualifies for.
+         */
+        if ($fact === EligibilityFact::Barangay) {
+            $this->assertBarangayCodesExist($validated['value'] ?? null, (string) $validated['comparator']);
+        }
+
         $criterion = ProgramEligibilityCriterion::query()->create([
             'program_id' => $model->id,
             'code' => $validated['code'],
@@ -323,6 +343,41 @@ final class ProgramController
         ]);
 
         return ApiResponse::created($this->criterionProjection($criterion));
+    }
+
+    /**
+     * Every barangay named by a criterion must exist, by code.
+     *
+     * The separator is `|`, matching {@see EligibilityGuidance::splitList()} exactly. They are two
+     * readings of one stored string, so a divergence here would accept a criterion the engine then
+     * reads differently — the shape of defect that is invisible until somebody is refused.
+     *
+     * The message names the codes that were not found rather than saying "invalid", because the
+     * author is a municipal administrator typing a slug, and "brgy-san-jaun is not a barangay" is
+     * a correctable instruction where "validation failed" is a shrug.
+     */
+    private function assertBarangayCodesExist(?string $value, string $comparator): void
+    {
+        $codes = $comparator === 'is-one-of'
+            ? array_values(array_filter(array_map('trim', explode('|', (string) $value)), static fn (string $v): bool => $v !== ''))
+            : array_values(array_filter([trim((string) $value)], static fn (string $v): bool => $v !== ''));
+
+        if ($codes === []) {
+            throw new ApiException(
+                ErrorCode::ValidationFailed,
+                'A barangay criterion must name at least one barangay code.',
+            );
+        }
+
+        $known = DB::table('barangays')->whereIn('code', $codes)->pluck('code')->all();
+        $missing = array_values(array_diff($codes, array_map(static fn (mixed $c): string => (string) $c, $known)));
+
+        if ($missing !== []) {
+            throw new ApiException(
+                ErrorCode::ValidationFailed,
+                'No barangay has the code '.implode(', ', $missing).'. Use the codes published by GET /api/v1/barangays.',
+            );
+        }
     }
 
     /**

@@ -32,7 +32,16 @@ enum EligibilityFact: string
     /** The applicant's age in years, from the canonical resident record. */
     case Age = 'age';
 
-    /** Which barangay the resident's record places them in. */
+    /**
+     * Which barangay the resident's record places them in, as the **code** the public directory
+     * publishes — `brgy-san-juan`, never the auto-increment key.
+     *
+     * A criterion is authored by a person and read back by a person, so the value has to be one
+     * they can recognise. It is also the only form that survives being carried between
+     * environments: surrogate keys are assigned by insertion order, so `2` means one barangay in
+     * staging and another in production. Authoring is validated against the directory, so a
+     * criterion cannot name a barangay that does not exist.
+     */
     case Barangay = 'barangay';
 
     /** A sectoral tag on the resident (senior-citizen, pwd, solo-parent, …). */

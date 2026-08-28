@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\ResidentProfile\Application;
 
+use Illuminate\Support\Facades\DB;
 use Modules\ResidentProfile\Contracts\ResidentSummary;
 use Modules\ResidentProfile\Infrastructure\Eloquent\HouseholdMembership;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
@@ -200,7 +201,33 @@ final class ResidentDirectory
         }
 
         $facts = [
-            'barangay' => $resident->barangay_id === null ? null : (string) $resident->barangay_id,
+            /*
+             * THE BARANGAY'S CODE, NEVER ITS AUTO-INCREMENT KEY.
+             *
+             * This fact is compared against a value an administrator typed into a criterion, so
+             * whatever it carries is what somebody has to author policy in. It used to carry
+             * `(string) $resident->barangay_id` — the surrogate key — which made a criterion read
+             * `barangay is 2`, and that is wrong three times over.
+             *
+             * It is unexplainable: {@see EligibilityFact} requires every fact be something a clerk
+             * can point at and explain to the person in front of them, and nobody at the MSWDO
+             * knows which barangay is 2.
+             *
+             * It is not stable across environments. Auto-increment keys are assigned by insertion
+             * order, so the same criterion authored against staging targets a DIFFERENT BARANGAY in
+             * production — silently, with no error anywhere, deciding who gets assistance. This
+             * system also imports legacy records and merges duplicates, both of which reorder
+             * insertions.
+             *
+             * And it is unpublishable: `GET /api/v1/barangays` deliberately publishes `uuid` and
+             * `code` and refuses to publish the integer (L-15, and that controller's own docblock),
+             * so no client could offer a picker for a value only the database knows.
+             *
+             * `code` rather than `uuid` because the explainability rule decides it: "brgy-san-juan"
+             * is legible on the criterion, in the audit trail, and at a counter. It is unique, it
+             * is what `POST me/kyc` already accepts, and it is what the public directory publishes.
+             */
+            'barangay' => $this->barangayCodeFor($resident->barangay_id),
             'verification-tier' => $resident->verification_tier->value,
         ];
 
@@ -248,6 +275,31 @@ final class ResidentDirectory
         // missing key and a null value identically, and dropping them keeps the payload honest
         // about what is actually known.
         return array_filter($facts, static fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
+     * The stable code for a barangay, for use as an eligibility fact.
+     *
+     * Reads the `barangays` table directly, as {@see BarangayDirectoryController} in this module
+     * already does. That table is municipal reference data rather than another module's record,
+     * and this module publishes the directory that serves it.
+     *
+     * AN UNRESOLVABLE BARANGAY YIELDS null, WHICH BECOMES AN ABSENT FACT AND THEREFORE `unknown`.
+     * That is the correct failure and it is the one this file already applies to income: a
+     * barangay row that has gone (a merge, a re-import) means nobody can currently say where the
+     * applicant lives, not that they live nowhere. `unknown` sends the case to a human, where a
+     * question about somebody's address belongs. Returning the integer as a fallback would put
+     * the defect back on exactly the records least likely to be correct.
+     */
+    private function barangayCodeFor(mixed $barangayId): ?string
+    {
+        if ($barangayId === null) {
+            return null;
+        }
+
+        $code = DB::table('barangays')->where('id', (int) $barangayId)->value('code');
+
+        return $code === null ? null : (string) $code;
     }
 
     /**
