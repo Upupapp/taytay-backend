@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Contracts\AuditWriter;
 
 /**
@@ -42,6 +43,7 @@ final class GlobalSearch
     public function __construct(
         private readonly AuthorizationService $authorization,
         private readonly AuditWriter $trail,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     /**
@@ -121,7 +123,7 @@ final class GlobalSearch
 
         $this->scope($actor, $query, 'barangay_id');
 
-        return $query->limit(self::PER_ENTITY_LIMIT)->get()->map(static fn (object $row): array => [
+        return $query->limit(self::PER_ENTITY_LIMIT)->get()->map(fn (object $row): array => [
             'type' => 'resident',
             'id' => (string) $row->uuid,
             /*
@@ -132,6 +134,7 @@ final class GlobalSearch
              */
             'title' => trim($row->first_name.' '.$row->last_name),
             'barangay_id' => $row->barangay_id === null ? null : (int) $row->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($row->barangay_id),
             'status' => (string) $row->verification_tier,
         ])->all();
     }
@@ -160,13 +163,14 @@ final class GlobalSearch
 
         $this->scope($actor, $query, 'barangay_id');
 
-        return $query->limit(self::PER_ENTITY_LIMIT)->get()->map(static fn (object $row): array => [
+        return $query->limit(self::PER_ENTITY_LIMIT)->get()->map(fn (object $row): array => [
             'type' => 'case',
             'id' => (string) $row->uuid,
             // The reference, never the narrative. A case number identifies the file; the reason
             // somebody applied is not a search snippet.
             'title' => (string) $row->case_number,
             'barangay_id' => $row->barangay_id === null ? null : (int) $row->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($row->barangay_id),
             'status' => (string) $row->status,
         ])->all();
     }
@@ -184,11 +188,12 @@ final class GlobalSearch
 
         $this->scope($actor, $query, 'barangay_id');
 
-        return $query->limit(self::PER_ENTITY_LIMIT)->get()->map(static fn (object $row): array => [
+        return $query->limit(self::PER_ENTITY_LIMIT)->get()->map(fn (object $row): array => [
             'type' => 'household',
             'id' => (string) $row->uuid,
             'title' => (string) $row->code,
             'barangay_id' => $row->barangay_id === null ? null : (int) $row->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($row->barangay_id),
             'status' => null,
         ])->all();
     }
@@ -213,12 +218,15 @@ final class GlobalSearch
             });
         }
 
-        return $query->limit(self::PER_ENTITY_LIMIT)->get()->map(static fn (object $row): array => [
+        return $query->limit(self::PER_ENTITY_LIMIT)->get()->map(fn (object $row): array => [
             'type' => 'referral',
             'id' => (string) $row->uuid,
             // Never `reason` or `destination_contact`.
             'title' => (string) $row->reference_number,
             'barangay_id' => null,
+            // Paired with the id so every result type carries the same keys. A referral is not
+            // barangay-scoped, and an absent key would make the console branch on result type.
+            'barangay_code' => null,
             'status' => (string) $row->status,
         ])->all();
     }

@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\AccessControl\Domain\Role;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\DataScope;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\AuthorizationDeniedException;
@@ -36,6 +37,7 @@ final class StaffProvisioningService
         private readonly ConnectionInterface $connection,
         private readonly AuthorizationService $authorization,
         private readonly AccessControlAudit $audit,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     /**
@@ -181,14 +183,14 @@ final class StaffProvisioningService
     /**
      * The effective authority of a staff member, as the server sees it.
      *
-     * @return array{roles: list<string>, permissions: list<string>, scope: array{type: string, barangay_ids: list<int>}}
+     * @return array{roles: list<string>, permissions: list<string>, scope: array{type: string, barangay_ids: list<int>, barangay_codes: list<string>}}
      */
     public function describeAuthority(string $subjectId, ScopeResolver $scopes, array $roles): array
     {
         return [
             'roles' => $roles,
             'permissions' => Role::permissionsFor($roles),
-            'scope' => $scopes->forSubject($subjectId)->forAudit(),
+            'scope' => $scopes->forSubject($subjectId)->forResponse($this->barangayCodes),
         ];
     }
 

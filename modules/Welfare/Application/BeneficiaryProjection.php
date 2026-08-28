@@ -6,6 +6,7 @@ namespace Modules\Welfare\Application;
 
 use Modules\ResidentProfile\Application\ResidentDirectory;
 use Modules\ResidentProfile\Contracts\ResidentSummary;
+use Modules\Shared\Application\BarangayCodes;
 
 /**
  * The beneficiary registry — a **projection**, never an entity (TAB 07).
@@ -58,6 +59,7 @@ final class BeneficiaryProjection
     public function __construct(
         private readonly AssistanceHistory $assistance,
         private readonly ResidentDirectory $residents,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     /**
@@ -110,6 +112,7 @@ final class BeneficiaryProjection
             // a second identifier for one person is how two records of them come to exist.
             'resident_id' => $resident->id,
             'barangay_id' => $resident->barangayId,
+            'barangay_code' => $this->barangayCodes->codeFor($resident->barangayId),
             'standings' => $this->standingsFor($fact),
             'current_program_codes' => array_values(array_unique($fact['current_program_codes'] ?? [])),
             'open_request_count' => $fact['open_request_count'] ?? 0,

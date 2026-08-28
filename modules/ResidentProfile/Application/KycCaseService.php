@@ -13,6 +13,7 @@ use Modules\ResidentProfile\Infrastructure\Eloquent\KycCase;
 use Modules\ResidentProfile\Infrastructure\Eloquent\KycCaseTransition;
 use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
 use Modules\Shared\Exceptions\InvalidStateTransitionException;
@@ -34,6 +35,7 @@ final class KycCaseService
         private readonly ResidentMatcher $matcher,
         private readonly ResidentProfileAudit $audit,
         private readonly AccountLinkService $links,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     /**
@@ -293,6 +295,7 @@ final class KycCaseService
             'birth_date' => $case->claimed_birth_date,
             'civil_status' => 'single',
             'barangay_id' => $case->claimed_barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($case->claimed_barangay_id),
             'street_address' => $case->claimed_street_address,
             'identity_fingerprint' => $case->identity_fingerprint,
             // The reviewer checked documents, so this record is verified — by a person,

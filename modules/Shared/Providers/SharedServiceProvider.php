@@ -6,6 +6,7 @@ namespace Modules\Shared\Providers;
 
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Support\ServiceProvider;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\RequestContext;
 use Modules\Shared\Console\GenerateOpenApiCommand;
 use Modules\Shared\Console\GenerateTypesCommand;
@@ -30,6 +31,15 @@ final class SharedServiceProvider extends ServiceProvider
         // same way in AccessControl, one citizen's AUTHORITY — bleed into the next
         // request. Keying on the Request object makes a new request structurally
         // incapable of reusing the previous one's context.
+        /*
+         * The barangay code map, one query per request and shared by every projection in it.
+         *
+         * `scoped` rather than `singleton` for the reason the comment above gives: a
+         * container-lifetime binding survives between requests on a long-lived worker, and a
+         * barangay added after boot would stay invisible until the process restarted.
+         */
+        $this->app->scoped(BarangayCodes::class, static fn (): BarangayCodes => new BarangayCodes);
+
         $this->app->bind(RequestContext::class, static function ($app): RequestContext {
             $request = $app['request'];
 

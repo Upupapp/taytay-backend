@@ -19,6 +19,7 @@ use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentAlias;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentStatusEvent;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
@@ -43,6 +44,7 @@ final class ResidentController
         private readonly AccountLinkService $links,
         private readonly AuthorizationService $authorization,
         private readonly ResidentProfileAudit $audit,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     /**
@@ -346,6 +348,7 @@ final class ResidentController
             'name' => $resident->fullName(),
             'birth_date' => $resident->birth_date?->toDateString(),
             'barangay_id' => $resident->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($resident->barangay_id),
             'verification_tier' => $resident->verification_tier->value,
             'is_active' => (bool) $resident->is_active,
         ];

@@ -122,9 +122,17 @@ id must not be rewritten, and running the migration twice must be a no-op.
 
 ## 6. What this does not fix
 
-**L-15's read side is still open.** Roughly fifteen response projections still emit the raw
-`barangay_id` — residents, households, cases, search results, metrics. The write side has now
-diverged from them twice: `POST me/kyc` accepts `barangay_code`, and eligibility criteria are
-authored by code, while responses still return the integer. That is a contract change across four
-clients and belongs in its own change, with the generated TypeScript and the console's vendored
-expectations regenerated together.
+**L-15's read side was closed immediately after this, in the same sweep.** Every response that
+names a barangay now carries `barangay_code` beside `barangay_id`, resolved through
+`Modules\Shared\Application\BarangayCodes`. That is the expand step only: the integer is still
+emitted, and dropping it is a breaking change behind a client cutover. See the evidence ledger's
+L-15 entry.
+
+**`barangays` still has no owning module.** The resolver sits in `Shared` because five modules
+already read that table directly and the dependency graph forbids most of them asking each other —
+`AccessControl` may not call `ResidentProfile`. It imports no module, which is the constraint
+Article 2.3 states and `ModuleBoundaryTest` enforces, and it follows `IdempotencyService`, which is
+also cross-cutting infrastructure in `Shared` that touches persistence. **The cleaner answer is a
+`Reference` module owning the table, with the directory controller moved into it** — a registry
+entry, a boundary-map row and an ADR of its own. Recorded here rather than left as a silent
+decision.

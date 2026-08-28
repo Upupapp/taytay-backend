@@ -22,6 +22,7 @@ use Modules\ResidentProfile\Infrastructure\Eloquent\Resident;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentCorrectionField;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentCorrectionRequest;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
@@ -52,6 +53,7 @@ final class MyProfileController
         private readonly HouseholdRegistry $households,
         private readonly HouseholdMembershipService $memberships,
         private readonly RelationshipService $relationships,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     /**
@@ -260,6 +262,7 @@ final class MyProfileController
             'id' => $household->uuid,
             'code' => $household->code,
             'barangay_id' => $household->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($household->barangay_id),
             'street_address' => $household->street_address,
             'purok_or_sitio' => $household->purok_or_sitio,
             'member_count' => $household->currentMemberCount(),
@@ -335,6 +338,7 @@ final class MyProfileController
             'birth_date' => $resident->birth_date?->toDateString(),
             'civil_status' => $resident->civil_status,
             'barangay_id' => $resident->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($resident->barangay_id),
             'street_address' => $resident->street_address,
             'purok_or_sitio' => $resident->purok_or_sitio,
             'mobile_number' => $resident->mobile_number,

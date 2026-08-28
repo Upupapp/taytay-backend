@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Welfare\Application;
 
 use Illuminate\Support\Collection;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Welfare\Domain\CaseStatus;
 use Modules\Welfare\Domain\ReleaseStatus;
 use Modules\Welfare\Infrastructure\Eloquent\ProgramEnrollment;
@@ -47,7 +48,10 @@ final class AssistanceHistory
         CaseStatus::Completed,
     ];
 
-    public function __construct(private readonly EnrollmentService $enrollments) {}
+    public function __construct(
+        private readonly EnrollmentService $enrollments,
+        private readonly BarangayCodes $barangayCodes,
+    ) {}
 
     /**
      * A resident's assistance history: what was granted, and which rolls they are on.
@@ -249,6 +253,7 @@ final class AssistanceHistory
             'status' => $case->status->value,
             'program_id' => $case->program_id,
             'barangay_id' => $case->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($case->barangay_id),
             'opened_at' => $case->opened_at?->toIso8601ZuluString(),
             'closed_at' => $case->closed_at?->toIso8601ZuluString(),
             /*

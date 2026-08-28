@@ -656,6 +656,36 @@ touching when the backend fixes it.
 Recorded rather than patched here, because the console is not the place to decide what an
 identifier is.
 
+### Resolved — 2026-08-28, sweep round eight (expand step)
+
+Every response that names a barangay now carries **`barangay_code`** beside `barangay_id`, drawn
+from `Modules\Shared\Application\BarangayCodes` — one query per request for the whole map, so the
+list endpoints under `QueryBudgetTest` stay flat. 24 response shapes changed; the OpenAPI diff is
+purely additive.
+
+`barangay_id` **is still emitted**, unchanged and in the same place. Article 6 requires
+expand → migrate → contract and four clients read these payloads, so removing the integer is a
+separate change that needs their cutover. Until then the console's `idTolerantOfNumeric()` is still
+load-bearing and should stay.
+
+Three things this closing found, recorded because each was a live gap rather than a tidy-up:
+
+* **The write side had already diverged from the read side twice** — `POST me/kyc` accepts
+  `barangay_code`, and eligibility criteria are authored by code (ADR 0045) — while every response
+  still returned the integer. A client could register by code and read back a number it had no way
+  to map.
+* **The staff list and the staff detail built their scope separately.** `describeAuthority()` was
+  fixed first and the list still emitted bare ids; both now go through `DataScope::forResponse()`.
+  Writing the test is what found the second call site.
+* **`types.ts` did not change at all.** Payload properties are still declared untyped (`{}`), which
+  is the mechanism this entry originally named: the published schema cannot disagree with the API,
+  so it could not have caught L-15 and cannot confirm this fix either. `ConsumerContractTest` is
+  what actually holds the line, and it is unaffected because nothing was removed.
+
+**Still open:** the contract step. `barangay_id` is a `foreignId` in eleven tables and the value the
+console maps today; dropping it from responses is a breaking change and belongs behind a client
+cutover or `/api/v2`.
+
 ### The wider point about step 10
 
 This is the first defect in the whole sequence found by *running the thing*. Every earlier one

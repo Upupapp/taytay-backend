@@ -17,6 +17,7 @@ use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentMatchCandidate;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentMerge;
 use Modules\ResidentProfile\Infrastructure\Eloquent\ResidentSector;
 use Modules\Shared\Application\ActorContext;
+use Modules\Shared\Application\BarangayCodes;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
 
@@ -47,6 +48,7 @@ final class ResidentMergeService
         private readonly ResidentRegistry $registry,
         private readonly AccountLinkService $links,
         private readonly ResidentProfileAudit $audit,
+        private readonly BarangayCodes $barangayCodes,
     ) {}
 
     /**
@@ -447,6 +449,7 @@ final class ResidentMergeService
             'name' => $resident->fullName(),
             'birth_date' => $resident->birth_date?->toDateString(),
             'barangay_id' => $resident->barangay_id,
+            'barangay_code' => $this->barangayCodes->codeFor($resident->barangay_id),
             'verification_tier' => $resident->verification_tier->value,
             // Shown so the reviewer can see whether the two rows were ever matched to each
             // other by the deterministic key, without re-running the hash themselves.
