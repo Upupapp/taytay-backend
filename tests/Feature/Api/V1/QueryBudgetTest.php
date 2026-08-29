@@ -571,6 +571,36 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('duplicate review queue', $small, $large);
     }
 
+    /**
+     * The task list, which is `/admin/work/mine`'s neighbour over the same table.
+     *
+     * `admin/work/mine` has had a budget since TAB 15; `tasks` never did, and the two render
+     * different projections of the same rows. An endpoint measured because its neighbour was is
+     * exactly the coverage gap that hid the duplicate-queue N+1.
+     */
+    #[Test]
+    public function the_task_list_does_not_grow_with_tasks(): void
+    {
+        $reviewer = $this->reviewer('lgu_admin');
+        Sanctum::actingAs($reviewer);
+
+        $assignee = (string) $reviewer->subject_id;
+        $addTask = fn () => $this->taskForBudget($assignee);
+
+        $url = '/api/v1/tasks';
+
+        $small = $this->measure($url, $addTask, 1);
+        $large = $this->measure($url, $addTask, 8);
+
+        $this->assertFixtureProduced(
+            8,
+            DB::table('tasks')->where('status', 'open')->count(),
+            'open tasks to render',
+        );
+
+        $this->assertBudget('task list', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -677,6 +707,9 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/admin/families') => DB::table('families')->count(),
             str_contains($url, '/admin/beneficiaries') => DB::table('residents')->count(),
             str_contains($url, '/admin/work/') => DB::table('tasks')->where('status', 'open')->count(),
+            // AFTER the '/admin/work/' arm, which is also backed by `tasks`. The citizen-facing
+            // task list is a different endpoint over the same table.
+            str_contains($url, '/tasks') => DB::table('tasks')->where('status', 'open')->count(),
             /*
              * ZERO IS NOT A SAFE DEFAULT, and this arm exists because it was.
              *
