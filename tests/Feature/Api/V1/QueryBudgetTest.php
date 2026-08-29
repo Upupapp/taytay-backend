@@ -500,6 +500,41 @@ final class QueryBudgetTest extends KycTestCase
         ])->assertCreated();
     }
 
+    private function releaseForBudget(int $caseId, string $residentUuid, int $sequence): void
+    {
+        DB::table('releases')->insert([
+            'uuid' => (string) Str::uuid7(),
+            'reference_number' => 'RL-'.strtoupper(Str::random(10)),
+            'welfare_case_id' => $caseId,
+            'resident_id' => $residentUuid,
+            'sequence' => $sequence,
+            'kind' => 'cash',
+            // Integer minor units, as Article 4 requires. A budget fixture is still a money row.
+            'amount_centavos' => 150000,
+            'currency' => 'PHP',
+            'release_mode' => 'cash-pickup',
+            'status' => 'released',
+            'released_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function notificationForBudget(string $recipient): void
+    {
+        DB::table('notifications')->insert([
+            'uuid' => (string) Str::uuid7(),
+            'recipient_subject_id' => $recipient,
+            'type' => 'general.notice',
+            'category' => 'optional',
+            'title' => 'Budget notice '.mt_rand(1000, 9999),
+            'body' => 'A notice created to grow the inbox.',
+            'priority' => 'normal',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     private function taskForBudget(string $assignee): void
     {
         DB::table('tasks')->insert([
@@ -601,6 +636,79 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('task list', $small, $large);
     }
 
+    /**
+     * The citizen inbox — the screen a resident opens most, over the connection least able to
+     * afford a per-row lookup.
+     *
+     * Unmeasured until now. Its projection reads columns today, and that is exactly the state in
+     * which a budget is worth adding: the cost of a `subject` preview or a sender name being
+     * resolved per row is paid by every resident on the platform, and nothing would have caught
+     * it.
+     */
+    #[Test]
+    public function the_citizen_inbox_does_not_grow_with_notifications(): void
+    {
+        [$citizen] = $this->activeCitizenWithResident();
+        Sanctum::actingAs($citizen);
+
+        /*
+         * Authenticated BEFORE measuring rather than via `asCitizen:` — that flag calls
+         * `activeCitizenWithResident()` itself, which mints a DIFFERENT citizen, and an inbox
+         * addressed to the first one would then measure an empty page.
+         */
+        $recipient = (string) $citizen->subject_id;
+        $addNotice = fn () => $this->notificationForBudget($recipient);
+
+        $url = '/api/v1/me/notifications';
+
+        $small = $this->measure($url, $addNotice, 1);
+        $large = $this->measure($url, $addNotice, 8);
+
+        $this->assertFixtureProduced(
+            8,
+            DB::table('notifications')->where('recipient_subject_id', $recipient)->count(),
+            'notices addressed to the measured citizen',
+        );
+
+        $this->assertBudget('citizen inbox', $small, $large);
+    }
+
+    /**
+     * The release ledger — the money surface, and the one an auditor pages through.
+     *
+     * Its projection reads columns today. The budget is added while that is true, because the
+     * screen that lists payouts is the one where a per-row resident or case lookup would be added
+     * next: "show who it went to" is the obvious next request, and the obvious implementation of
+     * it is a lookup inside the projection.
+     */
+    #[Test]
+    public function the_release_ledger_does_not_grow_with_releases(): void
+    {
+        // Authenticated FIRST: `caseForEligibility()` files a staff intake, and an unauthenticated
+        // one answers 401 rather than creating the case the rest of this test measures.
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $case = $this->caseForEligibility();
+
+        $caseId = (int) DB::table('welfare_cases')->where('uuid', $case)->value('id');
+        $residentUuid = (string) DB::table('welfare_cases')->where('uuid', $case)->value('resident_id');
+
+        $sequence = 0;
+        $addRelease = function () use ($caseId, $residentUuid, &$sequence): void {
+            $sequence++;
+            $this->releaseForBudget($caseId, $residentUuid, $sequence);
+        };
+
+        $url = '/api/v1/admin/releases';
+
+        $small = $this->measure($url, $addRelease, 1);
+        $large = $this->measure($url, $addRelease, 8);
+
+        $this->assertFixtureProduced(8, DB::table('releases')->count(), 'releases to render');
+
+        $this->assertBudget('release ledger', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -695,6 +803,8 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/registrations') => DB::table('event_registrations')->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
+            str_contains($url, '/me/notifications') => DB::table('notifications')->count(),
+            str_contains($url, '/admin/releases') => DB::table('releases')->count(),
             str_contains($url, '/me/cases') => DB::table('welfare_cases')->count(),
             // ── TAB 15: the endpoints TAB 07 added ────────────────────────────────
             /*
