@@ -236,3 +236,50 @@ directory.
 **Before concluding a file test is flaky, check `ps aux | grep phpunit`.** If somebody else is
 running, your result is not evidence. To run genuinely concurrently, use a separate worktree so the
 two checkouts do not share `storage/framework/testing`.
+
+---
+
+## Running the suite against real PostgreSQL
+
+The suite runs on SQLite by default (`phpunit.xml` sets `DB_CONNECTION=sqlite`, `:memory:`), and
+**production is PostgreSQL**. The two are not interchangeable, and the difference is not academic —
+see below.
+
+Postgres.app is installed at `/Applications/Postgres.app` (PostgreSQL 18, matching
+`docs/ci/pipeline.yml`'s `postgres:18`). No Homebrew, no Docker, no `sudo` — it is a single app
+bundle and deleting it removes everything.
+
+```bash
+export PGBIN=/Applications/Postgres.app/Contents/Versions/18/bin
+SOCK=/tmp/pg-taytay; mkdir -p "$SOCK"
+
+# The socket directory MUST be short. PostgreSQL caps the path at 103 bytes, and a data directory
+# under a scratch path is already longer than that — the server starts, fails to create a socket,
+# and exits with a message that does not mention length until you read the log.
+"$PGBIN/pg_ctl" -D <data-dir> -o "-p 55433 -k $SOCK" -l <data-dir>/server.log start
+
+DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=55433 DB_DATABASE=lguids_test \
+DB_USERNAME=postgres DB_PASSWORD= php -d memory_limit=2G vendor/bin/phpunit
+```
+
+**Port 55432 is taken by something else on this machine** — a `node serve.mjs` process running
+PGlite, a PostgreSQL compiled to WebAssembly. Connecting to it reports
+`PostgreSQL 18.3 (PGlite) on wasm32-unknown-emscripten` and accepts commands quite happily.
+
+That is worth knowing because the first attempt here did exactly that: `pg_ctl` failed, `psql`
+connected to the *other* server, and a database was created inside somebody else's instance. **A
+test result taken against a server you did not start is not evidence** — the same lesson as two
+suites sharing one checkout. Check `psql -c 'select version()'` before trusting a run.
+
+### What the first real run found
+
+**41 failures that SQLite cannot produce**, on a suite that has been green for the whole programme.
+
+The largest class is `SQLSTATE[22P02] invalid text representation` — values written into typed
+columns that SQLite accepts and PostgreSQL refuses. The first one traced to a **real production
+500**: `report.run` wrote the report's code (`case-summary`) into `audit_entries.entity_id`, which
+is a `uuid`. Every report run would have failed in production, and nothing could have caught it
+here, because SQLite stores whatever it is given.
+
+That is the same argument `MigrationSafetyTest` makes about rollback, now with a worked example: a
+green suite on SQLite is evidence about SQLite.

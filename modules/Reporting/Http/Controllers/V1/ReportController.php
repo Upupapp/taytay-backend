@@ -318,11 +318,22 @@ final class ReportController
          * "who has been looking at Barangay Dolores" is a question the trail should be able to
          * answer.
          */
+        /*
+         * NO ENTITY ID, because running a report creates no record to point at.
+         *
+         * This passed the report's CODE — `case-summary` — into `audit_entries.entity_id`, which
+         * is a `uuid` column. SQLite stores whatever it is given, so the whole suite was green;
+         * PostgreSQL refuses it, and every report run 500s in production.
+         *
+         * The report is still identified: `entity_type` names it, and the summary carries its
+         * title. What is absent is a pointer to a row that does not exist.
+         */
         $this->audit->record(
             $actor->subjectId,
             'report.run',
             'Report run: '.$definition->title(),
-            $definition->value,
+            null,
+            'Reporting.Report:'.$definition->value,
         );
 
         return ApiResponse::item([

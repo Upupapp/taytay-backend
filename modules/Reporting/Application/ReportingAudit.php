@@ -30,13 +30,22 @@ final class ReportingAudit
 {
     public function __construct(private readonly AuditWriter $trail) {}
 
-    public function record(?string $actorSubjectId, string $action, string $summary, string $entityId): void
-    {
+    /**
+     * @param  string|null  $entityId  the export's UUID, or null where the act concerns no stored
+     *                                 record — running a report produces no row to point at.
+     */
+    public function record(
+        ?string $actorSubjectId,
+        string $action,
+        string $summary,
+        ?string $entityId,
+        string $entityType = 'Reporting.Export',
+    ): void {
         $this->trail->record(
             $actorSubjectId,
             $action,
             $summary,
-            'Reporting.Export',
+            $entityType,
             $entityId,
         );
     }

@@ -709,6 +709,74 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('release ledger', $small, $large);
     }
 
+    /**
+     * The referral queue — a disclosure record, and the list a caseworker chases.
+     *
+     * Every row names a resident and an outside destination, which is the shape most likely to
+     * acquire a "who and where" lookup per row the first time somebody asks for a readable list.
+     */
+    #[Test]
+    public function the_referral_queue_does_not_grow_with_referrals(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $resident = $this->existingResident(['first_name' => 'Ref', 'last_name' => 'Erral']);
+
+        $addReferral = function () use ($resident): void {
+            $this->postJson('/api/v1/admin/referrals', [
+                'resident_id' => (string) $resident->uuid,
+                'destination_name' => 'District hospital',
+                'service_requested' => 'Medical social work assessment',
+                'reason' => 'Unable to meet hospital bill.',
+            ])->assertCreated();
+        };
+
+        $url = '/api/v1/admin/referrals';
+
+        $small = $this->measure($url, $addReferral, 1);
+        $large = $this->measure($url, $addReferral, 6);
+
+        $this->assertFixtureProduced(
+            6,
+            DB::table('referrals')->whereNotIn('status', ['closed', 'declined'])->count(),
+            'open referrals to render',
+        );
+
+        $this->assertBudget('referral queue', $small, $large);
+    }
+
+    /**
+     * The service-provider directory — read by front-line staff while preparing a referral.
+     *
+     * Reference data rather than casework, and small today. It is measured because "small today"
+     * is how every list starts, and this one is read on the path to raising a referral.
+     */
+    #[Test]
+    public function the_provider_directory_does_not_grow_with_providers(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $n = 0;
+        $addProvider = function () use (&$n): void {
+            $n++;
+            $this->postJson('/api/v1/admin/service-providers', [
+                'name' => "Budget partner {$n}",
+                'destination_type' => 'ngo-partner',
+                'services_offered' => ['counselling'],
+                'channels' => ['phone'],
+            ])->assertCreated();
+        };
+
+        $url = '/api/v1/admin/service-providers';
+
+        $small = $this->measure($url, $addProvider, 1);
+        $large = $this->measure($url, $addProvider, 8);
+
+        $this->assertFixtureProduced(8, DB::table('service_providers')->count(), 'providers to render');
+
+        $this->assertBudget('provider directory', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -805,6 +873,14 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
             str_contains($url, '/me/notifications') => DB::table('notifications')->count(),
             str_contains($url, '/admin/releases') => DB::table('releases')->count(),
+            /*
+             * OPEN referrals only. The list excludes `closed` and `declined` by default, so
+             * counting every row would end the growth loop with a page the endpoint does not
+             * render — the same trap the corrections and duplicate arms above record.
+             */
+            str_contains($url, '/admin/referrals') => DB::table('referrals')
+                ->whereNotIn('status', ['closed', 'declined'])->count(),
+            str_contains($url, '/admin/service-providers') => DB::table('service_providers')->count(),
             str_contains($url, '/me/cases') => DB::table('welfare_cases')->count(),
             // ── TAB 15: the endpoints TAB 07 added ────────────────────────────────
             /*

@@ -37,7 +37,16 @@ final class ProviderController
         $this->authorization->authorize($actor, Permission::ReferralView);
 
         $pagination = PaginationParams::fromRequest($request);
-        $query = $this->directory->query();
+
+        /*
+         * Both relations for the whole page, in two queries rather than two per row.
+         *
+         * Every row's projection reads `servicesOffered()`, `channels()` and `problems()`, and
+         * the last of those asks for the first two again. Without this the directory cost four
+         * round trips per provider — and it is read on the path to raising a referral, so the
+         * cost lands on a caseworker mid-task.
+         */
+        $query = $this->directory->query()->with(['channelRows', 'serviceRows']);
 
         $search = $request->query('search');
 

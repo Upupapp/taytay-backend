@@ -54,7 +54,19 @@ final class ServiceProvider extends Model
      */
     public function channels(): array
     {
-        return $this->channelRows()->pluck('channel')
+        /*
+         * THE RELATION PROPERTY, NEVER THE METHOD.
+         *
+         * `channelRows()` returns the relation and every `->pluck()` on it is a fresh query.
+         * `channelRows` reads the loaded collection when the caller eager-loaded it, and
+         * otherwise loads once and caches on this instance — which matters even without eager
+         * loading, because `problems()` asks for channels and services a SECOND time.
+         *
+         * Measured on `GET /admin/service-providers`: 8 queries for one provider and 36 for
+         * eight, four per row — one each for channels and services, then both again inside
+         * `problems()`.
+         */
+        return $this->channelRows->pluck('channel')
             ->map(static fn (mixed $value): string => (string) $value)->values()->all();
     }
 
@@ -63,7 +75,8 @@ final class ServiceProvider extends Model
      */
     public function servicesOffered(): array
     {
-        return $this->serviceRows()->pluck('service')
+        // The relation property, for the reason given on channels() above.
+        return $this->serviceRows->pluck('service')
             ->map(static fn (mixed $value): string => (string) $value)->values()->all();
     }
 
