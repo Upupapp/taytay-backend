@@ -415,6 +415,23 @@ final class EngagementService
         return NewsfeedComment::query()
             ->has('reports')
             ->withCount('reports')
+            /*
+             * THE REASONS, WHICH THIS ENDPOINT PROMISED AND DID NOT DELIVER.
+             *
+             * `moderatorProjection()` renders `report_reasons` only when the relation is loaded —
+             * `relationLoaded('reports') ? ... : null` — and nothing here loaded it, so every row
+             * came back without the "why". `withCount` alone does not load the rows it counts.
+             *
+             * The guard is right and the omission was invisible because of it: an unloaded
+             * relation yields null rather than an N+1, so the failure was silent in exactly the
+             * way it was designed to be safe. F26's whole point is that a moderator sees "how many
+             * and why"; they were seeing how many.
+             *
+             * Eager-loaded for the page, so this is one query for the whole queue and not one per
+             * comment — `QueryBudgetTest::the_moderation_queue_does_not_grow_with_reported_comments`
+             * measures that it stays flat.
+             */
+            ->with('reports')
             ->orderByDesc('reports_count')
             ->orderByDesc('created_at')
             ->orderByDesc('id');

@@ -619,7 +619,14 @@ final class QueryBudgetTest extends KycTestCase
         $reviewer = $this->reviewer('lgu_admin');
         Sanctum::actingAs($reviewer);
 
-        $assignee = (string) $reviewer->subject_id;
+        /*
+         * The account's `uuid` IS the subject id — `ActorContextFactory` reads exactly that.
+         *
+         * This said `$reviewer->subject_id`, a column that does not exist on `accounts`, so it was
+         * always null and `(string) null` is `''`. SQLite stored the empty string in a uuid column
+         * without complaint; PostgreSQL refuses it, and the budget measured a table nobody owned.
+         */
+        $assignee = (string) $reviewer->uuid;
         $addTask = fn () => $this->taskForBudget($assignee);
 
         $url = '/api/v1/tasks';
@@ -656,7 +663,7 @@ final class QueryBudgetTest extends KycTestCase
          * `activeCitizenWithResident()` itself, which mints a DIFFERENT citizen, and an inbox
          * addressed to the first one would then measure an empty page.
          */
-        $recipient = (string) $citizen->subject_id;
+        $recipient = (string) $citizen->uuid;
         $addNotice = fn () => $this->notificationForBudget($recipient);
 
         $url = '/api/v1/me/notifications';
@@ -844,6 +851,49 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('visit schedule', $small, $large);
     }
 
+    /**
+     * The moderation queue, WITH the reasons now eager-loaded.
+     *
+     * `reportedComments()` gained `->with('reports')` because `report_reasons` was rendering null
+     * for every row — the projection only emits it when the relation is loaded, and `withCount`
+     * counts without loading. This measures the fix did not trade a silent omission for an N+1:
+     * loading the reasons per comment would be one query per row on the screen a moderator uses
+     * to triage a morning's reports.
+     */
+    #[Test]
+    public function the_moderation_queue_does_not_grow_with_reported_comments(): void
+    {
+        // Publishing is a staff act; the reporting below re-authenticates per resident.
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+        $post = $this->publishPost();
+
+        $addReportedComment = function () use ($post): void {
+            [$author] = $this->activeCitizenWithResident();
+            Sanctum::actingAs($author);
+            $comment = (string) $this->postJson("/api/v1/newsfeed/{$post}/comments", [
+                'body' => 'A comment to be reported '.mt_rand(1000, 9999),
+            ])->assertCreated()->json('data.id');
+
+            [$reporter] = $this->activeCitizenWithResident();
+            Sanctum::actingAs($reporter);
+            $this->postJson("/api/v1/newsfeed-comments/{$comment}/reports", ['reason' => 'abusive'])
+                ->assertStatus(202);
+        };
+
+        $url = '/api/v1/admin/newsfeed-comments?reported=true';
+
+        $small = $this->measure($url, $addReportedComment, 1, asReviewer: true);
+        $large = $this->measure($url, $addReportedComment, 6, asReviewer: true);
+
+        $this->assertFixtureProduced(
+            6,
+            DB::table('newsfeed_comment_reports')->count(),
+            'reported comments to render',
+        );
+
+        $this->assertBudget('moderation queue', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -936,6 +986,17 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/me/profile/corrections') => DB::table('resident_correction_requests')->count(),
             str_contains($url, '/document-requests') => DB::table('document_requests')->count(),
             str_contains($url, '/registrations') => DB::table('event_registrations')->count(),
+            /*
+             * BEFORE the '/newsfeed' arm below, which it would otherwise match: the string
+             * "/admin/newsfeed-comments" CONTAINS "/newsfeed", so the posts arm answered first and
+             * counted published posts — one — and the growth loop gave up at "the fixture stopped
+             * producing rows". Reported comments only, since the queue is measured with
+             * `?reported=true` and counting every comment would end the loop with rows that page
+             * does not render.
+             */
+            str_contains($url, '/admin/newsfeed-comments') => DB::table('newsfeed_comments')
+                ->whereIn('id', DB::table('newsfeed_comment_reports')->select('newsfeed_comment_id'))
+                ->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
             /*

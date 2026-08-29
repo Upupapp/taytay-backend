@@ -284,6 +284,23 @@ final class CommentReportingTest extends KycTestCase
 
         $this->assertSame(2, $row['report_count']);
 
+        /*
+         * AND THE WHY, WHICH THIS TEST'S NAME ALWAYS CLAIMED AND ITS BODY DID NOT CHECK.
+         *
+         * `report_reasons` came back null for every row: `reportedComments()` used `withCount`
+         * without loading the relation, and `moderatorProjection()` renders the reasons only when
+         * it is loaded. The guard made the omission silent — an unloaded relation yields null
+         * rather than a per-row query — so a moderator saw a count and no categories, and nothing
+         * failed.
+         *
+         * Sorted before comparing: the projection dedupes with `array_unique` over whatever order
+         * the rows arrive in, and asserting an accidental order would make this fail on a database
+         * that returns them differently.
+         */
+        $reasons = $row['report_reasons'];
+        sort($reasons);
+        $this->assertSame(['abusive', 'spam'], $reasons);
+
         // A staff screen listing who reported a neighbour is a list somebody eventually reads
         // aloud at a barangay hall. The identities are in the audit trail, where answering "who
         // reported me" is a deliberate act with a record of its own.
