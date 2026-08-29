@@ -48,6 +48,11 @@ use PHPUnit\Framework\Attributes\Test;
  *  * **`/admin/audit-entries`** — pure columns, and the endpoint WRITES an audit entry on every
  *    read. The table a budget would count grows by one per measurement, so the fixture would
  *    perturb its own subject for no per-row work.
+ *  * **`/me/privacy/consents`** — bounded by a closed vocabulary. `consentPurposes()` derives
+ *    the list from `privacy.legal_bases` where the basis is `consent`, and there are FOUR. A
+ *    citizen cannot hold a fifth, so the page is capped at four rows.
+ *  * **`/admin/newsfeed-metrics`** — an `ApiResponse::item` of five fixed `count()` queries. A
+ *    constant, not a page; it has no rows to grow.
  *  * **`/admin/residents/{id}/families`** — reads like a certain N+1: `familiesOf()` has no
  *    `withCount` and the projection falls back to a per-row count. It is unreachable. A resident
  *    may hold only ONE open family membership (a second is refused 409), so the page is capped
@@ -1006,6 +1011,43 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('public programme catalogue', $small, $large);
     }
 
+    /**
+     * The legal-hold register — the list the Data Protection Officer works from.
+     *
+     * A hold is what stops a retention purge, so this register is read before anything is
+     * deleted. Every row names an entity by type and opaque id and nothing else; "show me what
+     * this hold is actually on" is the obvious next request, and resolving a subject per row
+     * would be a cross-module lookup on the screen that gates deletions.
+     *
+     * Measured as the DPO: `privacy.manage` places a hold, and `lgu_admin` does not hold it —
+     * the separation is deliberate, so the budget has to run as the role that can.
+     */
+    #[Test]
+    public function the_legal_hold_register_does_not_grow_with_holds(): void
+    {
+        Sanctum::actingAs($this->reviewer('data_protection_officer'));
+
+        $n = 0;
+        $addHold = function () use (&$n): void {
+            $n++;
+            $this->postJson('/api/v1/admin/privacy/legal-holds', [
+                'entity_type' => 'Welfare.Case',
+                'entity_id' => (string) Str::uuid7(),
+                'reference' => sprintf('NPC-2026-%03d', $n),
+                'reason' => 'Complaint under investigation by the National Privacy Commission.',
+            ])->assertCreated();
+        };
+
+        $url = '/api/v1/admin/privacy/legal-holds';
+
+        $small = $this->measure($url, $addHold, 1);
+        $large = $this->measure($url, $addHold, 6);
+
+        $this->assertFixtureProduced(6, DB::table('legal_holds')->count(), 'legal holds to render');
+
+        $this->assertBudget('legal-hold register', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1128,6 +1170,7 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/admin/service-providers') => DB::table('service_providers')->count(),
             str_contains($url, '/admin/visits') => DB::table('field_visits')->count(),
             str_contains($url, '/admin/enrollments') => DB::table('program_enrollments')->count(),
+            str_contains($url, '/admin/privacy/legal-holds') => DB::table('legal_holds')->count(),
             /*
              * The PUBLIC catalogue's own filter: published and citizen-visible. Counting every
              * programme would end the growth loop with rows an anonymous caller never sees —
