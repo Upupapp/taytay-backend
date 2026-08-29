@@ -34,6 +34,26 @@ use PHPUnit\Framework\Attributes\Test;
  * queries a page costs — it is whether that number **changes when the page gets longer**. One is a
  * budget somebody argues about; the other is a defect.
  *
+ * ── WHAT IS DELIBERATELY NOT MEASURED, AND WHY ──────────────────────────────────────
+ *
+ * Each of these was investigated and ruled out. They are listed so the next person counting
+ * coverage does not spend the afternoon re-deriving them:
+ *
+ *  * **`/services` and `/admin/services`** — config-backed.
+ *    `ConfigServiceCatalogRepository::all()` reads `service_catalog.services` from config, so
+ *    the rows never touch the database and no fixture can grow them. `ListServicesQuery` slices
+ *    in memory and says so. There is no per-row query to catch.
+ *  * **`/me/assistance-history`** — an `ApiResponse::item` envelope, not a page, and
+ *    `grantedCases()` caps at `limit(200)` with a pure-column projection.
+ *  * **`/admin/audit-entries`** — pure columns, and the endpoint WRITES an audit entry on every
+ *    read. The table a budget would count grows by one per measurement, so the fixture would
+ *    perturb its own subject for no per-row work.
+ *  * **`/admin/residents/{id}/families`** — reads like a certain N+1: `familiesOf()` has no
+ *    `withCount` and the projection falls back to a per-row count. It is unreachable. A resident
+ *    may hold only ONE open family membership (a second is refused 409), so the page is capped
+ *    at one row. **A domain invariant can make an apparent N+1 impossible — check what the
+ *    endpoint can contain before writing the test.**
+ *
  * The three fixed here were all real, and all found by measuring rather than reading:
  *
  *  * the staff registrant list resolved a resident name **per row** — 11 queries for one
