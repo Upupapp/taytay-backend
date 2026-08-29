@@ -53,6 +53,15 @@ use PHPUnit\Framework\Attributes\Test;
  *    citizen cannot hold a fifth, so the page is capped at four rows.
  *  * **`/admin/newsfeed-metrics`** — an `ApiResponse::item` of five fixed `count()` queries. A
  *    constant, not a page; it has no rows to grow.
+ *  * **`/admin/privacy/classifications` and `/admin/privacy/retention`** — config registers.
+ *    `RetentionPolicy::classifications()` and `schedule()` read `privacy.classifications` and
+ *    `privacy.retention.*` from config, returned in an `item` envelope. No rows, no growth.
+ *  * **`/admin/reports`** — the catalogue iterates `ReportCatalog::cases()`, a PHP enum. Bounded
+ *    by code rather than data.
+ *  * **`/me/kyc/documents`** — an `item` envelope listing one case's documents, bounded by the
+ *    document set that case requires.
+ *  * **`/admin/residents/{id}/kinship-history`** — already batched, explicitly: it resolves every
+ *    family the resident has ever been in with one `whereIn` and says so in a comment.
  *  * **`/admin/residents/{id}/families`** — reads like a certain N+1: `familiesOf()` has no
  *    `withCount` and the projection falls back to a per-row count. It is unreachable. A resident
  *    may hold only ONE open family membership (a second is refused 409), so the page is capped
@@ -1048,6 +1057,41 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('legal-hold register', $small, $large);
     }
 
+    /**
+     * The release-batch list — payout runs, the unit an office schedules money by.
+     *
+     * Pure columns today, so this measures flat. Pinned because a batch is a CONTAINER: the
+     * obvious next column is how many releases it holds and what they total, and both are
+     * per-batch aggregates that arrive as a query per row unless somebody reaches for
+     * `withCount` or a grouped sum.
+     *
+     * Every write here carries an `Idempotency-Key`, which is what `money()` supplies. A batch
+     * created without one is refused and the fixture would produce no rows.
+     */
+    #[Test]
+    public function the_release_batch_list_does_not_grow_with_batches(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $n = 0;
+        $addBatch = function () use (&$n): void {
+            $n++;
+            $this->money()->postJson('/api/v1/admin/release-batches', [
+                'name' => "Budget payout run {$n}",
+                'scheduled_for' => now()->addWeeks($n)->toDateString(),
+            ])->assertCreated();
+        };
+
+        $url = '/api/v1/admin/release-batches';
+
+        $small = $this->measure($url, $addBatch, 1);
+        $large = $this->measure($url, $addBatch, 6);
+
+        $this->assertFixtureProduced(6, DB::table('release_batches')->count(), 'batches to render');
+
+        $this->assertBudget('release batch list', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1171,6 +1215,13 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/admin/visits') => DB::table('field_visits')->count(),
             str_contains($url, '/admin/enrollments') => DB::table('program_enrollments')->count(),
             str_contains($url, '/admin/privacy/legal-holds') => DB::table('legal_holds')->count(),
+            /*
+             * No ordering constraint against the '/admin/releases' arm, checked rather than
+             * assumed: "/admin/release-batches" does NOT contain "/admin/releases" — the hyphen
+             * sits where the `s` would be. Several arms in this match DO collide that way, so the
+             * absence of one here is worth stating.
+             */
+            str_contains($url, '/admin/release-batches') => DB::table('release_batches')->count(),
             /*
              * The PUBLIC catalogue's own filter: published and citizen-visible. Counting every
              * programme would end the growth loop with rows an anonymous caller never sees —
