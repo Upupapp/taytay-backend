@@ -520,6 +520,21 @@ final class QueryBudgetTest extends KycTestCase
         ]);
     }
 
+    private function publishedProgramForBudget(int $n): void
+    {
+        Program::query()->create([
+            'code' => "BUDGETPROG{$n}",
+            'name' => "Budget programme {$n}",
+            'owner_office' => 'MSWDO',
+            'service_type' => 'financial',
+            'benefit_type' => 'cash',
+            'status' => 'published',
+            // Both are required by `publicQuery()`; published alone is not enough to appear.
+            'is_citizen_visible' => true,
+            'eligibility_guidance_version' => '1',
+        ]);
+    }
+
     private function enrollmentForBudget(string $residentUuid, int $n): void
     {
         DB::table('program_enrollments')->insert([
@@ -940,6 +955,37 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('enrolment roll', $small, $large);
     }
 
+    /**
+     * The public programme catalogue — what a resident sees before signing in, and for many the
+     * first request the app ever makes.
+     *
+     * Measured ANONYMOUSLY. The same route renders a staff projection when the caller holds
+     * `program.view`, so measuring as an admin would budget a different projection than the one
+     * the public actually gets.
+     */
+    #[Test]
+    public function the_public_programme_catalogue_does_not_grow_with_programmes(): void
+    {
+        $n = 0;
+        $addProgramme = function () use (&$n): void {
+            $n++;
+            $this->publishedProgramForBudget($n);
+        };
+
+        $url = '/api/v1/programs';
+
+        $small = $this->measure($url, $addProgramme, 1);
+        $large = $this->measure($url, $addProgramme, 8);
+
+        $this->assertFixtureProduced(
+            8,
+            DB::table('programs')->where('status', 'published')->where('is_citizen_visible', true)->count(),
+            'published, citizen-visible programmes',
+        );
+
+        $this->assertBudget('public programme catalogue', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1062,6 +1108,13 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/admin/service-providers') => DB::table('service_providers')->count(),
             str_contains($url, '/admin/visits') => DB::table('field_visits')->count(),
             str_contains($url, '/admin/enrollments') => DB::table('program_enrollments')->count(),
+            /*
+             * The PUBLIC catalogue's own filter: published and citizen-visible. Counting every
+             * programme would end the growth loop with rows an anonymous caller never sees —
+             * `publicQuery()` narrows on both columns.
+             */
+            str_contains($url, '/programs') => DB::table('programs')
+                ->where('status', 'published')->where('is_citizen_visible', true)->count(),
             str_contains($url, '/me/cases') => DB::table('welfare_cases')->count(),
             // ── TAB 15: the endpoints TAB 07 added ────────────────────────────────
             /*
