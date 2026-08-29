@@ -6,6 +6,7 @@ namespace Modules\ResidentProfile\Http\Controllers\V1;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Modules\AccessControl\Application\AuthorizationService;
 use Modules\AccessControl\Contracts\Permission;
 use Modules\ResidentProfile\Application\ResidentMergeService;
@@ -87,8 +88,28 @@ final class ResidentDuplicateController
          * set rather than the table. The listed total is the unfiltered count and is
          * labelled as such below.
          */
+        /*
+         * BOTH SIDES OF THE WHOLE PAGE, IN ONE QUERY.
+         *
+         * `pairProjection()` used to `find()` the lower and higher resident itself, which cost two
+         * round trips per row: measured at 7 queries for one pair and 16 for six. A review queue is
+         * read by somebody working through a backlog, so the page that grows is the one that gets
+         * opened.
+         *
+         * `withTrashed()` is why an eager-loaded relation is not the fix — a merged-away resident
+         * must still render its side, and a default relation would drop exactly the rows this queue
+         * exists to explain.
+         */
+        $residents = Resident::withTrashed()
+            ->whereIn('id', $pairs->flatMap(static fn (ResidentDuplicatePair $pair): array => [
+                $pair->lower_resident_id,
+                $pair->higher_resident_id,
+            ])->unique()->all())
+            ->get()
+            ->keyBy('id');
+
         $visible = $pairs
-            ->map(fn (ResidentDuplicatePair $pair): ?array => $this->pairProjection($actor, $pair))
+            ->map(fn (ResidentDuplicatePair $pair): ?array => $this->pairProjection($actor, $pair, $residents))
             ->filter()
             ->values()
             ->all();
@@ -260,13 +281,34 @@ final class ResidentDuplicateController
      *
      * @return array<string, mixed>|null
      */
-    private function pairProjection(ActorContext $actor, ResidentDuplicatePair $pair): ?array
-    {
+    /**
+     * @param  Collection<int, Resident>|null  $resolved
+     *                                                    Residents already fetched for the whole page, keyed by id. The list passes one; the
+     *                                                    single-pair callers pass none and resolve their two rows directly, which is correct at
+     *                                                    one pair and an N+1 at a hundred.
+     */
+    private function pairProjection(
+        ActorContext $actor,
+        ResidentDuplicatePair $pair,
+        ?Collection $resolved = null,
+    ): ?array {
+        /*
+         * NO PER-ROW FALLBACK WHEN THE MAP HAS NO ENTRY.
+         *
+         * An absent id is a real answer — the resident is gone — and the projection below already
+         * renders that side as absent. Falling back to a `find()` here would pay for the batch and
+         * then do the per-row work anyway, which ADR 0042 §1 records as measuring WORSE than the
+         * N+1 it replaced.
+         */
         // withTrashed so a resolved pair still renders its two sides in the queue history.
         /** @var Resident|null $lower */
-        $lower = Resident::withTrashed()->find($pair->lower_resident_id);
+        $lower = $resolved !== null
+            ? $resolved->get($pair->lower_resident_id)
+            : Resident::withTrashed()->find($pair->lower_resident_id);
         /** @var Resident|null $higher */
-        $higher = Resident::withTrashed()->find($pair->higher_resident_id);
+        $higher = $resolved !== null
+            ? $resolved->get($pair->higher_resident_id)
+            : Resident::withTrashed()->find($pair->higher_resident_id);
 
         foreach ([$lower, $higher] as $resident) {
             $barangayId = $resident?->barangay_id === null ? null : (int) $resident->barangay_id;

@@ -517,6 +517,60 @@ final class QueryBudgetTest extends KycTestCase
     /**
      * Grows the data to `$rows`, then counts the queries one request costs.
      */
+    /**
+     * The duplicate queue resolves BOTH SIDES of every pair, one query each.
+     *
+     * `pairProjection()` calls `Resident::withTrashed()->find()` for `lower_resident_id` and again
+     * for `higher_resident_id`, so a page of pairs costs two round trips per row on top of the
+     * page itself. `withTrashed()` is correct and is why the obvious fix — an eager-loaded
+     * relation — is not a one-liner: a merged-away resident must still render, which a default
+     * relation would drop.
+     *
+     * Unmeasured until now. 16 of this API's 54 paginating endpoints had a budget, and this was
+     * among the 38 that did not; the projection was written after the harness was pointed at its
+     * neighbours.
+     */
+    #[Test]
+    public function the_duplicate_queue_does_not_grow_with_pairs(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $family = 0;
+
+        /*
+         * One pair per call: two residents sharing an identity fingerprint, then detection.
+         * The names vary per call so each duo collides only with its own partner — one shared
+         * fingerprint across every resident would produce pairs combinatorially and the row count
+         * would outrun the loop.
+         */
+        $addPair = function () use (&$family): void {
+            $family++;
+
+            foreach (['12 Rizal Street', '48 Bonifacio Street'] as $address) {
+                $this->existingResident([
+                    'first_name' => "Ana{$family}",
+                    'last_name' => "Cruz{$family}",
+                    'street_address' => $address,
+                ]);
+            }
+
+            $this->postJson('/api/v1/admin/resident-duplicates/detect')->assertOk();
+        };
+
+        $url = '/api/v1/admin/resident-duplicates';
+
+        $small = $this->measure($url, $addPair, 1);
+        $large = $this->measure($url, $addPair, 6);
+
+        $this->assertFixtureProduced(
+            6,
+            DB::table('resident_duplicate_pairs')->where('decision', 'undecided')->count(),
+            'undecided pairs to render',
+        );
+
+        $this->assertBudget('duplicate review queue', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -613,6 +667,13 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
             str_contains($url, '/me/cases') => DB::table('welfare_cases')->count(),
             // ── TAB 15: the endpoints TAB 07 added ────────────────────────────────
+            /*
+             * Undecided only — the queue's default. Counting every pair would satisfy the loop
+             * with decided ones the endpoint does not render without `?decision=`, which is the
+             * same trap the resident-corrections arm above records.
+             */
+            str_contains($url, '/admin/resident-duplicates') => DB::table('resident_duplicate_pairs')
+                ->where('decision', 'undecided')->count(),
             str_contains($url, '/admin/families') => DB::table('families')->count(),
             str_contains($url, '/admin/beneficiaries') => DB::table('residents')->count(),
             str_contains($url, '/admin/work/') => DB::table('tasks')->where('status', 'open')->count(),
