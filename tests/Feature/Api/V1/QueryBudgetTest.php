@@ -68,6 +68,32 @@ use PHPUnit\Framework\Attributes\Test;
  *    at one row. **A domain invariant can make an apparent N+1 impossible — check what the
  *    endpoint can contain before writing the test.**
  *
+ * ── WHERE COVERAGE ACTUALLY STANDS ──────────────────────────────────────────────────
+ *
+ * **29 of the 54 endpoints that call `ApiResponse::page` have a budget. The other 25 were each
+ * looked at, and none is a measurable gap.** (31 test methods cover those 29: several endpoints
+ * are measured twice, once per projection or per actor.) They fall into four kinds, and the kinds matter
+ * more than the count:
+ *
+ *  * **No rows to grow** — config registers (`/services`, `/admin/services`, the two
+ *    `/admin/privacy` registers), a PHP enum (`/admin/reports`), a single record plus config
+ *    (`/privacy/notice`), or a handful of fixed `count()` queries (`/admin/newsfeed-metrics`).
+ *  * **Bounded by the domain** — a closed vocabulary (`/me/privacy/consents`, four purposes),
+ *    a one-open-membership invariant (`/admin/residents/{id}/families`), a `limit(200)` cap
+ *    (`/me/assistance-history`), or a page scoped to ONE subject: one event's history, one
+ *    post's history, one family, one programme's templates.
+ *  * **Already batched, verifiably** — `/admin/residents/{id}/kinship-history` resolves every
+ *    family in one `whereIn`; `/me/event-registrations` resolves its events the same way;
+ *    `/admin/work/team` is a single grouped query and `/admin/work/alerts` returns at most two
+ *    rows.
+ *  * **Self-perturbing** — the audit endpoints write an audit entry on every read, so a budget
+ *    fixture would grow the table it counts, for pure-column projections.
+ *
+ * **So "54 paginating endpoints, 30 measured" reads worse than the truth.** The honest figure is
+ * that the measurable surface is close to fully covered, and the remaining names are there
+ * because they call `ApiResponse::page`, not because anything is unguarded. A count of endpoints
+ * is not a measure of risk; what each one can CONTAIN is.
+ *
  * The three fixed here were all real, and all found by measuring rather than reading:
  *
  *  * the staff registrant list resolved a resident name **per row** — 11 queries for one
