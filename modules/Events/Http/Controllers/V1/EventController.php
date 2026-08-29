@@ -18,6 +18,7 @@ use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
 use Modules\Shared\Http\ApiResponse;
+use Modules\Shared\Support\Identifier;
 
 /**
  * Official LGU events (ADR 0030).
@@ -246,7 +247,18 @@ final class EventController
         /** @var Event|null $model */
         $model = $this->events->publicQuery()
             ->where(function ($where) use ($event): void {
-                $where->where('slug', $event)->orWhere('uuid', $event);
+                /*
+                 * The uuid branch is only built when the value could BE one.
+                 *
+                 * PostgreSQL type-checks the comparison even where the slug branch would have
+                 * matched, so `orWhere('uuid', 'barangay-feeding-programme-…')` fails the whole
+                 * statement — a 500 on the one lookup a resident performs from a poster.
+                 */
+                $where->where('slug', $event);
+
+                if (Identifier::isUuid($event)) {
+                    $where->orWhere('uuid', $event);
+                }
             })
             ->first();
 
@@ -422,8 +434,13 @@ final class EventController
     {
         /** @var Event|null $event */
         $event = Event::query()
-            ->where('uuid', $identifier)
-            ->orWhere('slug', $identifier)
+            ->where(function ($where) use ($identifier): void {
+                $where->where('slug', $identifier);
+
+                if (Identifier::isUuid($identifier)) {
+                    $where->orWhere('uuid', $identifier);
+                }
+            })
             ->first();
 
         if ($event === null) {

@@ -283,3 +283,32 @@ here, because SQLite stores whatever it is given.
 
 That is the same argument `MigrationSafetyTest` makes about rollback, now with a worked example: a
 green suite on SQLite is evidence about SQLite.
+
+### The failures are not all production defects, and the split matters
+
+**41 → 31 so far.** They divide into three kinds, and an earlier note here implied all of them were
+production bugs. They are not.
+
+**Production defects — real 500s, fixed.**
+
+* `report.run` wrote a report *code* into `audit_entries.entity_id`, a `uuid` column.
+* An event reached by **the slug printed on a poster** returned 500. The lookup read
+  `->where('slug', $x)->orWhere('uuid', $x)`, and PostgreSQL type-checks the uuid comparison even
+  where the slug branch would have matched — so the whole statement failed. Same shape in the
+  admin lookup and in the registration-by-reference lookup. `Modules\Shared\Support\Identifier`
+  now builds the uuid branch only when the value could be one.
+
+**A test of ours making the mistake it was written to catch.** The
+expand-migrate-contract rehearsal compared plucked rows without an `ORDER BY`, and passed on SQLite
+because SQLite happened to return rowid order. **PostgreSQL moves an updated row to the end of the
+heap**, so mid-backfill the same fifty values came back reordered and the test reported that the old
+query had "stopped working" when nothing was missing.
+
+**Test fixtures using non-uuid identifiers.** `'unrelated-id'`, `'officer-7'`, `'entity-L-1'`,
+`'some-batch'` are fixture values compared against uuid columns — including inside `WHERE` clauses,
+which PostgreSQL type-checks just as strictly as an `INSERT`. These are cheap to fix and say nothing
+about production.
+
+The eight `25P02 current transaction is aborted` failures are **cascades**, not causes: one earlier
+error in the same transaction poisons every statement after it. They will fall out as the causes
+above are cleared, and counting them as separate defects would overstate what is left.

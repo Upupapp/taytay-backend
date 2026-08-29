@@ -58,8 +58,27 @@ final class ExpandMigrateContractRehearsalTest extends TestCase
             DB::table(self::TABLE)->insert(['id' => $n, 'contact_no' => $original[$n]]);
         }
 
-        $oldCodeReads = fn (): array => DB::table(self::TABLE)->pluck('contact_no', 'id')->all();
-        $newCodeReads = fn (): array => DB::table(self::TABLE)->pluck('contact_number', 'id')->all();
+        /*
+         * ORDERED, because an unordered read is not a stable comparison.
+         *
+         * This originally plucked without an `orderBy`, and passed on SQLite for the wrong reason:
+         * SQLite happened to return rows in rowid order. **PostgreSQL moves an updated row to the
+         * end of the heap**, so halfway through the backfill the same fifty values came back in a
+         * different order and the assertion failed — reporting that the old query had "stopped
+         * working" when every value was present.
+         *
+         * The test was making the exact mistake it exists to catch: a claim proven on SQLite that
+         * does not hold on the database this system runs on. What it means to assert is that no
+         * VALUE is lost, so the query now says so.
+         */
+        $oldCodeReads = fn (): array => DB::table(self::TABLE)
+            ->orderBy('id')
+            ->pluck('contact_no', 'id')
+            ->all();
+        $newCodeReads = fn (): array => DB::table(self::TABLE)
+            ->orderBy('id')
+            ->pluck('contact_number', 'id')
+            ->all();
 
         $this->assertSame($original, $oldCodeReads(), 'The fixture is wrong before anything happened.');
 

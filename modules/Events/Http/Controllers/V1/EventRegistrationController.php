@@ -22,6 +22,7 @@ use Modules\Shared\Application\Pagination\Page;
 use Modules\Shared\Application\Pagination\PaginationParams;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
 use Modules\Shared\Http\ApiResponse;
+use Modules\Shared\Support\Identifier;
 
 /**
  * Taking a place at an event, and recording who turned up (ADR 0031).
@@ -141,7 +142,11 @@ final class EventRegistrationController
         /** @var EventRegistration|null $model */
         $model = $this->registrations->registrationsForResident($residentId)
             ->where(function ($where) use ($registration): void {
-                $where->where('uuid', $registration)->orWhere('reference', $registration);
+                $where->where('reference', $registration);
+
+                if (Identifier::isUuid($registration)) {
+                    $where->orWhere('uuid', $registration);
+                }
             })
             ->first();
 
