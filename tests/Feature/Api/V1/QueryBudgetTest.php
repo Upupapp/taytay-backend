@@ -777,6 +777,73 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('provider directory', $small, $large);
     }
 
+    /**
+     * The staff case list — the busiest screen in the admin console.
+     *
+     * Its projection reads columns today and the query paginates properly, so this measures flat.
+     * It is worth pinning anyway, and for a specific reason: `resident_id` and `barangay_id` are
+     * emitted as bare identifiers, and the obvious next request on a case queue is a resident
+     * name beside each row. That is one `summaryFor()` away from being an N+1 on the page staff
+     * open first, and the duplicate queue fixed earlier today is what that mistake looks like
+     * once it is made.
+     */
+    #[Test]
+    public function the_staff_case_list_does_not_grow_with_cases(): void
+    {
+        // Authenticated first: `caseForEligibility()` files a staff intake and answers 401 without it.
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $addCase = fn () => $this->caseForEligibility();
+
+        $url = '/api/v1/admin/assistance-requests';
+
+        $small = $this->measure($url, $addCase, 1);
+        $large = $this->measure($url, $addCase, 6);
+
+        $this->assertFixtureProduced(6, DB::table('welfare_cases')->count(), 'cases to render');
+
+        $this->assertBudget('staff case list', $small, $large);
+    }
+
+    /**
+     * The field-visit schedule — the list a caseworker opens before going out for the day.
+     *
+     * Every row names a resident by identifier. Like the case list, the obvious next request is a
+     * name and an address beside each visit, and this is what stops that arriving as a per-row
+     * lookup on a screen read on a phone in the field.
+     */
+    #[Test]
+    public function the_visit_schedule_does_not_grow_with_visits(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $resident = $this->existingResident(['first_name' => 'Vis', 'last_name' => 'Itor']);
+
+        $day = 0;
+        $addVisit = function () use ($resident, &$day): void {
+            $day++;
+            $this->postJson('/api/v1/admin/visits', [
+                'resident_id' => (string) $resident->uuid,
+                'purpose' => 'verification',
+                'scheduled_for' => now()->addDays($day)->toDateString(),
+            ])->assertCreated();
+        };
+
+        /*
+         * `scope=all` rather than the default. Unscoped, the list narrows to the caller's own
+         * assignments, and a fixture that creates unassigned visits would measure an empty page —
+         * a flat budget over nothing, which is the failure this harness exists to refuse.
+         */
+        $url = '/api/v1/admin/visits?scope=all';
+
+        $small = $this->measure($url, $addVisit, 1);
+        $large = $this->measure($url, $addVisit, 6);
+
+        $this->assertFixtureProduced(6, DB::table('field_visits')->count(), 'visits to render');
+
+        $this->assertBudget('visit schedule', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -871,6 +938,11 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/registrations') => DB::table('event_registrations')->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
+            /*
+             * BEFORE the '/me/cases' arm, and note it does NOT collide with the '/requirements'
+             * arm at the top: this URL is "assistance-requests", not "requirements".
+             */
+            str_contains($url, '/admin/assistance-requests') => DB::table('welfare_cases')->count(),
             str_contains($url, '/me/notifications') => DB::table('notifications')->count(),
             str_contains($url, '/admin/releases') => DB::table('releases')->count(),
             /*
@@ -881,6 +953,7 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/admin/referrals') => DB::table('referrals')
                 ->whereNotIn('status', ['closed', 'declined'])->count(),
             str_contains($url, '/admin/service-providers') => DB::table('service_providers')->count(),
+            str_contains($url, '/admin/visits') => DB::table('field_visits')->count(),
             str_contains($url, '/me/cases') => DB::table('welfare_cases')->count(),
             // ── TAB 15: the endpoints TAB 07 added ────────────────────────────────
             /*
