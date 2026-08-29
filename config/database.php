@@ -96,6 +96,25 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
+
+            /*
+             * THE SESSION IS UTC, WHICH THE SERVER'S OWN TIMEZONE MUST NOT DECIDE.
+             *
+             * Laravel sends a datetime as a naive string in the application's timezone (UTC), and
+             * PostgreSQL interprets a naive string in the SESSION's timezone before storing it in a
+             * `timestamptz`. Where those differ, every timestamp is silently shifted.
+             *
+             * This was found the first time the suite ran against a real PostgreSQL: the server had
+             * initialised as `Asia/Manila`, so a password-reset token written to expire in thirty
+             * minutes was stored eight hours in the past and was already invalid when redeemed.
+             * The same shift lands on MFA codes, retention clocks, registration windows and every
+             * `occurred_at` in the audit trail.
+             *
+             * SQLite has no timezone handling at all, so nothing in the suite could ever have seen
+             * it — and a deployment would have inherited whatever the database host happened to be
+             * set to.
+             */
+            'timezone' => env('DB_TIMEZONE', 'UTC'),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 

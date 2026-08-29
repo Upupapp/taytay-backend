@@ -520,6 +520,20 @@ final class QueryBudgetTest extends KycTestCase
         ]);
     }
 
+    private function enrollmentForBudget(string $residentUuid, int $n): void
+    {
+        DB::table('program_enrollments')->insert([
+            'uuid' => (string) Str::uuid7(),
+            'program_id' => (string) Str::uuid7(),
+            'program_code' => "BUDGET{$n}",
+            'resident_id' => $residentUuid,
+            'status' => 'active',
+            'effective_from' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     private function notificationForBudget(string $recipient): void
     {
         DB::table('notifications')->insert([
@@ -894,6 +908,38 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('moderation queue', $small, $large);
     }
 
+    /**
+     * The programme enrolment roll — who is on which programme.
+     *
+     * Pure columns today and it paginates at the query, so this measures flat. Pinned because
+     * every row carries a `resident_id` and a `program_code` and nothing else: a roll is read to
+     * find PEOPLE, so "show the name and the programme title" is the obvious next request, and
+     * both are cross-module lookups that would land per row.
+     */
+    #[Test]
+    public function the_enrolment_roll_does_not_grow_with_enrolments(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $resident = $this->existingResident(['first_name' => 'Enrol', 'last_name' => 'Ment']);
+        $residentUuid = (string) $resident->uuid;
+
+        $n = 0;
+        $addEnrolment = function () use ($residentUuid, &$n): void {
+            $n++;
+            $this->enrollmentForBudget($residentUuid, $n);
+        };
+
+        $url = '/api/v1/admin/enrollments';
+
+        $small = $this->measure($url, $addEnrolment, 1);
+        $large = $this->measure($url, $addEnrolment, 8);
+
+        $this->assertFixtureProduced(8, DB::table('program_enrollments')->count(), 'enrolments to render');
+
+        $this->assertBudget('enrolment roll', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1015,6 +1061,7 @@ final class QueryBudgetTest extends KycTestCase
                 ->whereNotIn('status', ['closed', 'declined'])->count(),
             str_contains($url, '/admin/service-providers') => DB::table('service_providers')->count(),
             str_contains($url, '/admin/visits') => DB::table('field_visits')->count(),
+            str_contains($url, '/admin/enrollments') => DB::table('program_enrollments')->count(),
             str_contains($url, '/me/cases') => DB::table('welfare_cases')->count(),
             // ── TAB 15: the endpoints TAB 07 added ────────────────────────────────
             /*

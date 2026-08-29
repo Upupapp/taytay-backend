@@ -342,3 +342,25 @@ Eight of the failures were `25P02 current transaction is aborted` — cascades o
 the same request. **Clearing a cause converts its cascades into whatever they would have been**, so
 the total moves very little while the composition improves. Errors fell from 8 to 6 across this
 pass; the honest reading is "causes fixed", not "failures reduced".
+
+### The one that mattered: the connection had no timezone
+
+**41 → 11, and 21 of those went with a single line of config.**
+
+The application runs in UTC. Laravel sends a datetime as a **naive string** in the application's
+timezone, and PostgreSQL interprets a naive string in the **session's** timezone before storing it
+in a `timestamptz`. The `pgsql` connection set no timezone, so the session inherited the server's —
+which had initialised here as `Asia/Manila`.
+
+Every timestamp was therefore written **eight hours early**. A password-reset token created to
+expire in thirty minutes was stored seven and a half hours in the past and was invalid the moment it
+was redeemed. The same shift lands on MFA codes, the retention clock, event registration windows,
+and every `occurred_at` in the audit trail.
+
+`'timezone' => env('DB_TIMEZONE', 'UTC')` on the connection fixes it, because the session then
+agrees with the application about what a naive string means.
+
+**Nothing in the suite could ever have caught this**, because SQLite has no timezone handling at
+all. And a deployment would have inherited whatever the database host happened to be set to — so
+the symptom would have depended on which machine it ran on, which is the worst kind of bug to
+diagnose from a support ticket about a reset link that "doesn't work".
