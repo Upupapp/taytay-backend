@@ -311,7 +311,10 @@ final class AuditAndPrivacyTest extends KycTestCase
             'document',
             now()->subYears(20),
             'Files.Document',
-            'unrelated-id',
+            // A uuid, because `legal_holds.entity_id` is one and PostgreSQL type-checks the
+            // comparison even in a WHERE clause. The point of the fixture is that this document is
+            // NOT the held one — a different uuid says that as clearly as a made-up string did.
+            '01a04d5a-0000-7000-8000-0000000000ff',
             $subject,
         );
 

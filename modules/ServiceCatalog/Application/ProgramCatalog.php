@@ -15,6 +15,7 @@ use Modules\ServiceCatalog\Infrastructure\Eloquent\ProgramRequirement;
 use Modules\Shared\Application\ActorContext;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
+use Modules\Shared\Support\Identifier;
 
 /**
  * Programme authoring and lookup (ADR 0018).
@@ -233,8 +234,23 @@ final class ProgramCatalog
         );
     }
 
+    /**
+     * A programme by its public UUID, or null.
+     *
+     * **Null for anything that is not a UUID at all**, rather than a 500. `GET programs/{program}`
+     * takes whatever is in the path, and a request for `programs/AICS` — a programme *code*, which
+     * is what somebody would try — sent that straight into a `uuid` comparison. PostgreSQL refuses
+     * it and the endpoint answered 500 where 404 is the truthful answer.
+     *
+     * Whether the route should also resolve a code is a separate question and deliberately not
+     * decided here. What is decided is that a malformed identifier is *not found*, not a crash.
+     */
     public function findByUuid(string $uuid): ?Program
     {
+        if (! Identifier::isUuid($uuid)) {
+            return null;
+        }
+
         /** @var Program|null $program */
         $program = Program::query()->where('uuid', $uuid)->first();
 

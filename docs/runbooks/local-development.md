@@ -312,3 +312,33 @@ about production.
 The eight `25P02 current transaction is aborted` failures are **cascades**, not causes: one earlier
 error in the same transaction poisons every statement after it. They will fall out as the causes
 above are cleared, and counting them as separate defects would overstate what is left.
+
+### The systemic pattern: a public identifier meeting a typed column
+
+Four separate 500s so far share one shape, and it is worth naming because it will recur wherever a
+new endpoint takes an identifier from the path:
+
+| Endpoint | Given | What happened |
+| --- | --- | --- |
+| `GET events/{event}` | the slug printed on a poster | 500 |
+| `GET programs/{program}` | a programme code such as `AICS` | 500 |
+| `GET documents/{handle}` | a typo, a truncated link, a probe | 500 |
+| registration by reference | the reference a resident was given | 500 |
+
+Each compared a path value against a `uuid` column. **PostgreSQL type-checks that comparison even
+when another branch of the `OR` would have matched**, so the whole statement fails. SQLite compares
+a uuid column as text and every one of these passed.
+
+The answers are wrong in two ways. A 404 is the truthful response to an identifier that names
+nothing — and a 500 additionally *tells a prober that their input reached the database*.
+
+`Modules\Shared\Support\Identifier::isUuid` is the guard: build the uuid branch only when the
+value could be one, or return "not found" before querying. It is not a decision about whether an
+endpoint should also accept a code — only that a malformed identifier is not a crash.
+
+### Why the remaining count is not a clean progress measure
+
+Eight of the failures were `25P02 current transaction is aborted` — cascades of an earlier error in
+the same request. **Clearing a cause converts its cascades into whatever they would have been**, so
+the total moves very little while the composition improves. Errors fell from 8 to 6 across this
+pass; the honest reading is "causes fixed", not "failures reduced".

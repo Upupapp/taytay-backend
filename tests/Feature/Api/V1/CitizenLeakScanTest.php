@@ -313,12 +313,21 @@ final class CitizenLeakScanTest extends KycTestCase
          * not notice.
          */
         DB::table('event_registrations')->update(['staff_notes' => 'INTERNAL: difficult at the door.']);
+        /*
+         * A REAL UUID, because these are uuid columns.
+         *
+         * This wrote `'officer-7'`, which SQLite stores as text and PostgreSQL refuses outright —
+         * so the whole scan errored on the database this system actually runs on. What the fixture
+         * needs is an internal value present in the row; which staff member it names is immaterial.
+         */
+        $officer = '01a04d5a-0000-7000-8000-00000000f007';
+
         DB::table('newsfeed_comments')->update([
             'moderation_reason' => 'INTERNAL: borderline.',
-            'moderated_by' => 'officer-7',
+            'moderated_by' => $officer,
         ]);
 
-        DB::table('welfare_cases')->update(['assigned_to' => 'officer-7']);
+        DB::table('welfare_cases')->update(['assigned_to' => $officer]);
 
         /*
          * THE POISON MUST HAVE LANDED.
@@ -329,7 +338,7 @@ final class CitizenLeakScanTest extends KycTestCase
          * would have to widen to leak, so if one is missing the scan is not testing what it
          * claims.
          */
-        $this->assertSame(1, DB::table('welfare_cases')->where('assigned_to', 'officer-7')->count());
+        $this->assertSame(1, DB::table('welfare_cases')->where('assigned_to', $officer)->count());
         $this->assertSame(1, DB::table('event_registrations')->whereNotNull('staff_notes')->count());
         $this->assertSame(1, DB::table('newsfeed_comments')->whereNotNull('moderation_reason')->count());
 
@@ -356,7 +365,9 @@ final class CitizenLeakScanTest extends KycTestCase
          * `404` body is a citizen response like any other — it carries a request id, and it must
          * not carry anything else.
          */
-        $document = (string) (DB::table('file_access_grants')->value('token') ?? 'none');
+        // The grant's identifier is `uuid`; there has never been a `token` column. SQLite let the
+        // read pass on an empty table, PostgreSQL rejects the column name outright.
+        $document = (string) (DB::table('file_access_grants')->value('uuid') ?? 'none');
 
         return [
             '/api/v1/health',

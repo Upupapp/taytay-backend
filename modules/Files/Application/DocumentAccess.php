@@ -12,6 +12,7 @@ use Modules\Shared\Application\ActorContext;
 use Modules\Shared\Exceptions\ApiException;
 use Modules\Shared\Exceptions\ErrorCode;
 use Modules\Shared\Exceptions\ResourceNotFoundException;
+use Modules\Shared\Support\Identifier;
 
 /**
  * Handing out permission to read one file, once (ADR 0020 §5).
@@ -124,6 +125,21 @@ final class DocumentAccess
      */
     public function redeem(string $handle, ActorContext $actor): array
     {
+        /*
+         * A malformed handle is NOT FOUND, not a crash.
+         *
+         * The handle arrives from the path and went straight into a `uuid` comparison, so anything
+         * that is not a uuid — a typo, a truncated link, a probe — answered 500 on PostgreSQL. That
+         * is both a worse answer than 404 and a more informative one: a 500 tells a prober their
+         * input reached the database.
+         *
+         * The refusals below already agree that expired, used, unknown and issued-to-somebody-else
+         * are all NOT FOUND. Malformed belongs in the same set.
+         */
+        if (! Identifier::isUuid($handle)) {
+            throw ResourceNotFoundException::make('That document could not be retrieved.');
+        }
+
         $grant = DB::transaction(function () use ($handle, $actor): FileAccessGrant {
             /** @var FileAccessGrant|null $grant */
             $grant = FileAccessGrant::query()->where('uuid', $handle)->lockForUpdate()->first();
