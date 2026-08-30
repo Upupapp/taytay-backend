@@ -547,6 +547,19 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('my work queue', $small, $large);
     }
 
+    private function residentForBudget(int $n): void
+    {
+        $this->postJson('/api/v1/admin/residents', [
+            'first_name' => "Budget{$n}",
+            'last_name' => 'Resident',
+            'birth_date' => '1990-01-15',
+            'sex' => 'female',
+            'civil_status' => 'single',
+            'barangay_id' => $this->barangayId(),
+            'street_address' => '12 Rizal Street',
+        ])->assertCreated();
+    }
+
     private function householdForBudget(): string
     {
         $head = (string) $this->postJson('/api/v1/admin/residents', [
@@ -1160,6 +1173,69 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('staff newsfeed list', $small, $large);
     }
 
+    /**
+     * The staff resident registry — the busiest list in the console, and one of three that a
+     * miscounted coverage tally had reported as measured while it was only a fixture target.
+     */
+    #[Test]
+    public function the_resident_registry_does_not_grow_with_residents(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $n = 0;
+        $addResident = function () use (&$n): void {
+            $n++;
+            $this->residentForBudget($n);
+        };
+
+        $url = '/api/v1/admin/residents';
+
+        $small = $this->measure($url, $addResident, 1);
+        $large = $this->measure($url, $addResident, 8);
+
+        $this->assertFixtureProduced(8, DB::table('residents')->count(), 'residents to render');
+
+        $this->assertBudget('resident registry', $small, $large);
+    }
+
+    /**
+     * The household register. Each fixture call creates a head resident AND the household, so the
+     * residents table grows alongside — which is why this counts households, not residents.
+     */
+    #[Test]
+    public function the_household_register_does_not_grow_with_households(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $url = '/api/v1/admin/households';
+
+        $small = $this->measure($url, fn () => $this->householdForBudget(), 1);
+        $large = $this->measure($url, fn () => $this->householdForBudget(), 6);
+
+        $this->assertFixtureProduced(6, DB::table('households')->count(), 'households to render');
+
+        $this->assertBudget('household register', $small, $large);
+    }
+
+    /**
+     * The staff event list — every status, unlike the public `/events` the harness already
+     * measures. Two projections behind one route again, and only one of them was covered.
+     */
+    #[Test]
+    public function the_staff_event_list_does_not_grow_with_events(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $url = '/api/v1/admin/events';
+
+        $small = $this->measure($url, fn () => $this->publishedEvent(), 1);
+        $large = $this->measure($url, fn () => $this->publishedEvent(), 6);
+
+        $this->assertFixtureProduced(6, DB::table('events')->count(), 'events to render');
+
+        $this->assertBudget('staff event list', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1269,6 +1345,13 @@ final class QueryBudgetTest extends KycTestCase
              */
             str_contains($url, '/admin/newsfeed') => DB::table('newsfeed_posts')->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
+            /*
+             * BEFORE the '/events' arm below, which "/admin/events" also matches. The staff list
+             * renders every status, so it counts all events rather than published ones — and the
+             * registrations sub-resource is unaffected because '/registrations' is matched further
+             * up.
+             */
+            str_contains($url, '/admin/events') => DB::table('events')->count(),
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
             /*
              * BEFORE the '/me/cases' arm, and note it does NOT collide with the '/requirements'
@@ -1311,6 +1394,11 @@ final class QueryBudgetTest extends KycTestCase
              */
             str_contains($url, '/admin/resident-duplicates') => DB::table('resident_duplicate_pairs')
                 ->where('decision', 'undecided')->count(),
+            // Neither collides with an arm above: "/admin/residents" is not a substring of
+            // "/admin/resident-corrections" or "/admin/resident-duplicates", and nothing matches
+            // "/admin/households". Checked rather than assumed.
+            str_contains($url, '/admin/residents') => DB::table('residents')->count(),
+            str_contains($url, '/admin/households') => DB::table('households')->count(),
             str_contains($url, '/admin/families') => DB::table('families')->count(),
             str_contains($url, '/admin/beneficiaries') => DB::table('residents')->count(),
             str_contains($url, '/admin/work/') => DB::table('tasks')->where('status', 'open')->count(),

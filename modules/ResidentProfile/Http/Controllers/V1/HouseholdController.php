@@ -75,6 +75,19 @@ final class HouseholdController
             $query->where('status', $status);
         }
 
+        /*
+         * The member count for the whole page, in one query rather than one per household.
+         *
+         * `listProjection()` derives it from open memberships every time — correct, and there is
+         * deliberately no stored count to drift — but derived PER ROW it cost a round trip each:
+         * measured 5 queries for one household and 10 for six.
+         *
+         * `FamilyController::index()` already does exactly this for the family list. The two
+         * lists mirror each other and only one of them had it, which is the surface-parity
+         * defect this codebase names in its own brief.
+         */
+        $query->withCount(['memberships as current_member_count' => fn ($q) => $q->whereNull('effective_to')]);
+
         $total = (clone $query)->count();
         $rows = $query->forPage($pagination->page, $pagination->perPage)->get();
 
@@ -372,8 +385,15 @@ final class HouseholdController
             'barangay_code' => $this->barangayCodes->codeFor($household->barangay_id),
             'street_address' => $household->street_address,
             'purok_or_sitio' => $household->purok_or_sitio,
-            // Derived from open memberships every time. There is no stored count to drift.
-            'member_count' => $household->currentMemberCount(),
+            /*
+             * Derived from open memberships every time — there is no stored count to drift.
+             *
+             * The alias comes from the `withCount` on the LIST query. The fallback is for the
+             * single-household callers below, which render one row and for which one extra query
+             * is the right cost. On a page the alias is always present, and `the_household_
+             * register_does_not_grow_with_households` fails if that stops being true.
+             */
+            'member_count' => (int) ($household->current_member_count ?? $household->currentMemberCount()),
             'verification_status' => $household->verification_status,
             'status' => $household->status,
         ];
