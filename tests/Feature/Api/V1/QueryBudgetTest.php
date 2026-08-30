@@ -92,9 +92,16 @@ use PHPUnit\Framework\Attributes\Test;
  *    `/admin/privacy` registers), a PHP enum (`/admin/reports`), a single record plus config
  *    (`/privacy/notice`), or a handful of fixed `count()` queries (`/admin/newsfeed-metrics`).
  *  * **Bounded by the domain** — a closed vocabulary (`/me/privacy/consents`, four purposes),
- *    a one-open-membership invariant (`/admin/residents/{id}/families`), a `limit(200)` cap
- *    (`/me/assistance-history`), or a page scoped to ONE subject: one event's history, one
- *    post's history, one family, one programme's templates.
+ *    a one-open-membership invariant (`/admin/residents/{id}/families`), or a `limit(200)` cap
+ *    (`/me/assistance-history`).
+ *
+ *    **"Scoped to one subject" is NOT a reason, and it was the reason first written here.** One
+ *    event's history can have hundreds of rows; a per-row query in it is an N+1 like any other.
+ *    The single-subject pages — one event's history, one post's history, one family, one
+ *    programme's templates, a resident's duplicate findings, an event's registration summary —
+ *    are excluded because each was re-read and none does per-row work. The findings page in fact
+ *    batches explicitly, with `Resident::whereIn(...)->pluck('uuid', 'id')` for the whole set,
+ *    and the summary is a fixed set of aggregates for one event.
  *  * **Already batched, verifiably** — `/admin/residents/{id}/kinship-history` resolves every
  *    family in one `whereIn`; `/me/event-registrations` resolves its events the same way;
  *    `/admin/work/team` is a single grouped query and `/admin/work/alerts` returns at most two
