@@ -27,6 +27,8 @@ supersede it with a new one and update the status here.
 | [0045](0045-the-barangay-eligibility-fact-is-a-code.md) | The barangay eligibility fact is the published code, never the auto-increment key; criterion values are validated against the directory | Accepted |
 | [0046](0046-pushing-to-main-is-authorised.md) | Pushing to `main` is authorised by the owner; Article 9 amended to agree with the admin console's rule rather than contradict it | Accepted |
 | [0047](0047-the-second-optimisation-sweep.md) | The second optimisation sweep: four defects found by measuring, none by reading; three of its own exclusion reasons failed on inspection | Accepted |
+| [0048](0048-an-exclusion-must-be-a-floor.md) | An exclusion from the query budgets must be a bound the endpoint cannot exceed, never a reading of the current code; coverage 31 -> 36 of 44, and one of the five was an N+1 | Accepted |
+| [0049](0049-a-role-was-not-in-force-when-it-was-granted.md) | A role granted during the current second was not in force: the clock was bound without its microseconds, over a column PostgreSQL rounded UP | Accepted |
 
 An ADR is required when a change alters a module boundary, an API convention, an
 authentication/authorization model, a persistence source of truth, or a lifecycle state

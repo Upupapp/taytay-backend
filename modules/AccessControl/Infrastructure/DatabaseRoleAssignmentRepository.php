@@ -66,7 +66,7 @@ final class DatabaseRoleAssignmentRepository implements RoleAssignmentRepository
      */
     public function grantedBarangayIdsFor(string $subjectId): array
     {
-        $now = now();
+        $now = self::instant();
 
         return array_values(array_map('intval', $this->connection->table('staff_barangay_grants')
             ->where('subject_id', $subjectId)
@@ -91,7 +91,7 @@ final class DatabaseRoleAssignmentRepository implements RoleAssignmentRepository
             return [];
         }
 
-        $now = now();
+        $now = self::instant();
         $authority = [];
 
         $assignmentRows = $this->connection->table('role_assignments')
@@ -137,9 +137,34 @@ final class DatabaseRoleAssignmentRepository implements RoleAssignmentRepository
         return $authority;
     }
 
+    /**
+     * THE CLOCK, WITH ITS MICROSECONDS INTACT.
+     *
+     * Binding a Carbon here loses them. Laravel serialises a timestamp with the connection's date
+     * format -- `Y-m-d H:i:s` -- so `valid_from <= now()` compiles to "at or before the START of
+     * the current second", and a role granted at .84 past the second is invisible for the rest of
+     * it. The holder is refused a permission they demonstrably hold.
+     *
+     * It fails closed, which is the safe direction and still wrong. The fix is to compare at the
+     * precision the column stores, never to loosen the comparison: a `<` that tolerated a future
+     * `valid_from` would admit a grant that has not started yet, which is the opposite defect and
+     * a worse one.
+     *
+     * Invisible on SQLite, where the stored value is text without a fractional part and the
+     * comparison is lexicographic, so the shorter stored string sorts before this one and the row
+     * matches. Real on PostgreSQL. See the migration that gave these columns sub-second precision:
+     * BOTH halves are required, and the precision alone makes it worse rather than better --
+     * rounding to whole seconds failed about half the time, and an exact microsecond `valid_from`
+     * against a truncated bound fails every time.
+     */
+    private static function instant(): string
+    {
+        return now()->format('Y-m-d H:i:s.u');
+    }
+
     private function liveAssignments(string $subjectId): Builder
     {
-        $now = now();
+        $now = self::instant();
 
         return $this->connection->table('role_assignments')
             ->where('subject_id', $subjectId)
