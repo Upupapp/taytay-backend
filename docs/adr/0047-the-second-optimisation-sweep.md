@@ -9,9 +9,9 @@
 
 ## Context
 
-ADR 0042 built the query-budget harness after the first sweep and pointed it at six endpoints. A
-year of features later this asked the obvious question — what is still unmeasured — and answered
-it by measuring rather than by reading.
+ADR 0042 built the query-budget harness after the first sweep and pointed it at four endpoints,
+across five measurements. Eleven days and a good deal of feature work later, this asked the
+obvious question — what is still unmeasured — and answered it by measuring rather than reading.
 
 **Four defects, on four screens people work through in bulk.**
 
