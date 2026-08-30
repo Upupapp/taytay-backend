@@ -74,6 +74,11 @@ have caught it is a budget on both halves, not a rule about writing them togethe
 examined: config-backed catalogues, an enum, single-subject pages that do no per-row work, two
 that batch explicitly, one capped by a domain invariant, and one closed four-value vocabulary.
 
+> **Superseded by ADR 0048 — the figure is now 36 of 44.** Five of those 13 were excluded on
+> reasons of the form "it does no per-row work", which describes an implementation rather than a
+> bound, and one of the five was an N+1. The sentence above is left as written because it is the
+> record of what this sweep concluded; it is not the current count.
+
 **The denominator was 54 in the first version of this ADR, and 54 was wrong.** It came from a
 scan that read a fixed 4000-character window from each handler, which overruns into the next
 method — so ten `ApiResponse::item` endpoints were counted as paginating because a NEIGHBOUR
@@ -130,6 +135,11 @@ so the next person inherits a list of questions already answered rather than a c
   500ed the entire export feature in production: `report_exports.stored_file_id` was typed `uuid`
   while holding a storage path, which SQLite's dynamic typing accepts and PostgreSQL refuses.
   A budget cannot see that class either — the driver can.
-* **Nothing yet makes the PostgreSQL run happen again.** It is a command someone must remember,
-  which is the same shape of gap as an unmeasured endpoint. A gate is the open item; the runtime
-  is not.
+* **CLOSED by ADR 0050.** This said the open item was a gate, and it now exists:
+  `composer check:pg` provisions a throwaway cluster, runs the full suite against it, and removes
+  it, in about thirty seconds. Article 7 requires it before a push, and it FAILS rather than
+  skipping when no PostgreSQL is installed. It is proven to catch what SQLite cannot: with ADR
+  0049's migration reverted, `composer test` passes and `composer test:pg` fails.
+* The count in the row above is now **six** rather than five — ADR 0049 added one, a role that was
+  not in force at the instant it was granted, found because a test PASSED IN THE FULL SUITE AND
+  FAILED IN ISOLATION on PostgreSQL. That asymmetry is a finding, not a flake.

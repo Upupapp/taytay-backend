@@ -169,6 +169,15 @@ A change is done when:
 4. `vendor/bin/pint --test` passes.
 5. Docs updated when a boundary, convention or decision changed; material decisions get
    an ADR in `docs/adr/`.
+6. **Before a push, `composer check:pg` passes.** The suite runs on SQLite and production
+   runs on PostgreSQL, and that gap has produced six defects a fully green SQLite suite
+   could not see — an export feature that 500ed in production, a lost idempotency race on
+   the money-write path, a QR nonce replay answering 500, and a role that was not in force
+   at the instant it was granted. Every one was found by running against PostgreSQL once.
+   Once is the problem: `scripts/postgres-suite.sh` provisions a throwaway cluster, runs
+   the suite, and removes it, so this needs no standing server. It **fails** rather than
+   skipping when no PostgreSQL is installed — a green gate is a claim that the code met the
+   real engine, and skipping would make that claim falsely. Decided in ADR 0050.
 
 ---
 

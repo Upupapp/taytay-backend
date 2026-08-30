@@ -51,6 +51,11 @@
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"
         ],
+        "test:pg": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan config:clear --ansi @no_additional_args",
+            "./scripts/postgres-suite.sh"
+        ],
         "lint": [
             "@php vendor/bin/pint --test"
         ],
@@ -60,6 +65,10 @@
         "check": [
             "@composer lint",
             "@composer test"
+        ],
+        "check:pg": [
+            "@composer lint",
+            "@composer test:pg"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
