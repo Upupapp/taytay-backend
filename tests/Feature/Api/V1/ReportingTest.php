@@ -7,6 +7,7 @@ namespace Tests\Feature\Api\V1;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Modules\Identity\Infrastructure\Eloquent\Account;
 use Modules\Reporting\Application\MetricsService;
@@ -389,9 +390,12 @@ final class ReportingTest extends KycTestCase
         $admin = $this->admin();
         Sanctum::actingAs($admin);
 
+        // A real uuid: `batch_id` is compared against a uuid column, and 'some-batch' is now a 422.
+        $batchId = (string) Str::uuid7();
+
         $this->postJson('/api/v1/admin/exports', [
             'report' => 'release-manifest',
-            'filters' => ['batch_id' => 'some-batch'],
+            'filters' => ['batch_id' => $batchId],
         ])->assertCreated();
 
         $row = ReportExport::query()->firstOrFail();
@@ -403,7 +407,7 @@ final class ReportingTest extends KycTestCase
          */
         $this->assertContains('report.export-person-level', $row->permission_context['permissions']);
         $this->assertArrayHasKey('scope', $row->permission_context);
-        $this->assertSame('some-batch', $row->filters['batch_id']);
+        $this->assertSame($batchId, $row->filters['batch_id']);
     }
 
     #[Test]

@@ -103,8 +103,22 @@ final class IdempotencyService
          * exists to prevent. The unique index is the real arbiter: two racing claims mean one
          * insert fails, and that caller is told to retry rather than allowed to proceed.
          */
+        /*
+         * WRAPPED SO THE FAILURE IS SURVIVABLE, which is a PostgreSQL requirement and not a
+         * style choice.
+         *
+         * A losing insert violates the unique index, and on PostgreSQL that ABORTS the enclosing
+         * transaction: every later statement answers `25P02 current transaction is aborted`, so
+         * the 409 below cannot be rendered and the caller gets a 500 instead. SQLite has no such
+         * rule, and the suite runs on SQLite, so two tests asserted a clean 409 for as long as
+         * this code has existed while production would have answered 500 to the same request.
+         *
+         * A nested `DB::transaction()` is a SAVEPOINT when one is already open, so the rollback
+         * undoes only the failed insert. Outside a transaction it is an ordinary committed write,
+         * which is what the comment above requires.
+         */
         try {
-            DB::table('idempotency_keys')->insert([
+            DB::transaction(fn () => DB::table('idempotency_keys')->insert([
                 'uuid' => (string) Str::uuid7(),
                 'idempotency_key' => $key,
                 'subject_id' => $subjectId,
@@ -114,7 +128,7 @@ final class IdempotencyService
                 'expires_at' => now()->addHours(self::RETENTION_HOURS),
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ]));
         } catch (\Throwable) {
             // Lost the race to insert. The winner is executing; this caller must not.
             throw new ApiException(

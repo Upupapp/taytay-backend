@@ -171,8 +171,26 @@ final class CredentialService
          * simultaneous scans of the same photographed code must not both succeed, and only
          * the database can arbitrate that race.
          */
+        /*
+         * WRAPPED IN A SAVEPOINT, because the catch below WRITES.
+         *
+         * On PostgreSQL a unique-index violation aborts the enclosing transaction, so the
+         * `Replayed` record in the catch answers `25P02 current transaction is aborted` and the
+         * verifier gets a 500 instead of "this code has already been used". SQLite has no such
+         * rule, and the suite runs on SQLite, so the replay test asserted the correct outcome for
+         * as long as this code has existed while production would have failed the same scan.
+         *
+         * A nested `DB::transaction()` is a SAVEPOINT when a transaction is already open, so the
+         * losing insert rolls back to it and the connection stays usable. The unique index is
+         * still the arbiter — that design is unchanged and is right.
+         */
         try {
-            $this->recordVerification($credential, VerificationOutcome::Valid, $decoded['nonce'], $verifierSubjectId);
+            DB::transaction(fn () => $this->recordVerification(
+                $credential,
+                VerificationOutcome::Valid,
+                $decoded['nonce'],
+                $verifierSubjectId,
+            ));
         } catch (QueryException) {
             $this->recordVerification($credential, VerificationOutcome::Replayed, null, $verifierSubjectId);
 

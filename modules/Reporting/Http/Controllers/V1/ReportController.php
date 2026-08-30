@@ -121,6 +121,22 @@ final class ReportController
             'report' => ['required', 'string', 'in:'.implode(',', ReportCatalog::values())],
             'format' => ['sometimes', 'string', 'in:csv'],
             'filters' => ['sometimes', 'array'],
+            /*
+             * THE UUID FILTERS ARE VALIDATED AS UUIDS, because they reach a uuid COLUMN.
+             *
+             * `filters` was checked as an array and nothing more, so `batch_id => 'some-batch'`
+             * was accepted, stored, and compared against a uuid column by the export job.
+             * PostgreSQL answers `invalid input syntax for type uuid` and the request 500s;
+             * SQLite compares it as text and quietly returns nothing. Production is PostgreSQL,
+             * so a client sending a malformed id got a server error where it should have been
+             * told its input was wrong.
+             *
+             * 422 is the honest answer: the caller can act on it, and it never reaches the query.
+             */
+            'filters.batch_id' => ['sometimes', 'uuid'],
+            'filters.program_id' => ['sometimes', 'uuid'],
+            'filters.resident_id' => ['sometimes', 'uuid'],
+            'filters.barangay_id' => ['sometimes', 'integer'],
         ]);
 
         $report = ReportCatalog::from($validated['report']);
