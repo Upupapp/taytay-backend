@@ -70,12 +70,19 @@ have caught it is a budget on both halves, not a rule about writing them togethe
 
 ## 4. Coverage, and why the raw number misleads
 
-**31 of the 54 endpoints that call `ApiResponse::page` have a budget.** The other 23 were each
-examined: config registers and enums with no rows to grow, pages bounded by a domain invariant or
-a `limit`, and already-batched queries.
+**31 of the 44 endpoints that call `ApiResponse::page` have a budget.** The other 13 were each
+examined: config-backed catalogues, an enum, single-subject pages that do no per-row work, two
+that batch explicitly, one capped by a domain invariant, and one closed four-value vocabulary.
 
-**Three corrections are part of this record, because each changed what got done — and the third
-was made an hour after this ADR was first published, against its own claims:**
+**The denominator was 54 in the first version of this ADR, and 54 was wrong.** It came from a
+scan that read a fixed 4000-character window from each handler, which overruns into the next
+method — so ten `ApiResponse::item` endpoints were counted as paginating because a NEIGHBOUR
+called `page`. Re-derived with balanced-brace parsing of each method body: 44. This correction
+flatters the result, moving coverage from 57% to 70%, which is precisely why it is stated here
+rather than quietly applied.
+
+**Four corrections are part of this record, because each changed what got done — and the last two
+were made after this ADR was first published, against its own claims:**
 
 * An earlier figure of 29 was reached by grepping every `/api/v1/…` string in the harness, which
   counts **fixture targets** as measured. The true figure at that moment was 25 — and
@@ -84,6 +91,10 @@ was made an hour after this ADR was first published, against its own claims:**
 * Six pages were excluded as "scoped to one subject". That is not a bound — one event's history
   can have hundreds of rows. Each was re-read against the real question, and none does per-row
   work; the conclusion held and the reasoning did not.
+* The denominator itself was wrong: 54 endpoints "call `ApiResponse::page`" only if you read a
+  fixed window past the end of each method. Ten of them are `item` handlers whose neighbour
+  paginates. Parse the body, do not window it — the same class of error as counting fixture
+  targets, one level up.
 * The audit endpoints were excluded because reading the trail WRITES to it (`audit.searched`), so
   a budget fixture would grow the table it counts. True, and not a reason: the extra row is one
   per request whether the page holds two entries or twelve, so it lands in both samples and

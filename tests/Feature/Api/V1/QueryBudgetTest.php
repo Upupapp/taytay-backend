@@ -70,7 +70,13 @@ use PHPUnit\Framework\Attributes\Test;
  *
  * ── WHERE COVERAGE ACTUALLY STANDS ──────────────────────────────────────────────────
  *
- * **26 of the 54 endpoints that call `ApiResponse::page` have a budget.**
+ * **31 of the 44 endpoints that call `ApiResponse::page` have a budget.**
+ *
+ * **AND PARSE THE HANDLER BODY, DO NOT WINDOW IT.** The denominator was 54 for most of this
+ * sweep and is 44: the scan that produced it read a fixed 4000 characters from each handler,
+ * which runs past the end of the method, so ten `ApiResponse::item` endpoints were counted as
+ * paginating because a NEIGHBOUR called `page`. Balanced-brace parsing of each body gives 44.
+ * Same class of error as the one below, one level up — a window is not a scope.
  *
  * **COUNT THE `measure()` CALLS, NOT THE URLS IN THIS FILE.** An earlier tally said 29 and was
  * wrong: it was built by grepping every `/api/v1/...` string here, which counts FIXTURE TARGETS
