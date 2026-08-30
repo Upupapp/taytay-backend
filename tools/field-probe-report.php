@@ -41,6 +41,29 @@ declare(strict_types=1);
  *
  * The strongest signals are fields whose sibling endpoints DO populate them, which is why the
  * report groups by field as well as by endpoint.
+ *
+ * ── THE FIRST FULL RUN, AND WHAT IT SETTLED ──────────────────────────────────────────
+ *
+ * 2160 endpoint/field pairs, 166 fields never once non-null, 106 of them populated on one
+ * endpoint and never on a sibling — which is the shape the moderation defect had.
+ *
+ * **Intersected with what this class can actually be, that reduces to two.** A field can only
+ * exhibit it if a PROJECTION renders it from a relation that something must have loaded.
+ * Everything else in the list is one of:
+ *
+ *   * input defaulting on a WRITE path (`$attributes['note'] ?? null`) — not a projection;
+ *   * an enum read (`$case->status->value`) — cannot be unloaded;
+ *   * a plain column (`$referral->outcome`) — if the column is set, the field is set;
+ *   * a nullable field no fixture happens to populate.
+ *
+ * The two that survive are `report_reasons`, which WAS the defect and is fixed, and `media`,
+ * which was checked by publishing a post with an image and listing it — it fills.
+ *
+ * **So run this after adding an endpoint or a projection, not as a routine sweep.** Its value is
+ * highest when the code has just changed; on a settled codebase it mostly reports fixtures.
+ * `grep -rn "relationLoaded(" modules/` finds the same class in one line and is the cheaper
+ * first move — this probe is what catches the case where the guard is a `??` or a relation
+ * property rather than an explicit `relationLoaded`.
  */
 $path = __DIR__.'/../storage/framework/testing/field-probe.tsv';
 
