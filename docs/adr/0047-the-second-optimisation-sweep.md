@@ -70,12 +70,12 @@ have caught it is a budget on both halves, not a rule about writing them togethe
 
 ## 4. Coverage, and why the raw number misleads
 
-**29 of the 54 endpoints that call `ApiResponse::page` have a budget.** The other 25 were each
+**31 of the 54 endpoints that call `ApiResponse::page` have a budget.** The other 23 were each
 examined: config registers and enums with no rows to grow, pages bounded by a domain invariant or
-a `limit`, already-batched queries, and the audit endpoints, which write an entry on every read
-and would perturb their own measurement.
+a `limit`, and already-batched queries.
 
-Two counting corrections are part of the record because both changed what got done:
+**Three corrections are part of this record, because each changed what got done — and the third
+was made an hour after this ADR was first published, against its own claims:**
 
 * An earlier figure of 29 was reached by grepping every `/api/v1/…` string in the harness, which
   counts **fixture targets** as measured. The true figure at that moment was 25 — and
@@ -84,6 +84,13 @@ Two counting corrections are part of the record because both changed what got do
 * Six pages were excluded as "scoped to one subject". That is not a bound — one event's history
   can have hundreds of rows. Each was re-read against the real question, and none does per-row
   work; the conclusion held and the reasoning did not.
+* The audit endpoints were excluded because reading the trail WRITES to it (`audit.searched`), so
+  a budget fixture would grow the table it counts. True, and not a reason: the extra row is one
+  per request whether the page holds two entries or twelve, so it lands in both samples and
+  cancels out of the SLOPE. `assertBudget` compares two measurements and never asserts an absolute
+  number — the first thing the harness docblock says. **The exclusion contradicted the premise of
+  the file it was written in.** Both are measured now, both flat, and this ADR said they had no
+  guard for about an hour.
 
 **Count `measure()` calls, not URLs.** The harness docblock says so and gives the command.
 
@@ -96,8 +103,11 @@ so the next person inherits a list of questions already answered rather than a c
 
 ## Consequences
 
-* A per-row query on any of the 29 measured endpoints now fails the suite.
+* A per-row query on any of the 31 measured endpoints now fails the suite.
 * The four defects are fixed and published.
-* **The unmeasured set is not a clean bill.** The audit endpoints have no guard, and every budget
-  runs against SQLite — `ReleaseConcurrencyTest` is still skipped for the same reason, and no
-  Docker runtime exists on the machine this was done on. Both are open, not solved.
+* **The unmeasured set is not a clean bill**, and the reasons in it deserve more scepticism than
+  the conclusions. Three exclusions written during this sweep failed on inspection — "scoped to
+  one subject", a coverage tally that counted fixture targets, and the audit endpoints above.
+  Each was plausible; none survived being checked.
+* **Every budget runs against SQLite.** `ReleaseConcurrencyTest` is still skipped for the same
+  reason, and no Docker runtime exists on the machine this was done on. That is open, not solved.
