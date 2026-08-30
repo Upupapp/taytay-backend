@@ -32,6 +32,11 @@ use Modules\Shared\Exceptions\ErrorCode;
  *
  * ── ROLLBACK ──────────────────────────────────────────────────────────────────────────
  *
+ * **The `$create` callback MUST return the new entity's UUID.** `import_rows.created_entity_id`
+ * is a `uuid` column; PostgreSQL rejects anything else outright and SQLite silently accepts it,
+ * so a caller returning some other identifier passes every local test and fails in production.
+ * There is no production caller yet — the first one inherits this contract.
+ *
  * Every committed row records the entity it created (`created_entity_id`), so an import can be
  * undone by walking the batch rather than by guessing which records arrived when. That is a
  * *compensating* plan rather than a database rollback: by the time somebody wants it, the

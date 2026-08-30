@@ -7,6 +7,7 @@ namespace Tests\Feature\Database;
 use Database\Seeders\DemoDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Modules\Shared\Import\ImportPipeline;
 use Modules\Shared\Import\RowMapper;
 use PHPUnit\Framework\Attributes\Test;
@@ -316,8 +317,18 @@ final class SeedAndImportTest extends TestCase
 
         $created = [];
 
+        /*
+         * A REAL UUID, because `import_rows.created_entity_id` is a `uuid` column and every entity
+         * this pipeline can create is uuid-identified (Article 4).
+         *
+         * This returned `'entity-'.$row['source_id']` and passed, because SQLite stores any string
+         * in a column declared `uuid`. On PostgreSQL — which is what production runs — the commit
+         * fails with `invalid input syntax for type uuid: "entity-L-1"`, so the test was teaching
+         * the opposite of the contract the schema enforces. The pipeline has no production caller
+         * yet; the first one would have inherited that lesson from here.
+         */
         $outcome = $pipeline->commit($batch, static function (array $row) use (&$created): string {
-            $id = 'entity-'.$row['source_id'];
+            $id = (string) Str::uuid7();
             $created[] = $id;
 
             return $id;
