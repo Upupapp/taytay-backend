@@ -59,8 +59,25 @@ abstract class TestCase extends BaseTestCase
             return;
         }
 
-        // The path without ids, so every call to one endpoint aggregates together.
-        $endpoint = preg_replace('~/[0-9a-f]{8}-[0-9a-f-]{27,}~i', '/{id}', parse_url($uri, PHP_URL_PATH) ?? $uri);
+        /*
+         * THE ROUTE TEMPLATE, so every call to one endpoint aggregates together.
+         *
+         * Taken from the router rather than munged out of the URL. The regex below collapses a
+         * UUID and nothing else, so `/events/barangay-feeding-programme-48hgqy` stayed unique --
+         * and because that slug carries a random suffix, every run produced FRESH keys for those
+         * endpoints. Their fields could never aggregate, and two runs could not be compared: the
+         * first PostgreSQL-versus-SQLite diff showed 33 pairs "differing" on each side, which
+         * were the same fields under different slugs.
+         *
+         * The router knows the answer exactly -- `api/v1/events/{event}` -- so ask it, and keep
+         * the regex as a fallback for anything dispatched outside a matched route.
+         */
+        $path = parse_url($uri, PHP_URL_PATH) ?? $uri;
+        $route = app('router')->current();
+
+        $endpoint = $route !== null
+            ? '/'.ltrim($route->uri(), '/')
+            : preg_replace('~/[0-9a-f]{8}-[0-9a-f-]{27,}~i', '/{id}', $path);
 
         $rows = $decoded['data'];
         $rows = array_is_list($rows) ? $rows : [$rows];

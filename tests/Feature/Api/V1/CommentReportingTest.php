@@ -236,6 +236,54 @@ final class CommentReportingTest extends KycTestCase
 
     // ── the report has to reach a person ──────────────────────────────────────────────
 
+    /**
+     * THE SAME FIELD, ON THE SIBLING ENDPOINT.
+     *
+     * `moderatorProjection()` renders `report_reasons` only when the `reports` relation is loaded
+     * and `report_count` from a `reports_count` aggregate, falling back to null and 0. The queue
+     * loads both; `moderate()` loads neither, so the response a moderator gets back the moment
+     * they ACT on a comment said it had no reports and no reasons -- for a comment they were
+     * looking at precisely because it had been reported twice.
+     *
+     * Found by the field probe on PostgreSQL: `report_reasons` was non-null on
+     * `/admin/newsfeed-comments` and never once non-null across six observations of
+     * `/admin/newsfeed-comments/{comment}/moderation`. That asymmetry between two projections
+     * sharing one method is the mirrored-pair class ADR 0047 names -- a fix that stopped halfway.
+     */
+    #[Test]
+    public function moderating_a_comment_returns_how_many_reported_it_and_why(): void
+    {
+        [$comment] = $this->commentByAnother();
+
+        foreach (['abusive', 'spam'] as $reason) {
+            [$reporter] = $this->activeCitizenWithResident();
+            Sanctum::actingAs($reporter);
+            $this->postJson("/api/v1/newsfeed-comments/{$comment}/reports", ['reason' => $reason])
+                ->assertStatus(202);
+        }
+
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $row = $this->postJson("/api/v1/admin/newsfeed-comments/{$comment}/moderation", [
+            'moderation_state' => 'hidden',
+            'reason' => 'Abusive towards another resident.',
+        ])->assertOk()->json('data');
+
+        $this->assertSame(2, $row['report_count'], 'The moderation response under-reported how many people objected.');
+
+        // Sorted before comparing: the projection dedupes with `array_unique` over whatever order
+        // the rows arrive in, and asserting an accidental order would fail on another database.
+        $reasons = $row['report_reasons'];
+        $this->assertIsArray($reasons, 'report_reasons came back null -- the `reports` relation was never loaded.');
+        sort($reasons);
+        $this->assertSame(['abusive', 'spam'], $reasons);
+
+        // The identities stay out of it here exactly as they do on the queue.
+        $encoded = json_encode($row);
+        $this->assertIsString($encoded);
+        $this->assertStringNotContainsString('reporter', $encoded);
+    }
+
     #[Test]
     public function the_moderation_queue_can_ask_for_what_residents_reported(): void
     {

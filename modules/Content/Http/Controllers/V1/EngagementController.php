@@ -242,16 +242,27 @@ final class EngagementController
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
-        return ApiResponse::item($this->moderatorProjection(
-            $this->engagement->moderate(
-                $model,
-                ModerationState::from($validated['moderation_state']),
-                $validated['reason'] ?? null,
-                $actor,
-            ),
-            null,
-            $actor->subjectId,
-        ));
+        $moderated = $this->engagement->moderate(
+            $model,
+            ModerationState::from($validated['moderation_state']),
+            $validated['reason'] ?? null,
+            $actor,
+        );
+
+        /*
+         * LOADED, because `moderatorProjection()` renders `report_count` from a `reports_count`
+         * aggregate and `report_reasons` only when the relation IS loaded -- falling back to 0 and
+         * null otherwise. The queue loads both and this path loaded neither, so the response a
+         * moderator got back the moment they acted said the comment had no reports at all, for a
+         * comment they were looking at precisely because it had been reported.
+         *
+         * The same defect ADR 0047 fixed on the queue, surviving on the sibling that shares the
+         * projection -- the mirrored-pair class, where a fix stops halfway. Found by the field
+         * probe: never once non-null here across six observations, while non-null on the queue.
+         */
+        $moderated->loadCount('reports')->load('reports');
+
+        return ApiResponse::item($this->moderatorProjection($moderated, null, $actor->subjectId));
     }
 
     // ── projections ───────────────────────────────────────────────────────────────────

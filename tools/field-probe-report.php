@@ -42,10 +42,27 @@ declare(strict_types=1);
  * The strongest signals are fields whose sibling endpoints DO populate them, which is why the
  * report groups by field as well as by endpoint.
  *
- * ── THE FIRST FULL RUN, AND WHAT IT SETTLED ──────────────────────────────────────────
+ * ── THE RUNS SO FAR, AND WHAT THEY SETTLED ───────────────────────────────────────────
  *
- * 2160 endpoint/field pairs, 166 fields never once non-null, 106 of them populated on one
- * endpoint and never on a sibling — which is the shape the moderation defect had.
+ * The first full run reported "2160 pairs, 166 fields never once non-null, 106 of them populated
+ * on one endpoint and never on a sibling". **The middle number was mislabelled**: 166 was the
+ * count of fields null on AT LEAST ONE endpoint. Only 60 were never non-null anywhere, and the
+ * other 106 were the asymmetric ones — which the prose already called the strongest signal while
+ * the output ranked everything together and cut the list at thirty by raw volume. A
+ * six-observation asymmetry therefore sat far below fields null two hundred times. Fixed; the two
+ * populations are now counted and printed separately, asymmetries first.
+ *
+ * **The second run was on PostgreSQL, and found the defect that mislabelling had hidden.**
+ * `report_reasons` was non-null on the moderation QUEUE and never once non-null across six
+ * observations of the moderation ACTION: `moderatorProjection()` is shared by both, the queue
+ * loaded the `reports` relation and the action did not, so the response a moderator received the
+ * instant they acted reported zero reports and no reasons for a comment reported twice. The same
+ * defect this tool was built for, on the sibling endpoint — the mirrored-pair class of ADR 0047.
+ *
+ * **The PostgreSQL and SQLite runs are otherwise identical**, to the pair: 35965 observations,
+ * 2101 pairs, 60 never-non-null fields, 478 never-non-null pairs, and zero differences either
+ * way. This class of defect is not driver-sensitive, which is worth knowing before running it
+ * twice again.
  *
  * **Intersected with what this class can actually be, that reduces to two.** A field can only
  * exhibit it if a PROJECTION renders it from a relation that something must have loaded.
@@ -56,8 +73,10 @@ declare(strict_types=1);
  *   * a plain column (`$referral->outcome`) — if the column is set, the field is set;
  *   * a nullable field no fixture happens to populate.
  *
- * The two that survive are `report_reasons`, which WAS the defect and is fixed, and `media`,
- * which was checked by publishing a post with an image and listing it — it fills.
+ * The two that survived were `report_reasons`, which WAS the defect, and `media`, which was
+ * checked by publishing a post with an image and listing it — it fills. `report_reasons` needed
+ * fixing TWICE, on two endpoints sharing one projection, and the second was found only after the
+ * output stopped burying asymmetries.
  *
  * **So run this after adding an endpoint or a projection, not as a routine sweep.** Its value is
  * highest when the code has just changed; on a settled codebase it mostly reports fixtures.
@@ -101,7 +120,57 @@ foreach ($seen as $key => [$nonNull, $total]) {
     }
 }
 
-printf("%d endpoint/field pairs observed; %d fields never once non-null.\n\n", count($seen), count($alwaysNull));
+/*
+ * THE ASYMMETRIC ONES FIRST, because that is the defect's shape and the flat list buried it.
+ *
+ * A field that is populated on one endpoint and never on another is a much sharper question than
+ * one that is null everywhere: the second is usually a fixture gap, the first means two
+ * projections of the same thing disagree. `report_reasons` was exactly this -- non-null on the
+ * moderation QUEUE and never once non-null across six observations of the moderation ACTION,
+ * because the queue loaded the relation and the action did not.
+ *
+ * It was findable in the old output and nobody found it, which is the point. The headline said
+ * "fields never once non-null" while counting fields null on AT LEAST ONE endpoint -- two
+ * different numbers, 60 and 166 -- and the list was cut at the top 30 by raw observation count,
+ * so a six-observation asymmetry sat far below the fold behind fields null two hundred times.
+ * Volume is not severity.
+ */
+$populatedSomewhere = [];
+
+foreach ($seen as $key => [$nonNull, $total]) {
+    if ($nonNull > 0) {
+        [, $field] = explode("\t", $key);
+        $populatedSomewhere[$field] = true;
+    }
+}
+
+$asymmetric = array_intersect_key($alwaysNull, $populatedSomewhere);
+$neverAnywhere = array_diff_key($alwaysNull, $populatedSomewhere);
+
+printf(
+    "%d endpoint/field pairs observed.\n  %d fields never non-null ANYWHERE.\n  %d fields populated on one endpoint and never on another.\n\n",
+    count($seen),
+    count($neverAnywhere),
+    count($asymmetric),
+);
+
+if ($asymmetric !== []) {
+    echo "── populated elsewhere, never here — read these first ──\n\n";
+
+    uasort($asymmetric, static fn (array $a, array $b): int => array_sum(array_column($b, 1)) <=> array_sum(array_column($a, 1)));
+
+    foreach ($asymmetric as $field => $rows) {
+        printf("  %-28s null on %d endpoint(s)\n", $field, count($rows));
+
+        foreach ($rows as [$endpoint, $total]) {
+            printf("      %-52s %dx\n", $endpoint, $total);
+        }
+    }
+
+    echo "\n── null everywhere the suite looked ──\n\n";
+}
+
+$alwaysNull = $neverAnywhere;
 
 /*
  * Sorted by how often the field was OBSERVED null, because a field null across two hundred
