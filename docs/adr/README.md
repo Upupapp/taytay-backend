@@ -30,6 +30,7 @@ supersede it with a new one and update the status here.
 | [0048](0048-an-exclusion-must-be-a-floor.md) | An exclusion from the query budgets must be a bound the endpoint cannot exceed, never a reading of the current code; coverage 31 -> 36 of 44, and one of the five was an N+1 | Accepted |
 | [0049](0049-a-role-was-not-in-force-when-it-was-granted.md) | A role granted during the current second was not in force: the clock was bound without its microseconds, over a column PostgreSQL rounded UP | Accepted |
 | [0050](0050-the-suite-runs-on-the-engine-production-uses.md) | `composer check:pg` runs the suite against a throwaway PostgreSQL cluster and Article 7 requires it before a push; six defects came from running it once | Accepted |
+| [0051](0051-the-now-binding-audit.md) | Auditing the other 15 `now()` comparisons: none is a defect, because the class needs a database-written column — and the schema now guards that precondition | Accepted |
 
 An ADR is required when a change alters a module boundary, an API convention, an
 authentication/authorization model, a persistence source of truth, or a lifecycle state
