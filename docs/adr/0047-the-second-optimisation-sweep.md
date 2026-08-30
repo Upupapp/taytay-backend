@@ -120,5 +120,16 @@ so the next person inherits a list of questions already answered rather than a c
   the conclusions. Three exclusions written during this sweep failed on inspection — "scoped to
   one subject", a coverage tally that counted fixture targets, and the audit endpoints above.
   Each was plausible; none survived being checked.
-* **Every budget runs against SQLite.** `ReleaseConcurrencyTest` is still skipped for the same
-  reason, and no Docker runtime exists on the machine this was done on. That is open, not solved.
+* **Every budget runs against SQLite**, and that is still true. What changed is the reason given
+  here for it. This ADR said the gap was blocked on a missing Docker runtime; it was blocked on
+  looking. Postgres.app 18.6 was already installed on this machine, never started, its binaries
+  simply not on `PATH`. The full suite now runs on real PostgreSQL — **1129 tests, 1129 passing,
+  zero skipped**, against 1128 passing and one skipped on SQLite — and `ReleaseConcurrencyTest` is
+  no longer a skip but a passing, mutation-proven test of the TAB 08 criterion.
+* **That single first run found five defects with green SQLite tests behind them**, one of which
+  500ed the entire export feature in production: `report_exports.stored_file_id` was typed `uuid`
+  while holding a storage path, which SQLite's dynamic typing accepts and PostgreSQL refuses.
+  A budget cannot see that class either — the driver can.
+* **Nothing yet makes the PostgreSQL run happen again.** It is a command someone must remember,
+  which is the same shape of gap as an unmeasured endpoint. A gate is the open item; the runtime
+  is not.
