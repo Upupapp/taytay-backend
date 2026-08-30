@@ -70,9 +70,22 @@ use PHPUnit\Framework\Attributes\Test;
  *
  * ── WHERE COVERAGE ACTUALLY STANDS ──────────────────────────────────────────────────
  *
- * **29 of the 54 endpoints that call `ApiResponse::page` have a budget. The other 25 were each
- * looked at, and none is a measurable gap.** (31 test methods cover those 29: several endpoints
- * are measured twice, once per projection or per actor.) They fall into four kinds, and the kinds matter
+ * **26 of the 54 endpoints that call `ApiResponse::page` have a budget.**
+ *
+ * **COUNT THE `measure()` CALLS, NOT THE URLS IN THIS FILE.** An earlier tally said 29 and was
+ * wrong: it was built by grepping every `/api/v1/...` string here, which counts FIXTURE TARGETS
+ * as though they were measured. Posts are created through `POST /admin/newsfeed`, residents
+ * through `POST /admin/residents` — so both appeared "covered" while neither was measured at
+ * all. `/admin/newsfeed` was the expensive one: its `withCount(['reactions', 'comments'])` can be
+ * deleted and every budget stays green, which is how that gap was found. It is measured now, and
+ * that deletion fails it 7 → 21.
+ *
+ * The honest recipe:
+ *
+ *     grep -oE "measure\(\s*['\"][^'\"]+" tests/Feature/Api/V1/QueryBudgetTest.php
+ *
+ * Three genuinely unmeasured endpoints remain — `/admin/residents`, `/admin/events` and
+ * `/admin/households` — all high-traffic staff lists, all previously miscounted as covered. They fall into four kinds, and the kinds matter
  * more than the count:
  *
  *  * **No rows to grow** — config registers (`/services`, `/admin/services`, the two
@@ -1118,6 +1131,35 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('release batch list', $small, $large);
     }
 
+    /**
+     * The staff newsfeed list — and the endpoint that showed this harness was over-reporting its
+     * own coverage.
+     *
+     * `adminProjection()` renders `reaction_count` and `comment_count` as
+     * `$post->reactions_count ?? $post->reactions()->count()`. The alias comes from a
+     * `withCount(['reactions', 'comments'])` on this query alone, and the fallback is a query per
+     * row per count — two extra round trips per post if it is ever dropped.
+     *
+     * **It was NOT measured, and I had counted it as measured.** A coverage tally built by
+     * grepping every `/api/v1/...` string in this file counts fixture POST targets as though they
+     * were measured URLs; `/admin/newsfeed` appears here only because posts are CREATED through
+     * it. Proven by removing the `withCount` and watching the whole budget suite stay green.
+     */
+    #[Test]
+    public function the_staff_newsfeed_list_does_not_grow_with_posts(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $url = '/api/v1/admin/newsfeed';
+
+        $small = $this->measure($url, fn () => $this->publishPost(), 1);
+        $large = $this->measure($url, fn () => $this->publishPost(), 8);
+
+        $this->assertFixtureProduced(8, DB::table('newsfeed_posts')->count(), 'posts to render');
+
+        $this->assertBudget('staff newsfeed list', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1221,6 +1263,11 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/admin/newsfeed-comments') => DB::table('newsfeed_comments')
                 ->whereIn('id', DB::table('newsfeed_comment_reports')->select('newsfeed_comment_id'))
                 ->count(),
+            /*
+             * BEFORE the '/newsfeed' arm below, which "/admin/newsfeed" also matches. The staff
+             * list renders every status, so it counts all posts rather than published ones.
+             */
+            str_contains($url, '/admin/newsfeed') => DB::table('newsfeed_posts')->count(),
             str_contains($url, '/newsfeed') => DB::table('newsfeed_posts')->where('status', 'published')->count(),
             str_contains($url, '/events') => DB::table('events')->where('status', 'published')->count(),
             /*
