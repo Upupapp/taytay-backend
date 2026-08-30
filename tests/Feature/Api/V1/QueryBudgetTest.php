@@ -106,8 +106,14 @@ use PHPUnit\Framework\Attributes\Test;
  *    family in one `whereIn`; `/me/event-registrations` resolves its events the same way;
  *    `/admin/work/team` is a single grouped query and `/admin/work/alerts` returns at most two
  *    rows.
- *  * **Self-perturbing** — the audit endpoints write an audit entry on every read, so a budget
- *    fixture would grow the table it counts, for pure-column projections.
+ *  * ~~**Self-perturbing** — the audit endpoints~~ **WRONG, and now measured.** Reading the trail
+ *    does write to it (`audit.searched`), so I recorded the audit endpoints as unmeasurable: the
+ *    fixture would grow the table it counts. It perturbs the COUNT, not the SLOPE. The extra row
+ *    is one per request whether the page holds two entries or twelve, so it lands identically in
+ *    both samples and cancels out of the growth. `assertBudget` compares two measurements; a
+ *    constant added to both is invisible to it. What that reasoning would have broken is an
+ *    assertion on an absolute number — which this harness deliberately never makes, and which is
+ *    the first thing its own docblock says.
  *
  * **So "54 paginating endpoints, 30 measured" reads worse than the truth.** The honest figure is
  * that the measurable surface is close to fully covered, and the remaining names are there
@@ -138,6 +144,9 @@ final class QueryBudgetTest extends KycTestCase
      * for one to hide.
      */
     private const ALLOWED_GROWTH = 0;
+
+    /** The entity whose history the for-entity budget renders. Fixed, so the arm can count it. */
+    private const BUDGET_AUDIT_ENTITY = '01a05100-0000-7000-8000-00000000beef';
 
     private ?object $applicant = null;
 
@@ -552,6 +561,21 @@ final class QueryBudgetTest extends KycTestCase
         $large = $this->measure('/api/v1/admin/work/mine', fn () => $this->taskForBudget((string) $me->uuid), 6);
 
         $this->assertBudget('my work queue', $small, $large);
+    }
+
+    private function auditEntryForBudget(int $n, ?string $entityId = null): void
+    {
+        DB::table('audit_entries')->insert([
+            'uuid' => (string) Str::uuid7(),
+            'occurred_at' => now(),
+            'actor_subject_id' => (string) Str::uuid7(),
+            'actor_label' => "Budget actor {$n}",
+            'action' => 'budget.probe',
+            'entity_type' => 'Welfare.Case',
+            'entity_id' => $entityId ?? (string) Str::uuid7(),
+            'summary' => "A recorded act, number {$n}.",
+            'created_at' => now(),
+        ]);
     }
 
     private function residentForBudget(int $n): void
@@ -1243,6 +1267,66 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget('staff event list', $small, $large);
     }
 
+    /**
+     * The audit trail — the last paginating endpoint in this API without a budget, and the one
+     * this harness previously ruled out as unmeasurable.
+     *
+     * **THAT RULING WAS TOO QUICK.** Reading the trail WRITES to it — `audit.searched`, with the
+     * query keys — so the table a budget counts grows by one on every measured request, and I
+     * recorded it as a fixture that would perturb its own subject.
+     *
+     * It perturbs the COUNT, not the SLOPE. The extra row is one per request whether the page
+     * holds one entry or eight, so it lands identically in both samples and cancels out of the
+     * growth. `assertBudget` compares two measurements; a constant added to both is invisible to
+     * it. What would have broken is an assertion on an absolute number, which this harness
+     * deliberately does not make.
+     *
+     * Measured as the DPO: `audit.view` is withheld from `lgu_admin` on purpose, so the trail
+     * recording the head's approvals is not read by the head.
+     */
+    #[Test]
+    public function the_audit_trail_does_not_grow_with_entries(): void
+    {
+        Sanctum::actingAs($this->reviewer('data_protection_officer'));
+
+        $n = 0;
+        $addEntry = function () use (&$n): void {
+            $n++;
+            $this->auditEntryForBudget($n);
+        };
+
+        $url = '/api/v1/admin/audit-entries';
+
+        $small = $this->measure($url, $addEntry, 2);
+        $large = $this->measure($url, $addEntry, 12);
+
+        $this->assertBudget('audit trail', $small, $large);
+    }
+
+    /**
+     * One entity's history — the page a Data Protection Officer opens to answer "who touched this
+     * record". Its rows are the same shape as the trail above, filtered to one subject.
+     */
+    #[Test]
+    public function one_entitys_audit_history_does_not_grow_with_entries(): void
+    {
+        Sanctum::actingAs($this->reviewer('data_protection_officer'));
+
+        $n = 0;
+        $addEntry = function () use (&$n): void {
+            $n++;
+            $this->auditEntryForBudget($n, self::BUDGET_AUDIT_ENTITY);
+        };
+
+        $url = '/api/v1/admin/audit-entries/for-entity?entity_type=Welfare.Case&entity_id='
+            .self::BUDGET_AUDIT_ENTITY;
+
+        $small = $this->measure($url, $addEntry, 2);
+        $large = $this->measure($url, $addEntry, 12);
+
+        $this->assertBudget("one entity's audit history", $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1377,6 +1461,14 @@ final class QueryBudgetTest extends KycTestCase
             str_contains($url, '/admin/service-providers') => DB::table('service_providers')->count(),
             str_contains($url, '/admin/visits') => DB::table('field_visits')->count(),
             str_contains($url, '/admin/enrollments') => DB::table('program_enrollments')->count(),
+            /*
+             * BEFORE the plain '/admin/audit-entries' arm: the for-entity page renders only ONE
+             * entity's history, so counting the whole table would end the growth loop with rows
+             * that page never shows.
+             */
+            str_contains($url, '/admin/audit-entries/for-entity') => DB::table('audit_entries')
+                ->where('entity_id', self::BUDGET_AUDIT_ENTITY)->count(),
+            str_contains($url, '/admin/audit-entries') => DB::table('audit_entries')->count(),
             str_contains($url, '/admin/privacy/legal-holds') => DB::table('legal_holds')->count(),
             /*
              * No ordering constraint against the '/admin/releases' arm, checked rather than
