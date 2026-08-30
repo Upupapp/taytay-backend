@@ -194,6 +194,14 @@ final class ProgramCatalog
     public function requirementsFor(Program $program): Collection
     {
         return ProgramRequirement::query()
+            /*
+             * EAGER, because every projection of a requirement renders its accepted document
+             * types. Reading them through the relation METHOD -- `$r->acceptedDocuments()` -- runs
+             * a fresh query per requirement, which cost the template page one query per version
+             * and the public programme detail one per requirement. Loaded here rather than at each
+             * call site so `currentRequirements()`, which builds on this, inherits it.
+             */
+            ->with('acceptedDocuments')
             ->where('program_id', $program->id)
             ->orderBy('display_order')
             ->orderBy('id')

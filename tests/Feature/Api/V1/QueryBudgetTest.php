@@ -70,7 +70,20 @@ use PHPUnit\Framework\Attributes\Test;
  *
  * ── WHERE COVERAGE ACTUALLY STANDS ──────────────────────────────────────────────────
  *
- * **31 of the 44 endpoints that call `ApiResponse::page` have a budget.**
+ * **36 of the 44 endpoints that call `ApiResponse::page` have a budget.** The eight without one
+ * are listed above and every one of them is a page that CANNOT GROW — not a page believed to be
+ * safe. That distinction is the whole content of the last pass, and it found a defect: five of
+ * the thirteen endpoints excluded by ADR 0047 were excluded on reasons of the form "it does no
+ * per-row work" or "it batches explicitly". Each reading was correct and none was a guard.
+ * `/admin/programs/{id}/requirement-templates` was one of them, and it was an N+1 — six queries
+ * for one template version, eleven for six — because `requirementProjection()` read
+ * `$requirement->acceptedDocuments()`, the relation METHOD, once per row. The same defect class
+ * ADR 0047 fixed in `ServiceProvider::channels()`, surviving in a second place precisely because
+ * that endpoint had been reasoned about rather than measured.
+ *
+ * **The public programme detail carried the same call**, so a citizen opening a programme paid
+ * one query per requirement. Nothing measured that page either; it was fixed by eager-loading in
+ * `requirementsFor()`, which both read paths share.
  *
  * **AND PARSE THE HANDLER BODY, DO NOT WINDOW IT.** The denominator was 54 for most of this
  * sweep and is 44: the scan that produced it read a fixed 4000 characters from each handler,
@@ -90,9 +103,12 @@ use PHPUnit\Framework\Attributes\Test;
  *
  *     grep -oE "measure\(\s*['\"][^'\"]+" tests/Feature/Api/V1/QueryBudgetTest.php
  *
- * Three genuinely unmeasured endpoints remain — `/admin/residents`, `/admin/events` and
- * `/admin/households` — all high-traffic staff lists, all previously miscounted as covered. They fall into four kinds, and the kinds matter
- * more than the count:
+ * **THE STALE PARAGRAPH THAT USED TO SIT HERE NAMED `/admin/residents`, `/admin/events` AND
+ * `/admin/households` AS UNMEASURED.** All three were measured in the same pass that wrote it and
+ * the sentence was never updated — a coverage claim in prose going stale within the hour, which is
+ * the argument for the `measure()` grep above being the only figure anybody trusts.
+ *
+ * What remains excluded falls into three kinds, and the kinds matter more than the count:
  *
  *  * **No rows to grow** — config registers (`/services`, `/admin/services`, the two
  *    `/admin/privacy` registers), a PHP enum (`/admin/reports`), a single record plus config
@@ -641,6 +657,24 @@ final class QueryBudgetTest extends KycTestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /**
+     * A programme to hang requirement templates on. Returns the UUID, since that is what the
+     * admin routes take.
+     */
+    private function programForBudget(): string
+    {
+        return (string) Program::query()->create([
+            'code' => 'BUDGETTEMPLATES',
+            'name' => 'Budget template programme',
+            'owner_office' => 'MSWDO',
+            'service_type' => 'financial',
+            'benefit_type' => 'cash',
+            'status' => 'published',
+            'is_citizen_visible' => true,
+            'eligibility_guidance_version' => '1',
+        ])->uuid;
     }
 
     private function publishedProgramForBudget(int $n): void
@@ -1333,6 +1367,243 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget("one entity's audit history", $small, $large);
     }
 
+    /*
+     * ── THE SINGLE-SUBJECT PAGES, MEASURED ───────────────────────────────────────────────
+     *
+     * These five were excluded from ADR 0047's sweep on reasons of the form "it does no per-row
+     * work" or "it batches explicitly". Every one of those readings was correct. None of them is
+     * a guard.
+     *
+     * **"This code does no per-row work today" and "this page cannot grow" are different
+     * statements, and only the second is a reason not to measure.** The first is a description of
+     * the current implementation, which is exactly the thing a regression test exists to hold
+     * still. `/admin/work/team` was excluded as "a single grouped query" — and a single grouped
+     * query is precisely what a budget keeps it.
+     *
+     * What stays excluded after this pass is the set that genuinely cannot grow, each verified
+     * against the code rather than the claim: an event's history renders THREE columns of one row
+     * and a post's history FOUR, `/admin/work/alerts` builds at most two alerts from two fixed
+     * `count()` queries, `/me/privacy/consents` reads a four-value vocabulary, `/admin/reports`
+     * iterates a PHP enum, the two `/services` routes read config, and
+     * `/admin/residents/{id}/families` is capped at one row by `familiesOf()`'s
+     * `whereNull('effective_to')` combined with the one-open-membership rule that answers 409.
+     * A fixture cannot add a row to any of them without a code change.
+     */
+
+    /**
+     * The staff workload board. One row per assignee, so it grows with the OFFICE, not the work —
+     * which is why the tasks arm in `rowsSoFar()` would have satisfied the growth loop with eight
+     * tasks belonging to one person and measured a page of one row.
+     */
+    #[Test]
+    public function the_team_workload_board_does_not_grow_with_assignees(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        // A new staff member per call, each holding one open task: the board's row is the GROUP.
+        $addAssignee = function (): void {
+            $this->taskForBudget((string) $this->reviewer('lgu_admin')->uuid);
+        };
+
+        $url = '/api/v1/admin/work/team';
+
+        $small = $this->measure($url, $addAssignee, 1);
+        $large = $this->measure($url, $addAssignee, 8);
+
+        $this->assertFixtureProduced(
+            8,
+            DB::table('tasks')->where('status', 'open')->distinct()->count('assigned_to'),
+            'distinct assignees to group',
+        );
+
+        $this->assertBudget('team workload board', $small, $large);
+    }
+
+    /**
+     * A citizen's own event registrations. The handler resolves every event with one `whereIn`;
+     * this is what makes that stay true.
+     *
+     * Measured as the APPLICANT rather than `asCitizen`, and the difference matters:
+     * `activeCitizenWithResident()` mints a NEW account on every call, so measuring as a citizen
+     * would authenticate somebody who has never registered for anything and read a page of zero
+     * rows — green, and measuring nothing.
+     */
+    #[Test]
+    public function a_citizens_own_registrations_do_not_grow_with_events(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        [$citizen] = $this->activeCitizenWithResident();
+        $this->applicant = $citizen;
+
+        // One new published event per call, registered by the SAME citizen, so the page under
+        // test is the one that grows.
+        $addRegistration = function () use ($citizen): void {
+            $admin = auth()->user();
+
+            $event = $this->publishedEvent();
+
+            Sanctum::actingAs($citizen);
+            $this->postJson("/api/v1/events/{$event}/registration");
+
+            if ($admin !== null) {
+                Sanctum::actingAs($admin);
+            }
+        };
+
+        $url = '/api/v1/me/event-registrations';
+
+        $small = $this->measure($url, $addRegistration, 1, asApplicant: true);
+        $large = $this->measure($url, $addRegistration, 6, asApplicant: true);
+
+        $this->assertFixtureProduced(
+            6,
+            DB::table('event_registrations')->count(),
+            'registrations for the acting citizen',
+        );
+
+        $this->assertBudget("a citizen's own registrations", $small, $large);
+    }
+
+    /**
+     * A resident's kinship history. `kinshipHistory()` resolves every family the resident has
+     * ever been in with one `whereIn` and says so in a comment; the comment is not the guard.
+     */
+    #[Test]
+    public function a_residents_kinship_history_does_not_grow_with_families(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $resident = $this->existingResident(['first_name' => 'Kinship', 'last_name' => 'Subject']);
+
+        // Built through the API rather than inserted: `households` has several NOT NULL columns
+        // and a hand-written row drifts from the real shape every time one is added.
+        $householdId = DB::table('households')
+            ->where('uuid', $this->householdForBudget())
+            ->value('id');
+
+        /*
+         * Each call closes the previous membership before opening the next, because a resident
+         * may hold only ONE open membership at a time. A closed one renders TWO rows — joined and
+         * left — which is the history this page exists to show.
+         */
+        $addFamily = function () use ($resident, $householdId): void {
+            DB::table('family_memberships')
+                ->where('resident_id', $resident->id)
+                ->whereNull('effective_to')
+                ->update(['effective_to' => now()->toDateString(), 'end_reason' => 'moved-out']);
+
+            $familyId = DB::table('families')->insertGetId([
+                'uuid' => (string) Str::uuid7(),
+                'code' => 'FAM-'.mt_rand(100000, 999999),
+                // NOT NULL, and restrict-on-delete: a family belongs to a household.
+                'household_id' => $householdId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('family_memberships')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'family_id' => $familyId,
+                'resident_id' => $resident->id,
+                'effective_from' => now()->toDateString(),
+                /*
+                 * A REAL UUID, not the label 'budget-fixture' this fixture first wrote.
+                 * `recorded_by` is a `uuid` column: SQLite's dynamic typing accepts any string in
+                 * one and PostgreSQL refuses it, so the label would have passed here and failed
+                 * in production. Same trap as `report_exports.stored_file_id`.
+                 */
+                'recorded_by' => (string) Str::uuid7(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        };
+
+        $url = "/api/v1/admin/residents/{$resident->uuid}/kinship-history";
+
+        $small = $this->measure($url, $addFamily, 1);
+        $large = $this->measure($url, $addFamily, 6);
+
+        $this->assertBudget("a resident's kinship history", $small, $large);
+    }
+
+    /**
+     * One resident's duplicate findings — the decided pairs they appear in. The handler resolves
+     * the other side of every pair with one `whereIn`; without a budget nothing holds it there,
+     * and the queue page beside it was an N+1 of exactly this shape until ADR 0047.
+     */
+    #[Test]
+    public function a_residents_duplicate_findings_do_not_grow_with_pairs(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        // The subject every pair is measured against. Later residents collide with THIS one.
+        $subject = $this->existingResident([
+            'first_name' => 'Dupe',
+            'last_name' => 'Subject',
+            'street_address' => '12 Rizal Street',
+        ]);
+
+        /*
+         * One more resident sharing the subject's fingerprint, then detection, then a decision on
+         * every undecided pair — the page renders decided pairs only, so leaving them undecided
+         * would spin the growth loop against a page that stays empty.
+         */
+        $addFinding = function (): void {
+            $this->existingResident([
+                'first_name' => 'Dupe',
+                'last_name' => 'Subject',
+                'street_address' => '12 Rizal Street',
+            ]);
+
+            $this->postJson('/api/v1/admin/resident-duplicates/detect')->assertOk();
+
+            foreach (DB::table('resident_duplicate_pairs')->where('decision', 'undecided')->pluck('uuid') as $pair) {
+                $this->postJson("/api/v1/admin/resident-duplicates/{$pair}/decide", [
+                    'decision' => 'different-person',
+                    'note' => 'Same street and name; different birth certificates on file.',
+                ])->assertOk();
+            }
+        };
+
+        $url = "/api/v1/admin/residents/{$subject->uuid}/duplicate-findings";
+
+        $small = $this->measure($url, $addFinding, 1);
+        $large = $this->measure($url, $addFinding, 6);
+
+        $this->assertBudget("a resident's duplicate findings", $small, $large);
+    }
+
+    /**
+     * A programme's requirement templates. Its rows are template VERSIONS, not requirements, and
+     * republishing a code appends one — so the page grows every time an office corrects the
+     * wording of a form, which is the operation the versioning exists for.
+     */
+    #[Test]
+    public function a_programmes_requirement_templates_do_not_grow_with_versions(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $program = $this->programForBudget();
+
+        // Republishing the SAME code appends a version, and a version is a row on this page.
+        $addVersion = function () use ($program): void {
+            $this->postJson("/api/v1/admin/programs/{$program}/requirements", [
+                'code' => 'barangay-clearance',
+                'label' => 'Barangay clearance',
+                'obligation' => 'required',
+                'citizen_instructions' => 'Bring the clearance issued by your barangay this year.',
+            ])->assertSuccessful();
+        };
+
+        $url = "/api/v1/admin/programs/{$program}/requirement-templates";
+
+        $small = $this->measure($url, $addVersion, 1);
+        $large = $this->measure($url, $addVersion, 6);
+
+        $this->assertBudget("a programme's requirement templates", $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1400,6 +1671,19 @@ final class QueryBudgetTest extends KycTestCase
     }
 
     /**
+     * The subject UUID out of a single-subject URL.
+     *
+     * The per-subject arms in `rowsSoFar()` need to count the subject's rows rather than the
+     * table's, and the only thing they are handed is the URL.
+     */
+    private static function uuidIn(string $url): string
+    {
+        preg_match('/[0-9a-fA-F-]{36}/', $url, $m);
+
+        return $m[0] ?? '';
+    }
+
+    /**
      * How many rows the endpoint currently has to render.
      *
      * Counted from the table rather than from the response, so the loop cannot spin forever when
@@ -1415,6 +1699,19 @@ final class QueryBudgetTest extends KycTestCase
             // Replies only — a top-level comment costs no parent lookup, so counting all comments
             // would satisfy the loop without ever creating what is under test.
             str_contains($url, '/comments') => DB::table('newsfeed_comments')->whereNotNull('parent_id')->count(),
+            /*
+             * BEFORE the '/programs' arm far below, which "/admin/programs/{id}/requirement-
+             * templates" also matches and which counts published, citizen-visible PROGRAMMES —
+             * one of them, forever, so the growth loop would give up reporting a broken fixture.
+             *
+             * Rows here are template VERSIONS, not requirements: the handler groups by
+             * `template_version`, so six requirements at one version render ONE row.
+             */
+            str_contains($url, '/requirement-templates') => DB::table('program_requirements')
+                ->where('program_id', DB::table('programs')
+                    ->where('uuid', self::uuidIn($url))->value('id'))
+                ->distinct()
+                ->count('template_version'),
             str_contains($url, '/kyc-cases') => DB::table('kyc_cases')->count(),
             str_contains($url, '/staff') => DB::table('role_assignments')->count(),
             str_contains($url, '/eligibility-checks') => DB::table('welfare_case_eligibility_checks')->count(),
@@ -1455,6 +1752,12 @@ final class QueryBudgetTest extends KycTestCase
              * arm at the top: this URL is "assistance-requests", not "requirements".
              */
             str_contains($url, '/admin/assistance-requests') => DB::table('welfare_cases')->count(),
+            /*
+             * No ordering constraint, checked rather than assumed: "/me/event-registrations"
+             * contains neither "/registrations" nor "/events" — the hyphen sits where the slash
+             * would have to be, in both. Same near-miss as the release-batches arm above.
+             */
+            str_contains($url, '/me/event-registrations') => DB::table('event_registrations')->count(),
             str_contains($url, '/me/notifications') => DB::table('notifications')->count(),
             str_contains($url, '/admin/releases') => DB::table('releases')->count(),
             /*
@@ -1502,10 +1805,44 @@ final class QueryBudgetTest extends KycTestCase
             // Neither collides with an arm above: "/admin/residents" is not a substring of
             // "/admin/resident-corrections" or "/admin/resident-duplicates", and nothing matches
             // "/admin/households". Checked rather than assumed.
+            /*
+             * BOTH BEFORE the '/admin/residents' arm below, which each of these URLs matches and
+             * which counts the whole resident table — a number the fixture drives up as a SIDE
+             * EFFECT of building the page, so the loop would end having rendered almost nothing.
+             *
+             * Scoped to the subject in the URL rather than counted table-wide, because that is
+             * what these pages render.
+             */
+            str_contains($url, '/kinship-history') => DB::table('family_memberships')
+                ->where('resident_id', DB::table('residents')
+                    ->where('uuid', self::uuidIn($url))->value('id'))
+                ->count(),
+            /*
+             * DECIDED pairs only, and involving the subject. The page filters
+             * `decision != undecided`, so counting every pair would end the growth loop with a
+             * page the endpoint renders as empty — the trap the corrections and referrals arms
+             * above both record.
+             */
+            str_contains($url, '/duplicate-findings') => DB::table('resident_duplicate_pairs')
+                ->where('decision', '!=', 'undecided')
+                ->where(function ($q) use ($url): void {
+                    $id = DB::table('residents')->where('uuid', self::uuidIn($url))->value('id');
+                    $q->where('lower_resident_id', $id)->orWhere('higher_resident_id', $id);
+                })
+                ->count(),
             str_contains($url, '/admin/residents') => DB::table('residents')->count(),
             str_contains($url, '/admin/households') => DB::table('households')->count(),
             str_contains($url, '/admin/families') => DB::table('families')->count(),
             str_contains($url, '/admin/beneficiaries') => DB::table('residents')->count(),
+            /*
+             * BEFORE the '/admin/work/' arm below, which this URL also matches. That arm counts
+             * open TASKS; the board's rows are ASSIGNEES, so eight tasks belonging to one person
+             * would satisfy the loop and the budget would compare a one-row page with a one-row
+             * page. `count('assigned_to')` ignores nulls, which is right: unassigned work is one
+             * group however much of it there is.
+             */
+            str_contains($url, '/admin/work/team') => DB::table('tasks')
+                ->where('status', 'open')->distinct()->count('assigned_to'),
             str_contains($url, '/admin/work/') => DB::table('tasks')->where('status', 'open')->count(),
             // AFTER the '/admin/work/' arm, which is also backed by `tasks`. The citizen-facing
             // task list is a different endpoint over the same table.

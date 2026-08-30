@@ -435,7 +435,7 @@ final class ProgramController
                     'obligation' => $requirement->obligation,
                     'condition_note' => $requirement->condition_note,
                     'instructions' => $requirement->citizen_instructions,
-                    'accepted_documents' => $requirement->acceptedDocuments()->pluck('document_type')->all(),
+                    'accepted_documents' => $requirement->acceptedDocuments->pluck('document_type')->all(),
                 ])->all(),
             /*
              * The conditions in words, and nothing else.
@@ -495,7 +495,7 @@ final class ProgramController
             'citizen_instructions' => $requirement->citizen_instructions,
             'template_version' => $requirement->template_version,
             'display_order' => $requirement->display_order,
-            'accepted_documents' => $requirement->acceptedDocuments()->pluck('document_type')->all(),
+            'accepted_documents' => $requirement->acceptedDocuments->pluck('document_type')->all(),
         ];
     }
 
