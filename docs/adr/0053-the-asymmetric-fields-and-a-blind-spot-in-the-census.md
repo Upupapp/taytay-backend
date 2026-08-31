@@ -67,6 +67,53 @@ Some are legitimately bounded — `/staff/authority-catalog` iterates an enum,
 Article 4 says collections are always paginated and never return an unbounded list. On the reading
 above, several of these do.
 
+### The 27, classified
+
+Each was read for what actually bounds it, rather than sorted by how the name sounds.
+
+**Bounded by code or config — Article 4 satisfied in substance (6).** Nothing a fixture or a busy
+year can grow.
+
+| Endpoint | Bound |
+| --- | --- |
+| `/staff/authority-catalog` | `Permission::cases()` and `Role::cases()` — PHP enums |
+| `/admin/assessment-templates` | `config('assessment.templates')` — never touches the database |
+| `/me/notification-preferences` | one row per notification type, a closed vocabulary |
+| `/admin/exports` | an explicit `limit(self::EXPORT_HISTORY_LIMIT)` — **the only one of the 27 with a limit** |
+| `/me/sessions`, `/me/devices` | active, unexpired tokens only |
+
+**Bounded by the shape of the domain, not by code (9).** Each is one subject's small set — a
+household's members, a programme's requirement template, one visit's checklist. They can be
+argued about, none is a plausible operational problem, and none has a cap in code.
+
+`/admin/assistance-requests/{case}/requirements`, `/me/cases/{case}/requirements`, `/me/household`,
+`/admin/visits/{visit}`, `/admin/residents/{resident}/account-links`,
+`/admin/residents/{resident}/relationships`, `/admin/residents/{resident}/households`,
+`/admin/residents/{resident}/safeguarding`, `/me/assistance/drafts`.
+
+**Grows with activity, bounded by nothing (12).** These are the decision.
+
+| Endpoint | Grows with |
+| --- | --- |
+| **`/admin/release-batches/{batch}/manifest`** | **every release in a payout batch** |
+| `/admin/assistance-requests/{case}/notes` | every note ever written on a case |
+| `/admin/assistance-requests/{case}/history` | every lifecycle transition |
+| `/admin/assistance-requests/{case}/eligibility-checks` | every check ever run |
+| `/admin/assistance-requests/{case}/prior-cases` | the resident's whole assistance history |
+| `/admin/assistance-requests/{case}/document-requests` | every request raised |
+| `/admin/…/requirements/{requirement}/documents` | every version of one document |
+| `/admin/referrals/{referral}` | notes on the referral |
+| `/admin/releases/{release}` | transitions on the release |
+| `/admin/residents/{resident}/history` | every change to the record |
+| `/admin/saved-views` | staff usage |
+| `/me/referrals` | a resident's referrals |
+
+**The manifest is the one with a concrete operational risk, and it is not a hypothetical.**
+`manifestQuery()` selects every release in the batch with no limit, nothing caps batch size when a
+batch is created, and a municipal payout batch is hundreds to thousands of beneficiaries. It is
+also the document staff open at the payout table, on a phone, on an LGU connection — the worst
+place for an unbounded response. Everything else on that list is a page somebody opens at a desk.
+
 **This is filed, not fixed.** Paginating them is a breaking change to response shape for every
 client that reads them, which is an `/api/v2` conversation under Article 4, not a defect to patch
 quietly — and the judgement about which are genuinely unbounded belongs with the owner rather than
