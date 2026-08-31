@@ -99,7 +99,7 @@ argued about, none is a plausible operational problem, and none has a cap in cod
 | `/admin/assistance-requests/{case}/notes` | every note ever written on a case |
 | `/admin/assistance-requests/{case}/history` | every lifecycle transition |
 | `/admin/assistance-requests/{case}/eligibility-checks` | every check ever run |
-| `/admin/assistance-requests/{case}/prior-cases` | the resident's whole assistance history |
+| ~~`/admin/assistance-requests/{case}/prior-cases`~~ | **WRONG — capped at 50 by `priorCasesFor()`.** Found while writing its budget; the classification above read the controller and not the service behind it |
 | `/admin/assistance-requests/{case}/document-requests` | every request raised |
 | `/admin/…/requirements/{requirement}/documents` | every version of one document |
 | `/admin/referrals/{referral}` | notes on the referral |
@@ -114,7 +114,33 @@ batch is created, and a municipal payout batch is hundreds to thousands of benef
 also the document staff open at the payout table, on a phone, on an LGU connection — the worst
 place for an unbounded response. Everything else on that list is a page somebody opens at a desk.
 
-**This is filed, not fixed.** Paginating them is a breaking change to response shape for every
+### The ruling, and what was done
+
+The owner ruled: **bound the manifest, budget the rest.** Both halves are done.
+
+The manifest is paginated with its totals aggregated in the database, so a page can never be
+reported as the payout — see the commit for why bounding it naively would have been worse than
+leaving it alone.
+
+**All twelve now carry a query budget** (two already did), each mutation-proven: every one fails
+when a per-row lookup is introduced into its projection. That closes §1's loose end as well —
+`DocumentPresenter::version()` falls back to a query per version when `file` is not loaded, and
+dropping the eager load now fails the document-history budget rather than merely being true today.
+
+Two corrections came out of writing them, both worth more than the tests:
+
+* **`prior-cases` is capped at 50** and the table above called it unbounded. The classification
+  read the controller and not the service behind it.
+* **The `prior-cases` budget passed while measuring nothing.** Its `rowsSoFar()` arm counted
+  `welfare_cases` table-wide, which the fixture's own case already satisfied, so the growth loop
+  ended immediately, no rows were created, and the budget compared zero against zero. It was caught
+  by the MUTATION NOT BITING, not by the test failing — a green test that asserts nothing looks
+  exactly like a green test. Every budget added in this pass now asserts what the page actually
+  renders.
+
+Article 4's pagination question is unchanged and still open.
+
+**The pagination is filed, not fixed.** Paginating them is a breaking change to response shape for every
 client that reads them, which is an `/api/v2` conversation under Article 4, not a defect to patch
 quietly — and the judgement about which are genuinely unbounded belongs with the owner rather than
 with the agent that found them.

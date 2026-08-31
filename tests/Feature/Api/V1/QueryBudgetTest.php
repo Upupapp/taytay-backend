@@ -75,7 +75,11 @@ use PHPUnit\Framework\Attributes\Test;
  * envelope is not counted by it at all, and a census of the other envelope finds 27 more GET
  * endpoints doing exactly that, several of them unbounded. So this figure is true and narrower
  * than it sounds. A census measures what its denominator can see, and the denominator is a choice
- * somebody made. The eight without one
+ * somebody made.
+ *
+ * **The twelve unbounded ones from that census are now budgeted too**, which is why `measure()`
+ * calls outnumber the `page` endpoints. Whether a list is paginated and whether it costs a query
+ * per row are separate defects, and only the first is a compatibility conversation. The eight without one
  * are listed above and every one of them is a page that CANNOT GROW — not a page believed to be
  * safe. That distinction is the whole content of the last pass, and it found a defect: five of
  * the thirteen endpoints excluded by ADR 0047 were excluded on reasons of the form "it does no
@@ -644,10 +648,180 @@ final class QueryBudgetTest extends KycTestCase
         ])->assertCreated();
     }
 
-    private function releaseForBudget(int $caseId, string $residentUuid, int $sequence): void
+    /**
+     * One referral, created through the API so it carries whatever the write path sets.
+     *
+     * Takes a resident UUID when the caller needs the referral to belong to somebody specific —
+     * `/me/referrals` renders only the acting citizen's — and mints one otherwise.
+     */
+    /**
+     * A resident's prior assistance cases.
+     *
+     * CAPPED AT 50 by `priorCasesFor()`, which the ADR 0053 §3 classification missed and called
+     * unbounded. Budgeted anyway: fifty per-row lookups is still fifty, and the cap is a `limit()`
+     * somebody can remove without noticing this page.
+     */
+    #[Test]
+    public function prior_cases_do_not_grow_with_earlier_cases(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $case = $this->caseForEligibility();
+        // A UUID, NOT an integer key. Cast to `(int)` here first, which silently produced cases
+        // belonging to resident `0` -- rows that exist, match nothing, and render nowhere.
+        $residentId = (string) DB::table('welfare_cases')->where('uuid', $case)->value('resident_id');
+
+        $n = 0;
+        $addPriorCase = function () use ($residentId, &$n): void {
+            $n++;
+            DB::table('welfare_cases')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'case_number' => 'WC-BUDGET-'.str_pad((string) $n, 4, '0', STR_PAD_LEFT),
+                'resident_id' => $residentId,
+                // Real enum values. 'financial' and 'closed' are not cases of CaseType and
+                // CaseStatus -- the insert succeeded and the projection 500ed on `->value`.
+                'type' => 'assistance',
+                'status' => 'completed',
+                'opened_at' => now()->subMonths($n),
+                'closed_at' => now()->subMonths($n)->addWeek(),
+                // NOT NULL: the queue sorts on it, so a case without one could never be listed.
+                'last_activity_at' => now()->subMonths($n)->addWeek(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        };
+
+        $url = "/api/v1/admin/assistance-requests/{$case}/prior-cases";
+
+        $small = $this->measure($url, $addPriorCase, 2);
+        $large = $this->measure($url, $addPriorCase, 8);
+
+        $this->assertFixtureProduced(
+            8,
+            count($this->getJson($url)->json('data.prior_cases')),
+            'prior cases the page actually renders',
+        );
+
+        $this->assertBudget('prior cases', $small, $large);
+    }
+
+    /**
+     * A resident's record history.
+     *
+     * Note this endpoint WRITES an audit entry on every read (`recordResidentRead`). That perturbs
+     * the count and not the SLOPE — one row per request whether the page holds two events or
+     * eight — so it lands identically in both samples and cancels out. The same reasoning the
+     * audit endpoints in this file were wrongly excluded on, applied the right way round.
+     */
+    #[Test]
+    public function a_residents_record_history_does_not_grow_with_events(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $resident = $this->existingResident(['first_name' => 'Hist', 'last_name' => 'Ory']);
+
+        $n = 0;
+        $addEvent = function () use ($resident, &$n): void {
+            $n++;
+            DB::table('resident_status_events')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'resident_id' => $resident->id,
+                'event' => 'corrected',
+                'field' => 'street_address',
+                'previous_value' => "{$n} Old Street",
+                'new_value' => "{$n} New Street",
+                'occurred_at' => now(),
+            ]);
+        };
+
+        $url = "/api/v1/admin/residents/{$resident->uuid}/history";
+
+        $small = $this->measure($url, $addEvent, 1);
+        $large = $this->measure($url, $addEvent, 6);
+
+        $this->assertBudget("a resident's record history", $small, $large);
+    }
+
+    /**
+     * Every version one document has ever had — the page that reads an evidence trail.
+     *
+     * `DocumentPresenter::version()` renders the stored file through a relation and falls back to
+     * a query PER VERSION when it is not loaded. Both list paths eager-load it today; this is what
+     * keeps the history path doing so.
+     */
+    #[Test]
+    public function a_documents_version_history_does_not_grow_with_versions(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $case = $this->caseWithRequirements();
+        $model = WelfareCase::query()->where('uuid', $case)->firstOrFail();
+
+        // ONE requirement, re-supplied. `recordOneDocument()` mints a fresh slot per call, which
+        // would grow documents rather than the versions of one.
+        $slot = CaseRequirement::query()->create([
+            'welfare_case_id' => $model->id,
+            'requirement_code' => 'DOC_VERSIONS',
+            'label' => 'Barangay certificate',
+            'template_version' => '1',
+            'obligation' => RequirementObligation::Required,
+            'applicability' => RequirementApplicability::Applies,
+        ]);
+
+        $addVersion = function () use ($slot): void {
+            $file = app(DocumentLibrary::class)->store(
+                UploadedFile::fake()->createWithContent('barangay-cert.jpg', $this->realJpeg()),
+                FileClassification::Personal,
+                ActorContext::system(),
+            );
+
+            app(CaseRequirementService::class)->recordDocument($slot, (string) $file->id, [
+                'source' => DocumentSource::Scanned,
+                'document_type' => 'barangay-certificate',
+                'document_number' => null,
+                'issued_on' => null,
+                'expires_on' => null,
+                'expiry_unknown' => true,
+                'replaces_because' => 'Clearer scan supplied at the counter.',
+            ], ActorContext::system());
+        };
+
+        $url = "/api/v1/admin/assistance-requests/{$case}/requirements/{$slot->uuid}/documents";
+
+        $small = $this->measure($url, $addVersion, 1);
+        $large = $this->measure($url, $addVersion, 6);
+
+        $this->assertFixtureProduced(
+            6,
+            count($this->getJson($url)->json('data.versions')),
+            'document versions the page actually renders',
+        );
+
+        $this->assertBudget("a document's version history", $small, $large);
+    }
+
+    private function referralForBudget(?string $residentUuid = null): string
+    {
+        $residentUuid ??= (string) $this->existingResident([
+            'first_name' => 'Ref',
+            'last_name' => 'Erral'.DB::table('referrals')->count(),
+        ])->uuid;
+
+        return (string) $this->postJson('/api/v1/admin/referrals', [
+            'resident_id' => $residentUuid,
+            'destination_name' => 'District hospital',
+            'service_requested' => 'Medical social work assessment',
+            'reason' => 'Unable to meet hospital bill.',
+        ])->assertCreated()->json('data.id');
+    }
+
+    private function releaseForBudget(int $caseId, string $residentUuid, int $sequence, ?int $batchId = null): void
     {
         DB::table('releases')->insert([
             'uuid' => (string) Str::uuid7(),
+            // Set only when the caller is measuring a batch's manifest; the ledger's rows have no
+            // batch and must keep not having one.
+            'release_batch_id' => $batchId,
             'reference_number' => 'RL-'.strtoupper(Str::random(10)),
             'welfare_case_id' => $caseId,
             'resident_id' => $residentUuid,
@@ -1609,6 +1783,217 @@ final class QueryBudgetTest extends KycTestCase
         $this->assertBudget("a programme's requirement templates", $small, $large);
     }
 
+    /*
+     * ── THE COLLECTIONS INSIDE AN `item` ENVELOPE (ADR 0053 §3) ──────────────────────────
+     *
+     * These endpoints return a list without paginating it, so they were invisible to the coverage
+     * census in this file's docblock, which counts handlers calling `ApiResponse::page`. The owner
+     * ruled that paginating them is an `/api/v2` question and that they should be BUDGETED now:
+     * whether a list is paged and whether it costs a query per row are separate defects, and only
+     * one of them is a compatibility conversation.
+     *
+     * Every projection below reads columns today. That is the argument for measuring them, not
+     * against — it is exactly what a budget keeps true, and it is exactly the reasoning ADR 0048
+     * found five endpoints excluded on.
+     */
+
+    /** The payout manifest — bounded in this same pass, and the list is still one query per page. */
+    #[Test]
+    public function the_payout_manifest_does_not_grow_with_lines(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $case = $this->caseForEligibility();
+        $caseId = (int) DB::table('welfare_cases')->where('uuid', $case)->value('id');
+        $residentUuid = (string) DB::table('welfare_cases')->where('uuid', $case)->value('resident_id');
+
+        $batchId = DB::table('release_batches')->insertGetId([
+            'uuid' => (string) Str::uuid7(),
+            'reference_number' => 'RB-'.strtoupper(Str::random(8)),
+            'name' => 'Budget payout batch',
+            'status' => 'open',
+            'scheduled_for' => now()->addWeek()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $batchUuid = (string) DB::table('release_batches')->where('id', $batchId)->value('uuid');
+
+        $sequence = 0;
+        $addLine = function () use ($caseId, $residentUuid, $batchId, &$sequence): void {
+            $sequence++;
+            $this->releaseForBudget($caseId, $residentUuid, $sequence, $batchId);
+        };
+
+        $url = "/api/v1/admin/release-batches/{$batchUuid}/manifest?per_page=100";
+
+        $small = $this->measure($url, $addLine, 1);
+        $large = $this->measure($url, $addLine, 8);
+
+        $this->assertBudget('payout manifest', $small, $large);
+    }
+
+    /** A case's notes. Each is disclosed per note against the reader's permission. */
+    #[Test]
+    public function a_cases_notes_do_not_grow_with_notes(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $case = $this->caseForEligibility();
+        $caseId = (int) DB::table('welfare_cases')->where('uuid', $case)->value('id');
+
+        $addNote = function () use ($caseId): void {
+            DB::table('case_notes')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'welfare_case_id' => $caseId,
+                'sensitivity' => 'routine',
+                'body' => 'Home visit agreed for next week.',
+            ]);
+        };
+
+        $url = "/api/v1/admin/assistance-requests/{$case}/notes";
+
+        $small = $this->measure($url, $addNote, 1);
+        $large = $this->measure($url, $addNote, 6);
+
+        $this->assertBudget("a case's notes", $small, $large);
+    }
+
+    /** A case's lifecycle history — every transition it has ever made. */
+    #[Test]
+    public function a_cases_history_does_not_grow_with_transitions(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $case = $this->caseForEligibility();
+        $caseId = (int) DB::table('welfare_cases')->where('uuid', $case)->value('id');
+
+        $addTransition = function () use ($caseId): void {
+            DB::table('welfare_case_transitions')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'welfare_case_id' => $caseId,
+                'to_status' => 'under-review',
+                'occurred_at' => now(),
+            ]);
+        };
+
+        $url = "/api/v1/admin/assistance-requests/{$case}/history";
+
+        $small = $this->measure($url, $addTransition, 2);
+        $large = $this->measure($url, $addTransition, 8);
+
+        $this->assertBudget("a case's history", $small, $large);
+    }
+
+    /** A referral's detail page, whose rows are its notes. */
+    #[Test]
+    public function a_referrals_notes_do_not_grow_with_notes(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $referral = $this->referralForBudget();
+        $referralId = (int) DB::table('referrals')->where('uuid', $referral)->value('id');
+
+        $addNote = function () use ($referralId): void {
+            DB::table('referral_notes')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'referral_id' => $referralId,
+                'audience' => 'internal',
+                'body' => 'Receiving office acknowledged by phone.',
+                'recorded_at' => now(),
+            ]);
+        };
+
+        $url = "/api/v1/admin/referrals/{$referral}";
+
+        $small = $this->measure($url, $addNote, 1);
+        $large = $this->measure($url, $addNote, 6);
+
+        $this->assertBudget("a referral's notes", $small, $large);
+    }
+
+    /** One release's detail page, whose rows are its transitions. */
+    #[Test]
+    public function a_releases_transitions_do_not_grow_with_transitions(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        $case = $this->caseForEligibility();
+        $caseId = (int) DB::table('welfare_cases')->where('uuid', $case)->value('id');
+        $residentUuid = (string) DB::table('welfare_cases')->where('uuid', $case)->value('resident_id');
+
+        $this->releaseForBudget($caseId, $residentUuid, 1);
+        $release = (string) DB::table('releases')->orderByDesc('id')->value('uuid');
+        $releaseId = (int) DB::table('releases')->where('uuid', $release)->value('id');
+
+        $addTransition = function () use ($releaseId): void {
+            DB::table('release_transitions')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'release_id' => $releaseId,
+                'to_status' => 'released',
+                'occurred_at' => now(),
+            ]);
+        };
+
+        $url = "/api/v1/admin/releases/{$release}";
+
+        $small = $this->measure($url, $addTransition, 1);
+        $large = $this->measure($url, $addTransition, 6);
+
+        $this->assertBudget("a release's transitions", $small, $large);
+    }
+
+    /** The saved views a staff member can reach — their own and anything shared. */
+    #[Test]
+    public function the_saved_views_list_does_not_grow_with_views(): void
+    {
+        $me = $this->reviewer('lgu_admin');
+        Sanctum::actingAs($me);
+
+        $n = 0;
+        $addView = function () use ($me, &$n): void {
+            $n++;
+            DB::table('saved_views')->insert([
+                'uuid' => (string) Str::uuid7(),
+                'owner_subject_id' => (string) $me->uuid,
+                'entity' => 'residents',
+                'name' => "Budget view {$n}",
+                // NOT NULL. An empty filter set is a legitimate saved view: "all residents".
+                'filters' => json_encode([]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        };
+
+        $url = '/api/v1/admin/saved-views';
+
+        $small = $this->measure($url, $addView, 1);
+        $large = $this->measure($url, $addView, 8);
+
+        $this->assertBudget('saved views', $small, $large);
+    }
+
+    /** A resident's own referrals, read as the resident. */
+    #[Test]
+    public function my_referrals_do_not_grow_with_referrals(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        [$citizen, $resident] = $this->activeCitizenWithResident();
+        $this->applicant = $citizen;
+
+        $addReferral = function () use ($resident): void {
+            $this->referralForBudget((string) $resident->uuid);
+        };
+
+        $url = '/api/v1/me/referrals';
+
+        $small = $this->measure($url, $addReferral, 1, asApplicant: true);
+        $large = $this->measure($url, $addReferral, 6, asApplicant: true);
+
+        $this->assertBudget('my referrals', $small, $large);
+    }
+
     private function measure(
         string $url,
         callable $addOne,
@@ -1699,6 +2084,13 @@ final class QueryBudgetTest extends KycTestCase
         return match (true) {
             // BEFORE the '/me/cases' arm, which the citizen requirements URL also contains.
             // Counted as rows WITH a document, because a requirement without one costs nothing.
+            /*
+             * BEFORE the '/requirements' arm below, which this URL also matches -- ".../
+             * requirements/{id}/documents" contains "/requirements" and that arm counts case
+             * requirements WITH a document, one of them, so the growth loop would give up
+             * reporting a broken fixture. The rows here are VERSIONS of one document.
+             */
+            str_contains($url, '/documents') => DB::table('document_versions')->count(),
             str_contains($url, '/requirements') => DB::table('welfare_case_requirements')
                 ->whereNotNull('document_id')->count(),
             // Replies only — a top-level comment costs no parent lookup, so counting all comments
@@ -1756,6 +2148,29 @@ final class QueryBudgetTest extends KycTestCase
              * BEFORE the '/me/cases' arm, and note it does NOT collide with the '/requirements'
              * arm at the top: this URL is "assistance-requests", not "requirements".
              */
+            /*
+             * ALL THREE BEFORE the '/admin/assistance-requests' arm below, which each of these
+             * URLs matches and which counts WELFARE CASES -- a number the fixture does not move,
+             * so the loop would spin to its limit and report a fixture that had stopped producing
+             * rows. Each counts what its own page renders.
+             */
+            str_contains($url, '/notes') => DB::table('case_notes')->count(),
+            /*
+             * THE SUBJECT'S OTHER CASES, not the table.
+             *
+             * This arm first counted `welfare_cases` table-wide, which the fixture's own case
+             * already satisfied -- so the growth loop ended immediately, nothing was created, and
+             * the page rendered ZERO rows while the budget compared 0 against 0 and passed. A
+             * green test asserting nothing. It is the trap this match's own comments describe,
+             * committed while adding an arm to it, and it was caught by the mutation not biting
+             * rather than by the test failing.
+             */
+            str_contains($url, '/prior-cases') => DB::table('welfare_cases')
+                ->where('resident_id', DB::table('welfare_cases')
+                    ->where('uuid', self::uuidIn($url))->value('resident_id'))
+                ->where('uuid', '!=', self::uuidIn($url))
+                ->count(),
+            str_contains($url, '/history') && str_contains($url, '/assistance-requests') => DB::table('welfare_case_transitions')->count(),
             str_contains($url, '/admin/assistance-requests') => DB::table('welfare_cases')->count(),
             /*
              * No ordering constraint, checked rather than assumed: "/me/event-registrations"
@@ -1763,13 +2178,31 @@ final class QueryBudgetTest extends KycTestCase
              * would have to be, in both. Same near-miss as the release-batches arm above.
              */
             str_contains($url, '/me/event-registrations') => DB::table('event_registrations')->count(),
+            str_contains($url, '/admin/saved-views') => DB::table('saved_views')->count(),
+            /*
+             * No ordering constraint against the '/admin/referrals' arm, checked rather than
+             * assumed: "/me/referrals" does not contain "/admin/referrals". It renders the acting
+             * citizen's referrals, and this test is the only thing creating any.
+             */
+            str_contains($url, '/me/referrals') => DB::table('referrals')->count(),
             str_contains($url, '/me/notifications') => DB::table('notifications')->count(),
+            /*
+             * BEFORE the '/admin/releases' arm below. One release's detail page renders its
+             * TRANSITIONS; counting releases would end the loop at one row.
+             */
+            str_contains($url, '/admin/releases/') => DB::table('release_transitions')->count(),
             str_contains($url, '/admin/releases') => DB::table('releases')->count(),
             /*
              * OPEN referrals only. The list excludes `closed` and `declined` by default, so
              * counting every row would end the growth loop with a page the endpoint does not
              * render — the same trap the corrections and duplicate arms above record.
              */
+            /*
+             * BEFORE the '/admin/referrals' arm below, which counts OPEN REFERRALS. The detail
+             * page's rows are the referral's NOTES, and one referral stays one referral however
+             * many notes it collects.
+             */
+            str_contains($url, '/admin/referrals/') => DB::table('referral_notes')->count(),
             str_contains($url, '/admin/referrals') => DB::table('referrals')
                 ->whereNotIn('status', ['closed', 'declined'])->count(),
             str_contains($url, '/admin/service-providers') => DB::table('service_providers')->count(),
@@ -1790,6 +2223,15 @@ final class QueryBudgetTest extends KycTestCase
              * sits where the `s` would be. Several arms in this match DO collide that way, so the
              * absence of one here is worth stating.
              */
+            /*
+             * BEFORE the '/admin/release-batches' arm below, which counts BATCHES -- one, forever.
+             * A manifest's rows are the releases inside its batch, so this counts those, scoped to
+             * the batch in the URL.
+             */
+            str_contains($url, '/manifest') => DB::table('releases')
+                ->whereIn('release_batch_id', DB::table('release_batches')
+                    ->where('uuid', self::uuidIn($url))->select('id'))
+                ->count(),
             str_contains($url, '/admin/release-batches') => DB::table('release_batches')->count(),
             /*
              * The PUBLIC catalogue's own filter: published and citizen-visible. Counting every
@@ -1835,6 +2277,11 @@ final class QueryBudgetTest extends KycTestCase
                     $q->where('lower_resident_id', $id)->orWhere('higher_resident_id', $id);
                 })
                 ->count(),
+            /*
+             * BEFORE the '/admin/residents' arm below, which counts RESIDENTS -- a number this
+             * fixture does not move. The page renders one resident's status events.
+             */
+            str_contains($url, '/admin/residents') && str_contains($url, '/history') => DB::table('resident_status_events')->count(),
             str_contains($url, '/admin/residents') => DB::table('residents')->count(),
             str_contains($url, '/admin/households') => DB::table('households')->count(),
             str_contains($url, '/admin/families') => DB::table('families')->count(),
