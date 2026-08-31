@@ -444,7 +444,34 @@ final class ReleaseController
 
         $model = $this->batchOrFail($batch);
 
-        $rows = $this->releases->manifestQuery((string) $model->uuid)->get();
+        $query = $this->releases->manifestQuery((string) $model->uuid);
+
+        /*
+         * BOUNDED (ADR 0053 §3). This selected every release in the batch and returned them all.
+         * Nothing caps batch size when a batch is created and a municipal payout is hundreds to
+         * thousands of beneficiaries — and this is the document staff open AT THE PAYOUT TABLE, on
+         * a phone, on an LGU connection. The worst place to send an unbounded response.
+         *
+         * A generous default per page, because the ordinary batch should still arrive in one
+         * response and a manifest is not a feed to scroll.
+         */
+        $pagination = PaginationParams::fromRequest($request, PaginationParams::MAX_PER_PAGE);
+
+        /*
+         * THE TOTALS ARE AGGREGATED IN THE DATABASE, OVER THE WHOLE BATCH — never summed from the
+         * rows on this page. That distinction is the entire risk in paginating this endpoint: a
+         * page-derived total would report a slice of a payout as the payout, and it would look
+         * exactly right. `total_count` therefore keeps the meaning it has always had.
+         */
+        $totals = (clone $query)->toBase()
+            ->selectRaw('count(*) as line_count')
+            ->selectRaw('coalesce(sum(amount_centavos), 0) as cash_centavos')
+            ->reorder()
+            ->first();
+
+        $totalCount = (int) ($totals->line_count ?? 0);
+
+        $rows = (clone $query)->forPage($pagination->page, $pagination->perPage)->get();
 
         return ApiResponse::item([
             'batch' => $this->batchProjection($model),
@@ -454,16 +481,24 @@ final class ReleaseController
              * table with a queue in front of it.
              */
             'lines' => $rows->map(fn (Release $release): array => $this->projection($release, $actor))->all(),
-            'total_count' => $rows->count(),
+            'total_count' => $totalCount,
             /*
              * A total in CENTAVOS, summed as integers. In-kind releases contribute nothing —
              * a relief pack has a notional value, and adding it here would produce a peso figure
-             * that says cash was handed over when rice was.
+             * that says cash was handed over when rice was. `amount_centavos` is null on an
+             * in-kind release, and `sum` ignores nulls, so the SQL says the same thing the PHP
+             * did.
              */
-            'total_cash_centavos' => $rows->sum(
-                static fn (Release $release): int => $release->amountCentavos() ?? 0,
-            ),
+            'total_cash_centavos' => (int) ($totals->cash_centavos ?? 0),
             'currency' => 'PHP',
+        ], 200, [
+            'pagination' => (new Page($rows->all(), $totalCount, $pagination))->meta(),
+            /*
+             * SAID OUT LOUD, because a client that renders `lines` and ignores pagination would
+             * otherwise print a short manifest that looks complete. Anyone reconciling cash at a
+             * table needs to know the page is not the batch.
+             */
+            'manifest' => ['complete' => count($rows) === $totalCount],
         ]);
     }
 

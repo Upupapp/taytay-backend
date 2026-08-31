@@ -238,6 +238,59 @@ final class ReleaseTest extends KycTestCase
         $this->assertSame(250000, $manifest['total_cash_centavos']);
     }
 
+    /**
+     * THE PAGE IS NOT THE PAYOUT.
+     *
+     * The manifest returned every release in the batch, unpaginated, and derived `total_count` and
+     * `total_cash_centavos` FROM THE ROWS IT HAD LOADED (ADR 0053 §3). Nothing caps batch size at
+     * creation and a municipal payout is hundreds to thousands of beneficiaries, so bounding it
+     * was necessary — but bounding it naively is worse than leaving it, because a total summed
+     * from one page reports a slice of a payout as the payout AND LOOKS EXACTLY RIGHT.
+     *
+     * So the totals are aggregated in the database over the whole batch, and this asserts the
+     * difference on a page that deliberately cannot hold the batch.
+     */
+    #[Test]
+    public function a_paged_manifest_still_totals_the_whole_batch(): void
+    {
+        Sanctum::actingAs($this->admin());
+
+        $batch = $this->money()->postJson('/api/v1/admin/release-batches', [
+            'name' => 'AICS payout, Barangay Dolores',
+            'scheduled_for' => now()->addWeek()->toDateString(),
+        ])->assertCreated()->json('data.id');
+
+        foreach ([100000, 250000, 400000] as $amount) {
+            $release = $this->prepare($this->approvedCase(), ['amount_centavos' => $amount]);
+            $this->money()->postJson("/api/v1/admin/release-batches/{$batch}/releases", ['release_id' => $release])
+                ->assertOk();
+        }
+
+        $response = $this->getJson("/api/v1/admin/release-batches/{$batch}/manifest?per_page=2")->assertOk();
+
+        $manifest = $response->json('data');
+
+        // The page is bounded ...
+        $this->assertCount(2, $manifest['lines']);
+
+        // ... and the totals are not. Summed from the page they would read 2 and 350000.
+        $this->assertSame(3, $manifest['total_count'], 'The manifest reported the page count as the batch count.');
+        $this->assertSame(750000, $manifest['total_cash_centavos'], 'The manifest reported the page total as the payout total.');
+
+        /*
+         * SAID OUT LOUD. A client that renders `lines` and ignores pagination would otherwise
+         * print a short manifest that looks complete, and somebody reconciling cash at a table
+         * would have no way to tell.
+         */
+        $this->assertFalse($response->json('meta.manifest.complete'));
+        $this->assertSame(3, $response->json('meta.pagination.total'));
+
+        // A page that does hold the batch says so.
+        $whole = $this->getJson("/api/v1/admin/release-batches/{$batch}/manifest")->assertOk();
+        $this->assertCount(3, $whole->json('data.lines'));
+        $this->assertTrue($whole->json('meta.manifest.complete'));
+    }
+
     // ── segregation of duties ─────────────────────────────────────────────────────────
 
     #[Test]
