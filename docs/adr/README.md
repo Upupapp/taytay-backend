@@ -32,6 +32,7 @@ supersede it with a new one and update the status here.
 | [0050](0050-the-suite-runs-on-the-engine-production-uses.md) | `composer check:pg` runs the suite against a throwaway PostgreSQL cluster and Article 7 requires it before a push; six defects came from running it once | Accepted |
 | [0051](0051-the-now-binding-audit.md) | Auditing the other 15 `now()` comparisons: none is a defect, because the class needs a database-written column — and the schema now guards that precondition | Accepted |
 | [0052](0052-the-field-probe-on-postgresql.md) | The field probe on PostgreSQL is identical to SQLite; the defect it did find was an asymmetry its own output had been burying | Accepted |
+| [0053](0053-the-asymmetric-fields-and-a-blind-spot-in-the-census.md) | The 105 asymmetric fields are fixture gaps and the guarded-fallback class is exhausted; but 27 collections sit inside `item` envelopes where the coverage census cannot see them | Accepted / §3 open |
 
 An ADR is required when a change alters a module boundary, an API convention, an
 authentication/authorization model, a persistence source of truth, or a lifecycle state

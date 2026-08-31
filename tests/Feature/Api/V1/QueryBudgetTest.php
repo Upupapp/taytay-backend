@@ -70,7 +70,12 @@ use PHPUnit\Framework\Attributes\Test;
  *
  * ── WHERE COVERAGE ACTUALLY STANDS ──────────────────────────────────────────────────
  *
- * **36 of the 44 endpoints that call `ApiResponse::page` have a budget.** The eight without one
+ * **36 of the 44 endpoints that call `ApiResponse::page` have a budget — and 44 is a denominator
+ * with a known blind spot (ADR 0053).** A collection returned inside an `ApiResponse::item`
+ * envelope is not counted by it at all, and a census of the other envelope finds 27 more GET
+ * endpoints doing exactly that, several of them unbounded. So this figure is true and narrower
+ * than it sounds. A census measures what its denominator can see, and the denominator is a choice
+ * somebody made. The eight without one
  * are listed above and every one of them is a page that CANNOT GROW — not a page believed to be
  * safe. That distinction is the whole content of the last pass, and it found a defect: five of
  * the thirteen endpoints excluded by ADR 0047 were excluded on reasons of the form "it does no
