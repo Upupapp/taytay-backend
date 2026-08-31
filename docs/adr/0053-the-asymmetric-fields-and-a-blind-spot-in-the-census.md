@@ -138,6 +138,27 @@ Two corrections came out of writing them, both worth more than the tests:
   exactly like a green test. Every budget added in this pass now asserts what the page actually
   renders.
 
+### The exclusions were re-audited, and a second one was false
+
+`prior-cases` being misclassified prompted re-reading the eight endpoints still excluded from the
+budgets. **`/me/privacy/consents` was excluded on a floor that does not exist.**
+
+The exclusion said the page was capped at four rows because `privacy.legal_bases` names exactly
+four purposes whose basis is consent. Four is the number of PURPOSES, and the page does not render
+purposes — `consentsFor()` returns every consent RECORD the subject holds, and `GovernanceRegistry`
+says so in its own comment: *"withdrawn rows carry NULL and accumulate freely."* Grant and withdraw
+one purpose ten times and the page has ten rows. It is now budgeted and mutation-proven.
+
+**Both failures are the same failure**: the floor was read off the controller, or off a vocabulary,
+rather than off the query that builds the page.
+
+The remaining seven were re-checked by tracing one level deeper than the handler and each holds —
+this time with the enforcing code named. The families page rests on an invariant that IS enforced:
+`HouseholdMembershipService` refuses a second open family membership with `ErrorCode::Conflict`,
+which this programme had asserted for some time and never located.
+
+Coverage is 37 of 44.
+
 Article 4's pagination question is unchanged and still open.
 
 **The pagination is filed, not fixed.** Paginating them is a breaking change to response shape for every

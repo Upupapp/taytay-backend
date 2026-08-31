@@ -48,9 +48,12 @@ use PHPUnit\Framework\Attributes\Test;
  *  * **`/admin/audit-entries`** — pure columns, and the endpoint WRITES an audit entry on every
  *    read. The table a budget would count grows by one per measurement, so the fixture would
  *    perturb its own subject for no per-row work.
- *  * **`/me/privacy/consents`** — bounded by a closed vocabulary. `consentPurposes()` derives
- *    the list from `privacy.legal_bases` where the basis is `consent`, and there are FOUR. A
- *    citizen cannot hold a fifth, so the page is capped at four rows.
+ *  * ~~**`/me/privacy/consents`** — bounded by a closed vocabulary, four purposes, four rows.~~
+ *    **WRONG, AND NOW MEASURED.** Four is the number of PURPOSES whose legal basis is consent,
+ *    and this page does not render purposes. `consentsFor()` returns every CONSENT RECORD the
+ *    subject holds, and `GovernanceRegistry` says so in its own comment: "withdrawn rows carry
+ *    NULL and accumulate freely". Grant and withdraw one purpose ten times and the page has ten
+ *    rows. The floor was read off the vocabulary instead of off the query that builds the page.
  *  * **`/admin/newsfeed-metrics`** — an `ApiResponse::item` of five fixed `count()` queries. A
  *    constant, not a page; it has no rows to grow.
  *  * **`/admin/privacy/classifications` and `/admin/privacy/retention`** — config registers.
@@ -70,7 +73,7 @@ use PHPUnit\Framework\Attributes\Test;
  *
  * ── WHERE COVERAGE ACTUALLY STANDS ──────────────────────────────────────────────────
  *
- * **36 of the 44 endpoints that call `ApiResponse::page` have a budget — and 44 is a denominator
+ * **37 of the 44 endpoints that call `ApiResponse::page` have a budget — and 44 is a denominator
  * with a known blind spot (ADR 0053).** A collection returned inside an `ApiResponse::item`
  * envelope is not counted by it at all, and a census of the other envelope finds 27 more GET
  * endpoints doing exactly that, several of them unbounded. So this figure is true and narrower
@@ -122,9 +125,16 @@ use PHPUnit\Framework\Attributes\Test;
  *  * **No rows to grow** — config registers (`/services`, `/admin/services`, the two
  *    `/admin/privacy` registers), a PHP enum (`/admin/reports`), a single record plus config
  *    (`/privacy/notice`), or a handful of fixed `count()` queries (`/admin/newsfeed-metrics`).
- *  * **Bounded by the domain** — a closed vocabulary (`/me/privacy/consents`, four purposes),
- *    a one-open-membership invariant (`/admin/residents/{id}/families`), or a `limit(200)` cap
- *    (`/me/assistance-history`).
+ *  * **Bounded by the domain** — a one-open-membership invariant
+ *    (`/admin/residents/{id}/families`), enforced by `HouseholdMembershipService` with
+ *    `ErrorCode::Conflict`, which this file asserted for some time and never located until the
+ *    re-audit; or a `limit(200)` cap (`/me/assistance-history`).
+ *
+ *    **The closed vocabulary that used to head this list was `/me/privacy/consents`, and it was
+ *    wrong.** Two exclusions have now failed the same way — read off a controller or a
+ *    vocabulary rather than off the query that builds the page. `prior-cases` was capped at 50
+ *    by a service the classification never opened; consents was not capped at all. The seven
+ *    that remain were re-checked by tracing one level deeper than the handler.
  *
  *    **"Scoped to one subject" is NOT a reason, and it was the reason first written here.** One
  *    event's history can have hundreds of rows; a per-row query in it is an N+1 like any other.
@@ -798,6 +808,61 @@ final class QueryBudgetTest extends KycTestCase
         );
 
         $this->assertBudget("a document's version history", $small, $large);
+    }
+
+    /**
+     * A citizen's consent history.
+     *
+     * **THIS WAS EXCLUDED ON A FLOOR THAT DOES NOT EXIST.** The exclusion said the page was capped
+     * at four rows by a closed vocabulary — `privacy.legal_bases` names exactly four purposes whose
+     * basis is consent, and a citizen cannot hold a fifth. That is true about PURPOSES and this
+     * page does not render purposes: `consentsFor()` returns every CONSENT RECORD the subject has,
+     * and `GovernanceRegistry` says so in its own comment — "withdrawn rows carry NULL and
+     * accumulate freely". Grant and withdraw the same purpose ten times and the page has ten rows.
+     *
+     * Found by re-auditing the exclusions after `prior-cases` turned out to be capped at 50 by a
+     * service the classification never opened. Both errors are the same one: the floor was read off
+     * the controller and the vocabulary, not off the query that builds the page.
+     */
+    #[Test]
+    public function a_citizens_consent_history_does_not_grow_with_records(): void
+    {
+        Sanctum::actingAs($this->reviewer('lgu_admin'));
+
+        [$citizen] = $this->activeCitizenWithResident();
+        $this->applicant = $citizen;
+
+        /*
+         * Granting an already-live purpose is idempotent by design, so each round WITHDRAWS first.
+         * A withdrawn row keeps its place in the history and the next grant writes a new one —
+         * which is exactly the accumulation the excluded floor denied.
+         */
+        $addRecord = function () use ($citizen): void {
+            $admin = auth()->user();
+            Sanctum::actingAs($citizen);
+
+            $this->postJson('/api/v1/me/privacy/consents', ['purpose' => 'marketing_communications'])
+                ->assertSuccessful();
+            $this->deleteJson('/api/v1/me/privacy/consents/marketing_communications')
+                ->assertSuccessful();
+
+            if ($admin !== null) {
+                Sanctum::actingAs($admin);
+            }
+        };
+
+        $url = '/api/v1/me/privacy/consents';
+
+        $small = $this->measure($url, $addRecord, 1, asApplicant: true);
+        $large = $this->measure($url, $addRecord, 6, asApplicant: true);
+
+        $this->assertFixtureProduced(
+            6,
+            DB::table('consent_records')->count(),
+            'consent records to render',
+        );
+
+        $this->assertBudget("a citizen's consent history", $small, $large);
     }
 
     private function referralForBudget(?string $residentUuid = null): string
@@ -2185,6 +2250,7 @@ final class QueryBudgetTest extends KycTestCase
              * citizen's referrals, and this test is the only thing creating any.
              */
             str_contains($url, '/me/referrals') => DB::table('referrals')->count(),
+            str_contains($url, '/me/privacy/consents') => DB::table('consent_records')->count(),
             str_contains($url, '/me/notifications') => DB::table('notifications')->count(),
             /*
              * BEFORE the '/admin/releases' arm below. One release's detail page renders its
